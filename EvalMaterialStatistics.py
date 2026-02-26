@@ -404,7 +404,7 @@ ax4.set_ylabel('GWP [kgCO$_2$-eq/m$^3$]')
 plt.tight_layout()
 
 # 1. Pfad definieren (r vor dem String verhindert Fehler durch Backslashes)
-save_path = r"C:\Users\tgalk\Documents\04 Working Folder\Remote Desktop Transfer"
+save_path = "/Users/jonathanbieg/Documents/Master Thesis/Python Repository/Output"
 file_name = "Roh_boxplot_en.pdf"
 
 # 2. Vollständigen Pfad zusammenbauen
@@ -428,7 +428,7 @@ ax1.set_xticklabels(['C30/37', 'GL24h', 'C24'], rotation=45)
 ax1.set_ylabel('GWP [kgCO$_2$-eq/m$^3$]')
 plt.tight_layout()
 # 1. Pfad definieren (r vor dem String verhindert Fehler durch Backslashes)
-save_path = r"C:\Users\tgalk\Documents\04 Working Folder\Remote Desktop Transfer"
+save_path = "/Users/jonathanbieg/Documents/Master Thesis/Python Repository/Output"
 file_name = "Roh_boxplot_zoom_en.pdf"
 
 # 2. Vollständigen Pfad zusammenbauen
@@ -489,7 +489,7 @@ ax4.set_xticklabels(['C30/37', 'GL24h', 'C24','B500B', 'S 355', 'Y1860'], rotati
 ax4.set_ylabel('GWP [kgCO$_2$-eq/m$^3$]')
 plt.tight_layout()
 # 1. Pfad definieren (r vor dem String verhindert Fehler durch Backslashes)
-save_path = r"C:\Users\tgalk\Documents\04 Working Folder\Remote Desktop Transfer"
+save_path = "/Users/jonathanbieg/Documents/Master Thesis/Python Repository/Output"
 file_name = "Roh_boxplot_de.pdf"
 
 # 2. Vollständigen Pfad zusammenbauen
@@ -510,7 +510,7 @@ ax1.set_xticklabels(['C30/37', 'GL24h', 'C24'], rotation=45)
 ax1.set_ylabel('GWP [kgCO$_2$-eq/m$^3$]')
 plt.tight_layout()
 # 1. Pfad definieren (r vor dem String verhindert Fehler durch Backslashes)
-save_path = r"C:\Users\tgalk\Documents\04 Working Folder\Remote Desktop Transfer"
+save_path = "/Users/jonathanbieg/Documents/Master Thesis/Python Repository/Output"
 file_name = "Roh_boxplot_zoom_de.pdf"
 
 # 2. Vollständigen Pfad zusammenbauen
