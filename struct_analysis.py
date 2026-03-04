@@ -143,6 +143,24 @@ class SteelReinforcingBar:
         fsd = self.fsk / gamma_s  # SIA 262, 2.3.2.5, Formel (4)
         return fsd
 
+class ConnectorTCC:
+    # defines properties of connectors for timber-concrete composite slabs
+    def __init__(self, mech_prop, database, prod_id="undef"):
+        # retrieve basic mechanical data from database (self, table, database name)
+        self.mech_prop = mech_prop
+        connection = sqlite3.connect(database)
+        cursor = connection.cursor()
+        # get mechanical properties from database
+        inquiry = "SELECT K_ser FROM connector_TCC WHERE name=" + mech_prop
+        cursor.execute(inquiry)
+        result = cursor.fetchall()
+        self.K_ser = result[0]
+        # get GWP properties from database
+        #TODO: Tabelle für TCC-Verbinder in Datenbank ergänzen, damit GWP und Kosten berücksichtigt werden können
+
+    def get_design_values(self):
+        return self.K_ser 
+
 
 #-----------------------------------------------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------
@@ -931,6 +949,9 @@ class RibWood(SupStrucRibWood):
     #     b_fire = max(section.b - d_ef * (fire[1] + fire[3]), 0)
     #     rem_sec = RectangularWood(section.wood_type, b_fire, h_fire)
     #     return rem_sec
+
+
+
 
 #-----------------------------------------------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------
