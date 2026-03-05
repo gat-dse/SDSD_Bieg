@@ -1013,10 +1013,21 @@ class TCC(SupStrucTCC):
         gamma_ULS0 = (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser*2/3 * self.l0**2))**(-1)
         gamma_SLS0 = (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser * self.l0**2))**(-1)
 
+        # calculate creep modification factors according to DIN/CEN/TS 19103:2022-02
+        # psi t=inf
+        psi_conc_ULSinf_06 = (2.6-0.8*gamma_ULS0**2)+ ((2.0-0.5*gamma_ULS0**1.9)-(2.6-0.8*gamma_ULS0**2))*(self.concrete_type.phi-2.5) #Lineare interpolation zwischen phi = 2.5 und phi = 3.5 für k_def = 0.6
+        psi_conc_ULSinf_08 = (2.3-0.5*gamma_ULS0**2.6)+ ((1.8-0.3*gamma_ULS0**2.5)-(2.3-0.5*gamma_ULS0**2.6))*(self.concrete_type.phi-2.5) #Lineare interpolation zwischen phi = 2.5 und phi = 3.5 für k_def = 0.8
+        psi_conc_ULSinf = psi_conc_inf_ULS_06 + (psi_conc_inf_ULS_08 - psi_conc_inf_ULS_06) * (self.wood_type.phi - 0.6) / (0.8 - 0.6) #Lineare interpolation zwischen k_def = 0.6 und k_def = 0.8
+        psi_wood_ULSinf = 1
+        psi_conn_ULSinf = 1
+        #psi t=3...7years
+        psi_conc_ULS37_06 = (2.5-gamma_ULS0**1.1)+ ((1.9-0.6*gamma_ULS0**1.1)-(2.5-gamma_ULS0**1.1))*(self.concrete_type.phi-2.5) #Lineare interpolation zwischen phi = 2.5 und phi = 3.5 für k_def = 0.6
+        psi_conc_ULS37_08 = (2.2-0.8*gamma_ULS0**1.2)+ ((1.7-0.5*gamma_ULS0**1.1)-(2.2-0.8*gamma_ULS0**1.2))*(self.concrete_type.phi-2.5) #Lineare interpolation zwischen phi = 2.5 und phi = 3.5 für k_def = 0.8
+        psi_conc_ULS37 = psi_conc_inf_ULS_06 + (psi_conc_inf_ULS_08 - psi_conc_inf_ULS_06) * (self.wood_type.phi - 0.6) / (0.8 - 0.6) #Lineare interpolation zwischen k_def = 0.6 und k_def = 0.8
+        psi_wood_ULS37 = 0.5
+        psi_conn_ULSinf = 0.65
         # t_37
-        # Hier weiter die Fälle programmieren
-        gamma_ULS37 = (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser * self.l0**2))**(-1)
-        gamma_ULSinf = 1.0
+        # Calculate gamma
         
         gamma_SLSinf = 1.0
         return gamma_ULS0, gamma_ULS37, gamma_ULSinf, gamma_SLS0, gamma_SLSinf
