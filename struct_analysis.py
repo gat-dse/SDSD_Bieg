@@ -40,11 +40,11 @@ class Wood:
         connection = sqlite3.connect(database)
         cursor = connection.cursor()
         # get mechanical properties from database
-        inquiry = ("SELECT strength_bend, strength_shea, E_modulus, density_load, burn_rate FROM material_prop WHERE"
+        inquiry = ("SELECT strength_bend, strength_shea, E_modulus, density_load, burn_rate, phi FROM material_prop WHERE"
                    " name=" + mech_prop)
         cursor.execute(inquiry)
         result = cursor.fetchall()
-        self.fmk, self.fvd, self.Emmean, self.weight, self.burn_rate = result[0]
+        self.fmk, self.fvd, self.Emmean, self.weight, self.burn_rate, self.phi = result[0]
         # get GWP properties from database
         if prod_id == "undef":  # no specific product is defined, chose first product entry with required mechanical
             # properties in database
@@ -76,11 +76,11 @@ class ReadyMixedConcrete:
         connection = sqlite3.connect(database)
         cursor = connection.cursor()
         # get mechanical properties from database
-        inquiry = ("SELECT strength_comp, strength_tens, E_modulus, density_load FROM material_prop WHERE name="
+        inquiry = ("SELECT strength_comp, strength_tens, E_modulus, density_load, phi FROM material_prop WHERE name="
                    + mech_prop)
         cursor.execute(inquiry)
         result = cursor.fetchall()
-        self.fck, self.fctm, self.Ecm, self.weight = result[0]
+        self.fck, self.fctm, self.Ecm, self.weight, self.phi = result[0]
         # get GWP properties from database
         if prod_id == "undef":  # no specific product is defined, chose first product entry with required mechanical
             # properties in database
@@ -442,8 +442,8 @@ class RectangularConcrete(SupStrucRectangular):
         return resistance
 
 
-#-----------------------------------------------------------------------------------------------------------------------
-#-----------------------------------------------------------------------------------------------------------------------
+# ........................................................................
+
 class SupStrucRibbedConcrete(Section):
     def __init__(self, section_type, b, b_w, h, h_f, l0, phi=0):
         super().__init__(section_type)
@@ -950,7 +950,76 @@ class RibWood(SupStrucRibWood):
     #     rem_sec = RectangularWood(section.wood_type, b_fire, h_fire)
     #     return rem_sec
 
+# ........................................................................
+class SupStrucTCC(Section): #takes the geometric parameters of the TCC cross-section as input parameters and calculates the geometric cross-sectional values
+    def __init__(self, section_type, a_ribs, h_c, h_w, b_w, d, l0):
+        super().__init__(section_type)
+        self.a_ribs = a_ribs  # spacing of timber beams [m] 
+        self.h_c = h_c  # height of concrete layer [m]
+        self.h_w = h_w  # height of timber beams [m]
+        self.b_w = b_w  # width of timber beams [m]
+        self.d = d  # thickness of formwork [m]
+        self.l0 = l0  # distance between moment zero points [m]
+        self.b_ceff = self.calc_beff(a_ribs, b_w, l0)  # effective width of concrete layer [m]
+        self.A_w = self.calc_area(h_w, b_w)  # area of timber beam [m^2]
+        self.A_c = self.calc_area(h_c, self.b_ceff)  # area of concrete layer according to effective width [m^2]
+        self.I_yw = self.calc_moment_of_inertia(h_w, b_w)  # moment of inertia of timber beam [m^4]
+        self.I_yc = self.calc_moment_of_inertia(h_c, self.b_ceff)  # moment of inertia of concrete layer according to effective width [m^4]
+        self.w = self.calc_weight()  # weight of cross section per m length [N/m]
 
+    def calc_beff(self, a_ribs, b_w, l0):
+        # in: spacing of timber beams [m], width of timber beams [m]
+        # out: effective width of concrete layer according to SIA 262 [m]
+        b_effi = min(0.2*(a_ribs-b_w)/2+0.1*l0, 0.2*l0) 
+        b_ceff = 2*b_effi + b_w 
+        return b_ceff
+    
+    def calc_area(self, h, b):
+        # in: height of layer [m], width of layer [m]
+        # out: area of layer [m^2]
+        A = h * b
+        return A
+    
+    def calc_moment_of_inertia(self, h, b):
+        # in: height of layer [m], width of layer [m]
+        # out: moment of inertia of layer [m^4]
+        I_y = b * h**3 / 12
+        return I_y
+    
+    def calc_weight(self, spec_weight_w=5, spec_weight_c=25):
+        # in: specific weight of timber [N/m^3], specific weight of concrete [N/m^3]
+        # out: weight of cross section per m length [N/m]
+        w = spec_weight_w * self.A_w + spec_weight_c * self.A_c
+        return w
+    
+class TCC(SupStrucTCC):
+    def __init__(self, concrete_type, rebar_type, wood_type, connector_type, s, a_ribs, h_c, h_w, b_w, d, l0):
+        section_type = "tcc"
+        super().__init__(section_type, a_ribs, h_c, h_w, b_w, d, l0)
+        self.concrete_type = concrete_type
+        self.rebar_type = rebar_type
+        self.wood_type = wood_type
+        self.connector_type = connector_type
+        self.s = s  # spacing of connectors [m]
+        self.co2 = self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
+        self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
+        self.gamma_ULS0, self.gamma_ULS37, self.gamma_ULSinf, self.gamma_SLS0, self.gamma_SLSinf = self.calc_gamma()
+        self.EI_ULS0, self.EI_ULS37, self.EI_ULSinf, self.EI_SLS0, self.EI_SLSinf = self.calc_EIeff()
+        self.Mu_0, self.Mu_37, self.Mu_inf = self.calc_mu()
+        self.Vu_0, self.Vu_37, self.Vu_inf = self.calc_vu()
+    
+    def calc_gamma(self):
+        # t_0
+        gamma_ULS0 = (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser*2/3 * self.l0**2))**(-1)
+        gamma_SLS0 = (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser * self.l0**2))**(-1)
+
+        # t_37
+        # Hier weiter die Fälle programmieren
+        gamma_ULS37 = (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser * self.l0**2))**(-1)
+        gamma_ULSinf = 1.0
+        
+        gamma_SLSinf = 1.0
+        return gamma_ULS0, gamma_ULS37, gamma_ULSinf, gamma_SLS0, gamma_SLSinf
 
 
 #-----------------------------------------------------------------------------------------------------------------------
