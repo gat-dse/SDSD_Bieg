@@ -425,22 +425,8 @@ class RectangularConcrete(SupStrucRectangular):
 
     @staticmethod
     def fire_resistance(section):
-        # fire resistance of 1-D load-bearing plates according to SIA 262, Tab.16
-        c_nom = section.c_nom
-        h = section.h
-        b = section.b
-        if c_nom >= 0.04 and h >= 0.15 and b >= 0.4:
-            resistance = 180
-        elif c_nom >= 0.03 and h >= 0.12 and b >= 0.3:
-            resistance = 120
-        elif c_nom >= 0.03 and h >= 0.1 and b >= 0.2:
-            resistance = 90
-        elif c_nom >= 0.02 and h >= 0.08 and b >= 0.15:
-            resistance = 60
-        elif c_nom >= 0.02 and h >= 0.06 and b >= 0.1:
-            resistance = 30
-        else:
-            resistance = 0
+        # Must be implemented 
+        resistance = 60  # Dummy default value for resistance
         return resistance
 
 
@@ -1122,6 +1108,12 @@ class TCC(SupStrucTCC):
             vu[i] = (fvd * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)**2)/self.a_ribs
 
         return vu
+    
+    @staticmethod
+    def fire_resistance(section):
+        #TODO: Fire resistance calculation for TCC
+            resistance = 60
+        return resistance
        
 
 

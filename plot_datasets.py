@@ -205,6 +205,52 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                 line_i1 = [section_01, floorstruc]
                 to_plot.extend([line_i0, line_i1])
 
+            elif crsec_type == "tcc":
+                # create a Concrete material object
+                # search database for concrete material of highest and lowest emissions
+                concrete = struct_analysis.ReadyMixedConcrete(mech_prop, database_name, prod_id=prod_id_str)
+                concrete.get_design_values()
+                # create rebar material objects with mech prop B500B and low rsp high emission values
+                # search database for rebar material of type B500B with lowest and highes emissions
+                inquiry = ("""
+                                            SELECT PRO_ID FROM products
+                                            WHERE Total_GWP = (SELECT MIN(Total_GWP) FROM products
+                                                                WHERE "MATERIAL" LIKE '%Steel_reinforcing_bar%'
+                                                                AND DENSITY IS NOT NULL
+                                                                AND MECH_PROP IS NOT NULL
+                                                                AND Statistik = 1
+                                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
+                                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
+                                                                AND "SOURCE" NOT LIKE '%KBOB%')
+                                            OR Total_GWP = (SELECT MAX(Total_GWP) FROM products
+                                                                WHERE "MATERIAL" LIKE '%Steel_reinforcing_bar%'
+                                                                AND DENSITY IS NOT NULL
+                                                                AND MECH_PROP IS NOT NULL
+                                                                AND Statistik = 1
+                                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
+                                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
+                                                                AND "SOURCE" NOT LIKE '%KBOB%')
+                                            """
+                           )
+                cursor.execute(inquiry)
+                result = cursor.fetchall()
+                prod_id_low = result[0]
+                prod_id_low_str = "'" + str(prod_id_low[0]) + "'"
+                prod_id_high = result[1]
+                prod_id_high_str = "'" + str(prod_id_high[0]) + "'"
+                rebar_low_em = struct_analysis.SteelReinforcingBar("'B500B'", database_name, prod_id=prod_id_low_str)
+                rebar_high_em = struct_analysis.SteelReinforcingBar("'B500B'", database_name, prod_id=prod_id_high_str)
+                # create wood material object 
+                timber = struct_analysis.Wood(mech_prop, database_name, prod_id=prod_id_str)
+                timber.get_design_values()
+                # create connector material object
+                connector = struct_analysis.ConnectorTCC(mech_prop, database_name, prod_id=prod_id_str)
+                # create initial cross-sections
+                section_00 = struct_analysis.TCC(concrete, rebar_low_em, timber, connector, 0.4, 1.0, 0.15, 0.3, 0.18, 0.01, 2)
+                section_01 = struct_analysis.TCC(concrete, rebar_high_em, timber, connector, 0.4, 1.0, 0.15, 0.3, 0.18, 0.01, 2)
+                
+
+
             else:
                 print("cross-section type is not defined inside function plot_dataset()")
 
