@@ -1005,20 +1005,20 @@ class TCC(SupStrucTCC):
         self.s = s  # spacing of connectors [m]
         self.co2 = self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
-        self.gamma_ULS, self.gamma_SLS, self.psi_ULS_37, self.psi_ULS_inf, self.psi_SLS_inf = self.calc_gamma()
-        self.EI_ULS0, self.EI_ULS37, self.EI_ULSinf, self.EI_SLS0, self.EI_SLSinf = self.calc_EIeff()
+        self.gamma_ULS, self.gamma_SLS, self.psi_ULS, self.psi_SLS = self.calc_gamma()
+        self.EI_ULS, self.EI_SLS = self.calc_EIeff()
         self.Mu_0, self.Mu_37, self.Mu_inf = self.calc_mu()
         self.Vu_0, self.Vu_37, self.Vu_inf = self.calc_vu()
     
     def calc_gamma(self):
-        # Initialise array for gamma values at different time points
+        # Initialize array for gamma values at different time points
         gamma_ULS = np.zeros(3) #gamma_ULS[0] for t=0, gamma_ULS[1] for t=3...7years, gamma_ULS[2] for t=inf
         gamma_SLS = np.zeros(2) #gamma_SLS[0] for t=0, gamma_SLS[1] for t=inf
 
-        # Initialize array for psi values at different time points
-        psi_ULS_37 = np.zeros(3) #concrete, wood, connector for t=3...7years
-        psi_ULS_inf = np.zeros(3) #concrete, wood, connector for t=inf
-        psi_SLS_inf = np.zeros(3) #concrete, wood, connector for t=inf
+        # Initialize 3x3 array for psi values at different time points for concrete, wood, and connector for ULS
+        psi_ULS = np.zeros((3, 3)) # Rows: 0 for t=0, 1 for t=3...7years, 2 for t=inf; Columns: 0 for concrete, 1 for wood, 2 for connector
+        # Initialize 2x3 array for psi values at different time points for concrete, wood, and connector for SLS
+        psi_SLS = np.zeros((2, 3)) # Rows: 0 for t=0, 1 for t=inf; Columns: 0 for concrete, 1 for wood, 2 for connector
 
         # t_0
         gamma_ULS[0] = 1 / (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser * 2/3 * self.l0**2))
@@ -1028,39 +1028,71 @@ class TCC(SupStrucTCC):
         phi_diff = self.concrete_type.phi - 2.5
         phi_ratio = (self.wood_type.phi - 0.6) / 0.2
 
-        #ULS
+        # ULS
         # psi t=3...7years
         psi_conc_ULS37_06 = 2.5 - gamma_ULS[0]**1.1 + (1.9 - 0.6 * gamma_ULS[0]**1.1 - (2.5 - gamma_ULS[0]**1.1)) * phi_diff
         psi_conc_ULS37_08 = 2.2 - 0.8 * gamma_ULS[0]**1.2 + (1.7 - 0.5 * gamma_ULS[0]**1.1 - (2.2 - 0.8 * gamma_ULS[0]**1.2)) * phi_diff
-        psi_ULS_37[0] = psi_conc_ULS37_06 + (psi_conc_ULS37_08 - psi_conc_ULS37_06) * phi_ratio #psi t=3...7years for concrete
-        psi_ULS_37[1], psi_ULS_37[2] = 0.5, 0.65 #psi t=3...7years for wood and connector
+        psi_ULS[1, 0] = psi_conc_ULS37_06 + (psi_conc_ULS37_08 - psi_conc_ULS37_06) * phi_ratio # psi t=3...7years for concrete
+        psi_ULS[1, 1], psi_ULS[1, 2] = 0.5, 0.65 # psi t=3...7years for wood and connector
         # psi t=inf
         psi_conc_ULSinf_06 = 2.6 - 0.8 * gamma_ULS[0]**2 + (2.0 - 0.5 * gamma_ULS[0]**1.9 - (2.6 - 0.8 * gamma_ULS[0]**2)) * phi_diff
         psi_conc_ULSinf_08 = 2.3 - 0.5 * gamma_ULS[0]**2.6 + (1.8 - 0.3 * gamma_ULS[0]**2.5 - (2.3 - 0.5 * gamma_ULS[0]**2.6)) * phi_diff
-        psi_ULS_inf[0] = psi_conc_ULSinf_06 + (psi_conc_ULSinf_08 - psi_conc_ULSinf_06) * phi_ratio #psi t=inf for concrete
-        psi_ULS_inf[1] = psi_ULS_inf[2] = 1 #psi t=inf for wood and connector
+        psi_ULS[2, 0] = psi_conc_ULSinf_06 + (psi_conc_ULSinf_08 - psi_conc_ULSinf_06) * phi_ratio # psi t=inf for concrete
+        psi_ULS[2, 1] = psi_ULS[2, 2] = 1 # psi t=inf for wood and connector
         # Calculate gamma ULS at t=3...7years
-        E_c_ULS37 = self.concrete_type.Ecm / (1 + psi_ULS_37[0] * self.concrete_type.phi)
-        K_ULS37 = self.connector_type.K_ser * 2/3 / (1 + psi_ULS_37[2] * self.wood_type.phi * 2)
-        gamma_ULS[1] = 1 / (1 + np.pi**2 * E_c_ULS37 * self.A_c * self.s / (K_ULS37 * self.l0**2)) #gamma ULS at t=3...7years
+        E_c_ULS37 = self.concrete_type.Ecm / (1 + psi_ULS[1, 0] * self.concrete_type.phi)
+        K_ULS37 = self.connector_type.K_ser * 2/3 / (1 + psi_ULS[1, 2] * self.wood_type.phi * 2)
+        gamma_ULS[1] = 1 / (1 + np.pi**2 * E_c_ULS37 * self.A_c * self.s / (K_ULS37 * self.l0**2)) # gamma ULS at t=3...7years
         # Calculate gamma ULS at t=inf
-        E_c_ULSinf = self.concrete_type.Ecm / (1 + psi_ULS_inf[0] * self.concrete_type.phi)
-        K_ULSinf = self.connector_type.K_ser * 2/3 / (1 + psi_ULS_inf[2] * self.wood_type.phi * 2)
-        gamma_ULS[2] = 1 / (1 + np.pi**2 * E_c_ULSinf * self.A_c * self.s / (K_ULSinf * self.l0**2)) #gamma ULS at t=inf
+        E_c_ULSinf = self.concrete_type.Ecm / (1 + psi_ULS[2, 0] * self.concrete_type.phi)
+        K_ULSinf = self.connector_type.K_ser * 2/3 / (1 + psi_ULS[2, 2] * self.wood_type.phi * 2)
+        gamma_ULS[2] = 1 / (1 + np.pi**2 * E_c_ULSinf * self.A_c * self.s / (K_ULSinf * self.l0**2)) # gamma ULS at t=inf
 
-        #SLS
+        # SLS
         # psi t=inf
-        # psi t=inf for SLS
         psi_conc_SLSinf_06 = 2.6 - 0.8 * gamma_SLS[0]**2 + (2.0 - 0.5 * gamma_SLS[0]**1.9 - (2.6 - 0.8 * gamma_SLS[0]**2)) * phi_diff
         psi_conc_SLSinf_08 = 2.3 - 0.5 * gamma_SLS[0]**2.6 + (1.8 - 0.3 * gamma_SLS[0]**2.5 - (2.3 - 0.5 * gamma_SLS[0]**2.6)) * phi_diff
-        psi_SLS_inf[0] = psi_conc_SLSinf_06 + (psi_conc_SLSinf_08 - psi_conc_SLSinf_06) * phi_ratio #psi t=inf for concrete
-        psi_SLS_inf[1] = psi_SLS_inf[2] = 1 #psi t=inf for wood and connector
+        psi_SLS[1, 0] = psi_conc_SLSinf_06 + (psi_conc_SLSinf_08 - psi_conc_SLSinf_06) * phi_ratio # psi t=inf for concrete
+        psi_SLS[1, 1] = psi_SLS[1, 2] = 1 # psi t=inf for wood and connector
         # Calculate gamma SLS at t=inf
-        E_c_SLSinf = self.concrete_type.Ecm / (1 + psi_SLS_inf[0] * self.concrete_type.phi)
-        K_SLSinf = self.connector_type.K_ser / (1 + psi_SLS_inf[2] * self.wood_type.phi * 2)
-        gamma_SLS[1] = 1 / (1 + np.pi**2 * E_c_SLSinf * self.A_c * self.s / (K_SLSinf * self.l0**2)) #gamma SLS at t=inf
+        E_c_SLSinf = self.concrete_type.Ecm / (1 + psi_SLS[1, 0] * self.concrete_type.phi)
+        K_SLSinf = self.connector_type.K_ser / (1 + psi_SLS[1, 2] * self.wood_type.phi * 2)
+        gamma_SLS[1] = 1 / (1 + np.pi**2 * E_c_SLSinf * self.A_c * self.s / (K_SLSinf * self.l0**2)) # gamma SLS at t=inf
 
-        return gamma_ULS, gamma_SLS, psi_ULS_37, psi_ULS_inf, psi_SLS_inf
+        return gamma_ULS, gamma_SLS, psi_ULS, psi_SLS
+    
+    def calc_EIeff(self):
+        # Initialize arrays for effective stiffness at ULS and SLS
+        EI_ULS = np.zeros(3) #EI_ULS[0] for t=0, EI_ULS[1] for t=3...7years, EI_ULS[2] for t=inf
+        EI_SLS = np.zeros(2) #EI_SLS[0] for t=0, EI_SLS[1] for t=inf
+        # Initialize 2x3 array for a_i values at ULS and 2x2 array for a_i values at SLS
+        a_ULS = np.zeros((3, 2)) #Rows for t=0, t=3...7years, t=inf, Columns for concrete and wood 
+        a_SLS = np.zeros((2, 2)) #Rows for t=0, t=inf, Columns for concrete and wood 
+
+        # Calculate a_i values for ULS at different time points i
+        for i in range(3):
+            a_ULS[i, 1] = (self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i, 0]*self.concrete_type.phi)) * self.A_c*(self.h_c+self.h_w)) / (2*(self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_ULS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at ULS
+            a_ULS[i, 0] = (self.h_c+self.h_w)/2 + self.d - a_ULS[i,1] #a_concrete at ULS
+
+        # Calculate a_i values for SLS at different time points
+        for i in range(2):
+            a_SLS[1, i] = (self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c*(self.h_c+self.h_w)) / (2*(self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_SLS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at SLS
+            a_SLS[0, i] = (self.h_c+self.h_w)/2 + self.d - a_SLS[1,i] #a_concrete at SLS
+
+        # Calculate effective stiffness at ULS for different time points
+        for i in range(3):
+            EI_ULS[i] += (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_ULS[i]*self.A_c*a_ULS[i,0]**2)
+            EI_ULS[i] += (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_ULS[i,1]**2)
+
+        # Calculate effective stiffness at SLS for different time points
+        for i in range(2):
+            EI_SLS[i] += (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_SLS[i]*self.A_c*a_SLS[i,0]**2)
+            EI_SLS[i] += (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_SLS[i,1]**2)
+        
+        return EI_ULS, EI_SLS
+    
+    def calc_mu(self):
+        
 
 #-----------------------------------------------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------
