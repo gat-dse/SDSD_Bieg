@@ -5,12 +5,14 @@
 # - Beton
 # - Betonstahl
 # - Holz
+# - Verbindung für Holz-Beton-Verbund (Jonathan Bieg)
 #
 # Abgebildete Querschnitte 1D:
 # - Betonrechteck-QS
 # - Holzrechteck-QS
 # - Beton-Rippen-QS
 # - Holz-Hohlkasten-QS
+# - Holz-Beton-Verbund-QS (Jonathan Bieg)
 #
 # Abgebildete Statische Systeme 1D:
 # - Einfacher Balken
@@ -1003,35 +1005,62 @@ class TCC(SupStrucTCC):
         self.s = s  # spacing of connectors [m]
         self.co2 = self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
-        self.gamma_ULS0, self.gamma_ULS37, self.gamma_ULSinf, self.gamma_SLS0, self.gamma_SLSinf = self.calc_gamma()
+        self.gamma_ULS, self.gamma_SLS, self.psi_ULS_37, self.psi_ULS_inf, self.psi_SLS_inf = self.calc_gamma()
         self.EI_ULS0, self.EI_ULS37, self.EI_ULSinf, self.EI_SLS0, self.EI_SLSinf = self.calc_EIeff()
         self.Mu_0, self.Mu_37, self.Mu_inf = self.calc_mu()
         self.Vu_0, self.Vu_37, self.Vu_inf = self.calc_vu()
     
     def calc_gamma(self):
+        # Initialise array for gamma values at different time points
+        gamma_ULS = np.zeros(3) #gamma_ULS[0] for t=0, gamma_ULS[1] for t=3...7years, gamma_ULS[2] for t=inf
+        gamma_SLS = np.zeros(2) #gamma_SLS[0] for t=0, gamma_SLS[1] for t=inf
+
+        # Initialize array for psi values at different time points
+        psi_ULS_37 = np.zeros(3) #concrete, wood, connector for t=3...7years
+        psi_ULS_inf = np.zeros(3) #concrete, wood, connector for t=inf
+        psi_SLS_inf = np.zeros(3) #concrete, wood, connector for t=inf
+
         # t_0
-        gamma_ULS0 = (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser*2/3 * self.l0**2))**(-1)
-        gamma_SLS0 = (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser * self.l0**2))**(-1)
+        gamma_ULS[0] = 1 / (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser * 2/3 * self.l0**2))
+        gamma_SLS[0] = 1 / (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser * self.l0**2))
 
-        # calculate creep modification factors according to DIN/CEN/TS 19103:2022-02
+        # Precompute common terms for interpolation
+        phi_diff = self.concrete_type.phi - 2.5
+        phi_ratio = (self.wood_type.phi - 0.6) / 0.2
+
+        #ULS
+        # psi t=3...7years
+        psi_conc_ULS37_06 = 2.5 - gamma_ULS[0]**1.1 + (1.9 - 0.6 * gamma_ULS[0]**1.1 - (2.5 - gamma_ULS[0]**1.1)) * phi_diff
+        psi_conc_ULS37_08 = 2.2 - 0.8 * gamma_ULS[0]**1.2 + (1.7 - 0.5 * gamma_ULS[0]**1.1 - (2.2 - 0.8 * gamma_ULS[0]**1.2)) * phi_diff
+        psi_ULS_37[0] = psi_conc_ULS37_06 + (psi_conc_ULS37_08 - psi_conc_ULS37_06) * phi_ratio #psi t=3...7years for concrete
+        psi_ULS_37[1], psi_ULS_37[2] = 0.5, 0.65 #psi t=3...7years for wood and connector
         # psi t=inf
-        psi_conc_ULSinf_06 = (2.6-0.8*gamma_ULS0**2)+ ((2.0-0.5*gamma_ULS0**1.9)-(2.6-0.8*gamma_ULS0**2))*(self.concrete_type.phi-2.5) #Lineare interpolation zwischen phi = 2.5 und phi = 3.5 für k_def = 0.6
-        psi_conc_ULSinf_08 = (2.3-0.5*gamma_ULS0**2.6)+ ((1.8-0.3*gamma_ULS0**2.5)-(2.3-0.5*gamma_ULS0**2.6))*(self.concrete_type.phi-2.5) #Lineare interpolation zwischen phi = 2.5 und phi = 3.5 für k_def = 0.8
-        psi_conc_ULSinf = psi_conc_inf_ULS_06 + (psi_conc_inf_ULS_08 - psi_conc_inf_ULS_06) * (self.wood_type.phi - 0.6) / (0.8 - 0.6) #Lineare interpolation zwischen k_def = 0.6 und k_def = 0.8
-        psi_wood_ULSinf = 1
-        psi_conn_ULSinf = 1
-        #psi t=3...7years
-        psi_conc_ULS37_06 = (2.5-gamma_ULS0**1.1)+ ((1.9-0.6*gamma_ULS0**1.1)-(2.5-gamma_ULS0**1.1))*(self.concrete_type.phi-2.5) #Lineare interpolation zwischen phi = 2.5 und phi = 3.5 für k_def = 0.6
-        psi_conc_ULS37_08 = (2.2-0.8*gamma_ULS0**1.2)+ ((1.7-0.5*gamma_ULS0**1.1)-(2.2-0.8*gamma_ULS0**1.2))*(self.concrete_type.phi-2.5) #Lineare interpolation zwischen phi = 2.5 und phi = 3.5 für k_def = 0.8
-        psi_conc_ULS37 = psi_conc_inf_ULS_06 + (psi_conc_inf_ULS_08 - psi_conc_inf_ULS_06) * (self.wood_type.phi - 0.6) / (0.8 - 0.6) #Lineare interpolation zwischen k_def = 0.6 und k_def = 0.8
-        psi_wood_ULS37 = 0.5
-        psi_conn_ULSinf = 0.65
-        # t_37
-        # Calculate gamma
-        
-        gamma_SLSinf = 1.0
-        return gamma_ULS0, gamma_ULS37, gamma_ULSinf, gamma_SLS0, gamma_SLSinf
+        psi_conc_ULSinf_06 = 2.6 - 0.8 * gamma_ULS[0]**2 + (2.0 - 0.5 * gamma_ULS[0]**1.9 - (2.6 - 0.8 * gamma_ULS[0]**2)) * phi_diff
+        psi_conc_ULSinf_08 = 2.3 - 0.5 * gamma_ULS[0]**2.6 + (1.8 - 0.3 * gamma_ULS[0]**2.5 - (2.3 - 0.5 * gamma_ULS[0]**2.6)) * phi_diff
+        psi_ULS_inf[0] = psi_conc_ULSinf_06 + (psi_conc_ULSinf_08 - psi_conc_ULSinf_06) * phi_ratio #psi t=inf for concrete
+        psi_ULS_inf[1] = psi_ULS_inf[2] = 1 #psi t=inf for wood and connector
+        # Calculate gamma ULS at t=3...7years
+        E_c_ULS37 = self.concrete_type.Ecm / (1 + psi_ULS_37[0] * self.concrete_type.phi)
+        K_ULS37 = self.connector_type.K_ser * 2/3 / (1 + psi_ULS_37[2] * self.wood_type.phi * 2)
+        gamma_ULS[1] = 1 / (1 + np.pi**2 * E_c_ULS37 * self.A_c * self.s / (K_ULS37 * self.l0**2)) #gamma ULS at t=3...7years
+        # Calculate gamma ULS at t=inf
+        E_c_ULSinf = self.concrete_type.Ecm / (1 + psi_ULS_inf[0] * self.concrete_type.phi)
+        K_ULSinf = self.connector_type.K_ser * 2/3 / (1 + psi_ULS_inf[2] * self.wood_type.phi * 2)
+        gamma_ULS[2] = 1 / (1 + np.pi**2 * E_c_ULSinf * self.A_c * self.s / (K_ULSinf * self.l0**2)) #gamma ULS at t=inf
 
+        #SLS
+        # psi t=inf
+        # psi t=inf for SLS
+        psi_conc_SLSinf_06 = 2.6 - 0.8 * gamma_SLS[0]**2 + (2.0 - 0.5 * gamma_SLS[0]**1.9 - (2.6 - 0.8 * gamma_SLS[0]**2)) * phi_diff
+        psi_conc_SLSinf_08 = 2.3 - 0.5 * gamma_SLS[0]**2.6 + (1.8 - 0.3 * gamma_SLS[0]**2.5 - (2.3 - 0.5 * gamma_SLS[0]**2.6)) * phi_diff
+        psi_SLS_inf[0] = psi_conc_SLSinf_06 + (psi_conc_SLSinf_08 - psi_conc_SLSinf_06) * phi_ratio #psi t=inf for concrete
+        psi_SLS_inf[1] = psi_SLS_inf[2] = 1 #psi t=inf for wood and connector
+        # Calculate gamma SLS at t=inf
+        E_c_SLSinf = self.concrete_type.Ecm / (1 + psi_SLS_inf[0] * self.concrete_type.phi)
+        K_SLSinf = self.connector_type.K_ser / (1 + psi_SLS_inf[2] * self.wood_type.phi * 2)
+        gamma_SLS[1] = 1 / (1 + np.pi**2 * E_c_SLSinf * self.A_c * self.s / (K_SLSinf * self.l0**2)) #gamma SLS at t=inf
+
+        return gamma_ULS, gamma_SLS, psi_ULS_37, psi_ULS_inf, psi_SLS_inf
 
 #-----------------------------------------------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------
