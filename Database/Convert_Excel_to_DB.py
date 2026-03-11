@@ -3,13 +3,14 @@
 import pandas as pd
 import sqlite3
 
-# Pfad zur Excel-Datei (bitte anpassen!)
-excel_file = "260126_Datenbankdefinition.xlsx"   #name of excel file. must be in same directory as code
+excel_file = "/Users/jonathanbieg/Documents/Master Thesis/1_Code/Python Repository/SDSD_Bieg/Database/260126_Datenbankdefinition.xlsx"  #name of excel file. must be in same directory as code
 
 # Excel-Datei einlesen
 df_products = pd.read_excel(excel_file, sheet_name="products", engine="openpyxl")
 df_material_prop = pd.read_excel(excel_file, sheet_name="material_prop", engine="openpyxl")
 df_floor_struc_prop = pd.read_excel(excel_file, sheet_name="floor_struc_prop", engine="openpyxl")
+df_connector_TCC = pd.read_excel(excel_file, sheet_name="connector_TCC", engine="openpyxl")
+
 
 # Verbindung zur SQLite-Datenbank herstellen (oder neu erstellen)
 conn = sqlite3.connect("database_260126.db") #name of database
@@ -18,6 +19,8 @@ conn = sqlite3.connect("database_260126.db") #name of database
 df_products.to_sql("products", conn, if_exists="replace", index=False)
 df_material_prop.to_sql("material_prop", conn, if_exists="replace", index=False)
 df_floor_struc_prop.to_sql("floor_struc_prop", conn, if_exists="replace", index=False)
+df_connector_TCC.to_sql("connector_TCC", conn, if_exists="replace", index=False)
+
 
 # Verbindung schließen
 conn.close()
