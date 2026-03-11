@@ -1006,9 +1006,9 @@ class TCC(SupStrucTCC):
         self.co2 = self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
         self.gamma_ULS, self.gamma_SLS, self.psi_ULS, self.psi_SLS = self.calc_gamma()
-        self.EI_ULS, self.EI_SLS = self.calc_EIeff()
-        self.Mu_0, self.Mu_37, self.Mu_inf = self.calc_mu()
-        self.Vu_0, self.Vu_37, self.Vu_inf = self.calc_vu()
+        self.EI_ULS, self.EI_SLS, self.a_ULS, self.a_SLS = self.calc_EIeff()
+        self.Mu = self.calc_mu()
+        self.Vu = self.calc_vu()
     
     def calc_gamma(self):
         # Initialize array for gamma values at different time points
@@ -1071,12 +1071,12 @@ class TCC(SupStrucTCC):
 
         # Calculate a_i values for ULS at different time points i
         for i in range(3):
-            a_ULS[i, 1] = (self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i, 0]*self.concrete_type.phi)) * self.A_c*(self.h_c+self.h_w)) / (2*(self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_ULS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at ULS
+            a_ULS[i, 1] = (self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i, 0]*self.concrete_type.phi)) * self.A_c*((self.h_c+self.h_w)/2+self.d)) / (2*(self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_ULS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at ULS
             a_ULS[i, 0] = (self.h_c+self.h_w)/2 + self.d - a_ULS[i,1] #a_concrete at ULS
 
         # Calculate a_i values for SLS at different time points
         for i in range(2):
-            a_SLS[1, i] = (self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c*(self.h_c+self.h_w)) / (2*(self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_SLS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at SLS
+            a_SLS[1, i] = (self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c*((self.h_c+self.h_w)/2+self.d)) / (2*(self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_SLS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at SLS
             a_SLS[0, i] = (self.h_c+self.h_w)/2 + self.d - a_SLS[1,i] #a_concrete at SLS
 
         # Calculate effective stiffness at ULS for different time points
@@ -1089,10 +1089,43 @@ class TCC(SupStrucTCC):
             EI_SLS[i] += (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_SLS[i]*self.A_c*a_SLS[i,0]**2)
             EI_SLS[i] += (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_SLS[i,1]**2)
         
-        return EI_ULS, EI_SLS
+        return EI_ULS, EI_SLS, a_ULS, a_SLS
     
     def calc_mu(self):
+        # Field momentresistance
+        # Initialize array for m_u at different time points
+        mu = np.zeros(3)
+
+        # Get material properties for concrete at design level ULS
+        fcd = self.concrete_type.fcd, self.concrete_type.tcd, self.concrete_type.ec2d
+
+        # Get material properties for wood at design level ULS
+        fmd = self.wood_type.fmd
+
+        # Calculate m_u at ULS for t=0, t=3...7years, t=inf in [Nm/m']
+        for i in range(3): 
+            mu[i] = min(fcd * self.EI_ULS[i] / (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*1/(self.gamma_ULS[i]*self.a_ULS[i,0]+self.h_c/2), #concrete edge stress
+                        fmd * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2))/self.a_ribs #wood edge stress
         
+        return mu
+    
+    def calc_vu(self):
+        # Shear resistance
+        # Initialize array for v_u at different time points
+        vu = np.zeros(3)
+
+        # Get material properties for wood at design level ULS
+        fvd = self.wood_type.fvd
+
+        # Calculate v_u at ULS for t=0, t=3...7years, t=inf in [N/m']
+        for i in range(3):
+            vu[i] = (fvd * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)**2)/self.a_ribs
+
+        return vu
+       
+
+     
+
 
 #-----------------------------------------------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------
