@@ -28,6 +28,7 @@
 # - Rechteckquerschnitte
 # - Anforderungen
 
+import copy
 import sqlite3  # import modul for SQLite
 import numpy as np
 from scipy.optimize import minimize
@@ -425,8 +426,22 @@ class RectangularConcrete(SupStrucRectangular):
 
     @staticmethod
     def fire_resistance(section):
-        # Must be implemented 
-        resistance = 60  # Dummy default value for resistance
+        # fire resistance of 1-D load-bearing plates according to SIA 262, Tab.16
+        c_nom = section.c_nom
+        h = section.h
+        b = section.b
+        if c_nom >= 0.04 and h >= 0.15 and b >= 0.4:
+            resistance = 180
+        elif c_nom >= 0.03 and h >= 0.12 and b >= 0.3:
+            resistance = 120
+        elif c_nom >= 0.03 and h >= 0.1 and b >= 0.2:
+            resistance = 90
+        elif c_nom >= 0.02 and h >= 0.08 and b >= 0.15:
+            resistance = 60
+        elif c_nom >= 0.02 and h >= 0.06 and b >= 0.1:
+            resistance = 30
+        else:
+            resistance = 0
         return resistance
 
 
@@ -1110,10 +1125,69 @@ class TCC(SupStrucTCC):
         return vu
     
     @staticmethod
-    def fire_resistance(section):
-        #TODO: Fire resistance calculation for TCC
-            resistance = 60
-        return resistance
+    def fire_resistance(member):
+        bnds = [(0, 240)]   #Randbedingungen für Definition Brand - mind. 0 min max. 240 min
+        t0 = 60     #Brandeinwirkungsdauer
+        max_t = minimize(TCC.fire_minimizer, t0, args=[member], bounds=bnds)    #Brandwiderstanddauer → maximale Brandeinwirkungszeit
+        t_max = max_t.x[0]
+        return t_max
+
+    @staticmethod
+    def fire_minimizer(t, args):
+        member = args[0]
+        rem_sec = TCC.remaining_section(member.section, member.fire, t)
+        mu_fire = 1.8 * rem_sec.mu[0] #SIA 265 (51)
+        vu_fire = 1.8 * rem_sec.vu[0]  # SIA 265 (51)
+        qd_fire = member.psi[2] * member.qk + member.gk
+        qd_fire_zul = min(mu_fire / (max(member.system.alpha_m) * member.system.l_tot ** 2),
+                          vu_fire / (max(member.system.alpha_v) * member.system.l_tot))
+        to_opt = abs(qd_fire - qd_fire_zul)
+        return to_opt
+
+    @staticmethod
+    def remaining_section(section, fire, t, dred=0.007):
+        # Fire is a list of integers: [bottom, left, top, right] 1: means exposed to fire, 0 means not exposed to fire.
+        # For TCC ribbed, [1,1,0,1] 
+        # For TCC slab, [1,0,0,0] 
+    
+        # Wood charring rate (beta_n)
+        dcharn = section.wood_type.burn_rate / 1000 #  mm/min to m/min for compatibility with other dimensions in m
+        if t > 0:
+            d_ef = dcharn * t + dred / 1000  # Effective charring depth m
+        else:
+            d_ef = 0
+
+        # Reduce timber rib width (usually exposed on left and right)
+        b_w_red = section.b_w
+        b_w_red -= d_ef*fire[1]  # Left side
+        b_w_red -= d_ef*fire[3]  # Right side
+
+        # Reduce timber rib height (exposed from bottom)
+        h_w_red = section.h_w
+        h_w_red -= d_ef*fire[0]  # Bottom
+        
+        # Wood has completely burned away
+        if b_w_red <= 0 or h_w_red <= 0:
+            b_w_red = 0.001 # Prevent division by zero errors
+            h_w_red = 0.001
+
+        # Reduce the connector stiffness if screws are used as connectors
+        k_modFi = 1 # Modification factor for connector stiffness according to Lignum 3.1, Table 46-1
+        if section.connector_type.name != "kerve":
+            a = (b_w_red - 0.03)/2 #Assume connectors use 3cm of timber width (A46-1) Lignum 3.1
+            a_mm = a * 1000 # convert to mm to correctly use the formula from Lignum 3.1, Table 46-1
+            if a_mm<=0.6*t: k_modFi = 0
+            elif a_mm<=0.8*t+3: k_modFi = (0.2*a_mm-0.12*t)/(0.2*t+3)
+            elif a_mm<= t+24: k_modFi = (a_mm*0.8-0.6*t+1.8)/(0.2*t+21)
+            else: k_modFi = 1
+        
+        reduced_connector = copy.deepcopy(section.connector_type)
+        reduced_connector.K_ser = reduced_connector.K_ser * k_modFi
+        # Create and return the reduced TCC section with the new connector stiffness and reduced timber dimensions
+        rem_sec = TCC(section.concrete_type, section.rebar_type, section.wood_type, reduced_connector, section.s, section.a_ribs, section.h_c, h_w_red, b_w_red, section.d, section.l0)
+        return rem_sec
+    
+    
        
 
 
