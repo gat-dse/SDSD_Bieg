@@ -43,9 +43,8 @@ class Wood:
         connection = sqlite3.connect(database)
         cursor = connection.cursor()
         # get mechanical properties from database
-        inquiry = ("SELECT strength_bend, strength_shea, E_modulus, density_load, burn_rate, phi FROM material_prop WHERE"
-                   " name=" + mech_prop)
-        cursor.execute(inquiry)
+        inquiry = ("SELECT strength_bend, strength_shea, E_modulus, density_load, burn_rate, phi FROM material_prop WHERE name = ?")
+        cursor.execute(inquiry, (mech_prop,))
         result = cursor.fetchall()
         self.fmk, self.fvd, self.Emmean, self.weight, self.burn_rate, self.phi = result[0]
         # get GWP properties from database
@@ -1326,6 +1325,29 @@ class Slab:
 
         #self.factors = [self.alpha_m, self.alpha_v, self.qs_cl_erf, self.alpha_w, self.kf2, self.alpha_w_f_cd]
 
+class LoadCombinations:
+    def __init__(self, g0k, g1k, g2k, qk=2e3, psi=[0.7, 0.5, 0.3], gamma_g=1.35, gamma_q=1.5):
+        self.g0k = g0k #selfweight of the structural element
+        self.g1k = g1k #dead load of the floor structure
+        self.g2k = g2k #superimposed dead load
+        self.qk = qk #live loads
+        self.psi = psi #psi factors for combination of actions
+        self.gamma_g = gamma_g #partial safety factor for permanent loads
+        self.gamma_q = gamma_q #partial safety factor for variable loads
+
+    def uls(self):
+        return self.gamma_g * (self.g0k + self.g1k + self.g2k) + self.gamma_q * self.qk
+    
+    def sls_rare(self):
+        return self.g0k + self.g1k + self.g2k + self.qk
+    
+    def sls_freq(self):
+        return self.g0k + self.g1k + self.g2k + self.psi[1] * self.qk
+    
+    def sls_per(self):
+        return self.g0k + self.g1k + self.g2k + self.psi[2] * self.qk
+    
+
 
 class Member1D:
     def __init__(self, section, system, floorstruc, requirements, g2k=0.0, qk=2e3, psi0=0.7, psi1=0.5, psi2=0.3,
@@ -1335,15 +1357,25 @@ class Member1D:
         self.floorstruc = floorstruc
         self.requirements = requirements
         self.li_max = self.system.li_max
+
+        # Initialize LoadCombinations
+        self.load_combinations = LoadCombinations(
+            g0k=self.section.g0k,
+            g1k=self.floorstruc.gk_area,
+            g2k=g2k,
+            qk=qk,
+            psi=[psi0, psi1, psi2]
+        )
         self.g0k = self.section.g0k
-        self.g1k = self.floorstruc.gk_area
-        self.g2k = g2k
+        self.g1k = self.load_combinations.g1k
+        self.g2k = self.load_combinations.g2k
         self.gk = self.g0k + self.g1k + self.g2k
-        self.qk = qk
-        self.psi = [psi0, psi1, psi2]
-        self.q_rare = self.gk + self.qk  #TODO: Wieso ist hier psi = 1.0?
-        self.q_freq = self.gk + self.psi[1] * self.qk
-        self.q_per = self.gk + self.psi[2] * self.qk
+        self.qk = self.load_combinations.qk
+        self.psi = self.load_combinations.psi
+        self.q_rare = self.load_combinations.sls_rare()
+        self.q_freq = self.load_combinations.sls_freq()
+        self.q_per = self.load_combinations.sls_per()
+
         self.m = self.q_per / 10
         self.w_install_adm = self.system.li_max / self.requirements.lw_install
         self.w_use_adm = self.system.li_max / self.requirements.lw_use
@@ -1542,6 +1574,9 @@ class Member1D:
         self.fire_resistance = fire_resistance
 
 
+
+
+
 class Member2D:
     def __init__(self, section, system, floorstruc, requirements, g2k=0.0, qk=2e3, psi0=0.7, psi1=0.5, psi2=0.3,
                      fire_b=True, fire_l=False, fire_t=False, fire_r=False):
@@ -1556,15 +1591,23 @@ class Member2D:
         self.requirements = requirements
         self.li_min = min(self.system.lx, self.system.ly)
         self.li_max = self.system.li_max
+        # Initialize LoadCombinations
+        self.load_combinations = LoadCombinations(
+            g0k=self.section.g0k,
+            g1k=self.floorstruc.gk_area,
+            g2k=g2k,
+            qk=qk,
+            psi=[psi0, psi1, psi2]
+        )
         self.g0k = self.section.g0k
-        self.g1k = self.floorstruc.gk_area
-        self.g2k = g2k
+        self.g1k = self.load_combinations.g1k
+        self.g2k = self.load_combinations.g2k
         self.gk = self.g0k + self.g1k + self.g2k
-        self.qk = qk
-        self.psi = [psi0, psi1, psi2]
-        self.q_rare = self.gk + self.qk
-        self.q_freq = self.gk + self.psi[1] * self.qk
-        self.q_per = self.gk + self.psi[2] * self.qk
+        self.qk = self.load_combinations.qk
+        self.psi = self.load_combinations.psi
+        self.q_rare = self.load_combinations.sls_rare()
+        self.q_freq = self.load_combinations.sls_freq()
+        self.q_per = self.load_combinations.sls_per()
         self.m = self.q_per / 10
         self.w_install_adm = self.li_min / self.requirements.lw_install
         self.w_use_adm = self.li_min / self.requirements.lw_use

@@ -588,6 +588,8 @@ def get_optimized_section(member, criterion, to_opt, max_iter, h_min=0.2):
         # available to_opt arguments: "GWP", "h"
         # available criterion arguments: "ULS", "SLS1", "SLS2"
         return opt_wd_rib(member, to_opt, criterion, max_iter)
+    elif member.section.section_type == "tcc":
+        return opt_tcc(member, to_opt, criterion, max_iter)
     else:
         print("There is no optimization for the section type " + member.section.section_type + " available!")
         return member.section
@@ -680,6 +682,22 @@ def get_opt_sec(section, gwp_budget):
         var0 = [h_0, b_0]
         print("wd-rib not yet defined for this plot")
 
+    elif section.section_type == "tcc":
+        var0 = np.array([section.h_c, section.h_w, section.b_w])
+        hc_min, hw_min, bw_min = 0.06, 0.12, 0.08
+        bnds = Bounds([hc_min, hw_min, bw_min], [0.4, 1.0, 0.6])
+        add_arg = [section.concrete_type, section.rebar_type, section.wood_type, section.connector_type, 
+                   section.s, section.a_ribs, section.d, section.l0, gwp_budget]
+        take_step = RandomDisplacementBounds(np.array([hc_min, hw_min, bw_min]), np.array([0.4, 1.0, 0.6]), stepsize=0.05)
+        
+        opt = basinhopping(tcc_crsc, var0, niter=max_iter, minimizer_kwargs={'args': add_arg, 'bounds': bnds}, take_step=take_step)
+        
+        opt_hc, opt_hw, opt_bw = opt.x
+        opt_section = struct_analysis.TCC(section.concrete_type, section.rebar_type, section.wood_type, 
+                                          section.connector_type, section.s, section.a_ribs, 
+                                          opt_hc, opt_hw, opt_bw, section.d, section.l0)
+                                          
+        return opt_section
 ## XXXXXXXXXXX neuen Querschnittstyp für optimierung vorbereiten. Für mehrere parameter: basinhopping methode.
 
     else:
@@ -726,3 +744,63 @@ def rc_rib_crsc(var, add_arg):
 
 ## XXXXXXXXXXX neue funktion (returnwert wird minimiert)
 
+#-----------------------------------------------------------------------------------------------------------------------
+# OPTIMIZATION OF TCC CROSS-SECTIONS
+def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.06, hw_min=0.12, bw_min=0.08):
+    # definition of initial values for variables, which are going to be optimized
+    hc0 = m.section.h_c
+    hw0 = m.section.h_w
+    bw0 = m.section.b_w
+    var0 = np.array([hc0, hw0, bw0])
+    
+    # bounds for dimensions [h_c, h_w, b_w]
+    # Adjust the upper bounds (e.g., 0.4, 1.0, 0.6) based on realistic architectural limits
+    bnds = Bounds([hc_min, hw_min, bw_min], [0.4, 1.0, 0.6])
+    
+    # static arguments passed to the objective function
+    add_arg = [m.section.concrete_type, m.section.rebar_type, m.section.wood_type, m.section.connector_type, 
+               m.section.s, m.section.a_ribs, m.section.d, m.section.l0, 99999] # 99999 = arbitrary high GWP budget
+               
+    # optimization step definition
+    take_step = RandomDisplacementBounds(np.array([hc_min, hw_min, bw_min]), np.array([0.4, 1.0, 0.6]), stepsize=0.05)
+    
+    # Run Basinhopping
+    res = basinhopping(tcc_crsc, var0, niter=max_iter, minimizer_kwargs={'args': add_arg, 'bounds': bnds}, take_step=take_step)
+    
+    # Create the optimized section
+    opt_hc, opt_hw, opt_bw = res.x
+    opt_section = struct_analysis.TCC(m.section.concrete_type, m.section.rebar_type, m.section.wood_type, 
+                                      m.section.connector_type, m.section.s, m.section.a_ribs, 
+                                      opt_hc, opt_hw, opt_bw, m.section.d, m.section.l0)
+                                      
+    # Create and return the optimized member
+    m_opt = struct_analysis.Member1D(opt_section, m.system, m.floorstruc, m.requirements, 
+                                     g2k=m.g2k, qk=m.qk, psi0=m.psi[0], psi1=m.psi[1], psi2=m.psi[2], 
+                                     fire_b=m.fire[0], fire_l=m.fire[1], fire_t=m.fire[2], fire_r=m.fire[3])
+    return m_opt
+
+def tcc_crsc(var, add_arg):
+    # Unpack variables
+    h_c, h_w, b_w = var
+    
+    # Unpack static arguments
+    concrete = add_arg[0]
+    reinfsteel = add_arg[1]
+    wood = add_arg[2]
+    connector = add_arg[3]
+    s = add_arg[4]
+    a_ribs = add_arg[5]
+    d = add_arg[6]
+    l0 = add_arg[7]
+    gwp_budget = add_arg[8]
+    
+    # Generate updated section
+    section_updated = struct_analysis.TCC(concrete, reinfsteel, wood, connector, s, a_ribs, h_c, h_w, b_w, d, l0)
+    
+    # Calculate penalty if GWP budget is exceeded
+    penalty = 1e6 * max(section_updated.CO_2 - gwp_budget, 0)
+    
+    # Minimize penalty minus the capacity (Mu_inf) to force the optimizer to maximize capacity
+    to_minimize = penalty - section_updated.Mu_inf
+    
+    return to_minimize

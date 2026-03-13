@@ -49,7 +49,7 @@ vrfctn_members = []
 #-----------------------------------------------------------------------------------------------------------------------
 # CREATE AND PLOT DATASET FOR TCC CROSS-SECTION
 # define materials for which date is searched in the database (table products, attribute material)
-mat_names = ["'ready_mixed_concrete'","'wood'","'connectorTCC'"]
+mat_names = ["'C20/25'","'C24'","'DBS_10'"]
 
 
 # retrieve data from database, find optimal cross-sections and plot results for TCC cross-section
