@@ -1002,6 +1002,8 @@ class TCC(SupStrucTCC):
         self.rebar_type = rebar_type
         self.wood_type = wood_type
         self.connector_type = connector_type
+        self.qs_class_n, self.qs_class_p = [3, 3]  # Required cross-section class: 1:PP, 2:EP, 3:EE
+
         self.s = s  # spacing of connectors [m]
         self.gamma_ULS, self.gamma_SLS, self.psi_ULS, self.psi_SLS = self.calc_gamma()
         self.EI_ULS, self.EI_SLS, self.a_ULS, self.a_SLS = self.calc_EIeff()
@@ -1011,7 +1013,6 @@ class TCC(SupStrucTCC):
         self.co2 = self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
         self.g0k = self.calc_weight() 
-        self.phi = 2 #phi dummy as creep is considered in EI_eff
         self.ei1 = 1 #ei1 dummy as creep is considered in EI_eff
         
     
@@ -1488,7 +1489,7 @@ class Member1D:
                 # assign a value, which drops from the full bending strength fast towards 0 (for concrete sections)
                 # or a value of 0 (for all other sections)
                 if self.section.section_type[0:2] == "rc":
-                    # for reinforced concrete cross-sections: smooth change to 0 load bearing capacity when roh<roh_min
+                    # for reinforced concthurete cross-sections: smooth change to 0 load bearing capacity when roh<roh_min
                     # or roh>roh_zul (enables more efficient optimization)
                     epsilon = 1.0e-3
                     if qs_class_vorh[1] == 1:
