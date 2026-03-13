@@ -1003,20 +1003,25 @@ class TCC(SupStrucTCC):
         self.wood_type = wood_type
         self.connector_type = connector_type
         self.s = s  # spacing of connectors [m]
-        self.co2 = self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
-        self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
         self.gamma_ULS, self.gamma_SLS, self.psi_ULS, self.psi_SLS = self.calc_gamma()
         self.EI_ULS, self.EI_SLS, self.a_ULS, self.a_SLS = self.calc_EIeff()
         self.Mu = self.calc_mu()
         self.Vu = self.calc_vu()
+
+        self.co2 = self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
+        self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
+        self.g0k = self.calc_weight() 
+        self.phi = 2 #phi dummy as creep is considered in EI_eff
+        self.ei1 = 1 #ei1 dummy as creep is considered in EI_eff
+        
     
     def calc_gamma(self):
         # Initialize array for gamma values at different time points
-        gamma_ULS = np.zeros(3) #gamma_ULS[0] for t=0, gamma_ULS[1] for t=3...7years, gamma_ULS[2] for t=inf
+        gamma_ULS = np.zeros(2) #gamma_ULS[0] for t=0, gamma_ULS[1] for t=inf
         gamma_SLS = np.zeros(2) #gamma_SLS[0] for t=0, gamma_SLS[1] for t=inf
 
-        # Initialize 3x3 array for psi values at different time points for concrete, wood, and connector for ULS
-        psi_ULS = np.zeros((3, 3)) # Rows: 0 for t=0, 1 for t=3...7years, 2 for t=inf; Columns: 0 for concrete, 1 for wood, 2 for connector
+        # Initialize 2x3 array for psi values at different time points for concrete, wood, and connector for ULS
+        psi_ULS = np.zeros((2, 3)) # Rows: 0 for t=0, 1 for t=inf; Columns: 0 for concrete, 1 for wood, 2 for connector
         # Initialize 2x3 array for psi values at different time points for concrete, wood, and connector for SLS
         psi_SLS = np.zeros((2, 3)) # Rows: 0 for t=0, 1 for t=inf; Columns: 0 for concrete, 1 for wood, 2 for connector
 
@@ -1029,24 +1034,15 @@ class TCC(SupStrucTCC):
         phi_ratio = (self.wood_type.phi - 0.6) / 0.2
 
         # ULS
-        # psi t=3...7years
-        psi_conc_ULS37_06 = 2.5 - gamma_ULS[0]**1.1 + (1.9 - 0.6 * gamma_ULS[0]**1.1 - (2.5 - gamma_ULS[0]**1.1)) * phi_diff
-        psi_conc_ULS37_08 = 2.2 - 0.8 * gamma_ULS[0]**1.2 + (1.7 - 0.5 * gamma_ULS[0]**1.1 - (2.2 - 0.8 * gamma_ULS[0]**1.2)) * phi_diff
-        psi_ULS[1, 0] = psi_conc_ULS37_06 + (psi_conc_ULS37_08 - psi_conc_ULS37_06) * phi_ratio # psi t=3...7years for concrete
-        psi_ULS[1, 1], psi_ULS[1, 2] = 0.5, 0.65 # psi t=3...7years for wood and connector
         # psi t=inf
         psi_conc_ULSinf_06 = 2.6 - 0.8 * gamma_ULS[0]**2 + (2.0 - 0.5 * gamma_ULS[0]**1.9 - (2.6 - 0.8 * gamma_ULS[0]**2)) * phi_diff
         psi_conc_ULSinf_08 = 2.3 - 0.5 * gamma_ULS[0]**2.6 + (1.8 - 0.3 * gamma_ULS[0]**2.5 - (2.3 - 0.5 * gamma_ULS[0]**2.6)) * phi_diff
-        psi_ULS[2, 0] = psi_conc_ULSinf_06 + (psi_conc_ULSinf_08 - psi_conc_ULSinf_06) * phi_ratio # psi t=inf for concrete
-        psi_ULS[2, 1] = psi_ULS[2, 2] = 1 # psi t=inf for wood and connector
-        # Calculate gamma ULS at t=3...7years
-        E_c_ULS37 = self.concrete_type.Ecm / (1 + psi_ULS[1, 0] * self.concrete_type.phi)
-        K_ULS37 = self.connector_type.K_ser * 2/3 / (1 + psi_ULS[1, 2] * self.wood_type.phi * 2)
-        gamma_ULS[1] = 1 / (1 + np.pi**2 * E_c_ULS37 * self.A_c * self.s / (K_ULS37 * self.l0**2)) # gamma ULS at t=3...7years
+        psi_ULS[1, 0] = psi_conc_ULSinf_06 + (psi_conc_ULSinf_08 - psi_conc_ULSinf_06) * phi_ratio # psi t=inf for concrete
+        psi_ULS[1, 1] = psi_ULS[1, 2] = 1 # psi t=inf for wood and connector
         # Calculate gamma ULS at t=inf
-        E_c_ULSinf = self.concrete_type.Ecm / (1 + psi_ULS[2, 0] * self.concrete_type.phi)
-        K_ULSinf = self.connector_type.K_ser * 2/3 / (1 + psi_ULS[2, 2] * self.wood_type.phi * 2)
-        gamma_ULS[2] = 1 / (1 + np.pi**2 * E_c_ULSinf * self.A_c * self.s / (K_ULSinf * self.l0**2)) # gamma ULS at t=inf
+        E_c_ULSinf = self.concrete_type.Ecm / (1 + psi_ULS[1, 0] * self.concrete_type.phi)
+        K_ULSinf = self.connector_type.K_ser * 2/3 / (1 + psi_ULS[1, 2] * self.wood_type.phi * 2)
+        gamma_ULS[1] = 1 / (1 + np.pi**2 * E_c_ULSinf * self.A_c * self.s / (K_ULSinf * self.l0**2)) # gamma ULS at t=inf
 
         # SLS
         # psi t=inf
@@ -1063,29 +1059,29 @@ class TCC(SupStrucTCC):
     
     def calc_EIeff(self):
         # Initialize arrays for effective stiffness at ULS and SLS
-        EI_ULS = np.zeros(3) #EI_ULS[0] for t=0, EI_ULS[1] for t=3...7years, EI_ULS[2] for t=inf
+        EI_ULS = np.zeros(2) #EI_ULS[0] for t=0, EI_ULS[1] for t=inf
         EI_SLS = np.zeros(2) #EI_SLS[0] for t=0, EI_SLS[1] for t=inf
-        # Initialize 2x3 array for a_i values at ULS and 2x2 array for a_i values at SLS
-        a_ULS = np.zeros((3, 2)) #Rows for t=0, t=3...7years, t=inf, Columns for concrete and wood 
+        # Initialize 2x2 array for a_i values at ULS and SLS
+        a_ULS = np.zeros((2, 2)) #Rows for t=0, t=inf, Columns for concrete and wood 
         a_SLS = np.zeros((2, 2)) #Rows for t=0, t=inf, Columns for concrete and wood 
 
         # Calculate a_i values for ULS at different time points i
-        for i in range(3):
+        for i in range(2):  # Only t=0 and t=inf
             a_ULS[i, 1] = (self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i, 0]*self.concrete_type.phi)) * self.A_c*((self.h_c+self.h_w)/2+self.d)) / (2*(self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_ULS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at ULS
             a_ULS[i, 0] = (self.h_c+self.h_w)/2 + self.d - a_ULS[i,1] #a_concrete at ULS
 
         # Calculate a_i values for SLS at different time points
-        for i in range(2):
+        for i in range(2):  # Only t=0 and t=inf
             a_SLS[1, i] = (self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c*((self.h_c+self.h_w)/2+self.d)) / (2*(self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_SLS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at SLS
             a_SLS[0, i] = (self.h_c+self.h_w)/2 + self.d - a_SLS[1,i] #a_concrete at SLS
 
         # Calculate effective stiffness at ULS for different time points
-        for i in range(3):
+        for i in range(2):  # Only t=0 and t=inf
             EI_ULS[i] += (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_ULS[i]*self.A_c*a_ULS[i,0]**2)
             EI_ULS[i] += (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_ULS[i,1]**2)
 
         # Calculate effective stiffness at SLS for different time points
-        for i in range(2):
+        for i in range(2):  # Only t=0 and t=inf
             EI_SLS[i] += (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_SLS[i]*self.A_c*a_SLS[i,0]**2)
             EI_SLS[i] += (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_SLS[i,1]**2)
         
@@ -1094,7 +1090,7 @@ class TCC(SupStrucTCC):
     def calc_mu(self):
         # Field momentresistance
         # Initialize array for m_u at different time points
-        mu = np.zeros(3)
+        mu = np.zeros(2) #mu[0] for t=0, mu[1] for t=inf
 
         # Get material properties for concrete at design level ULS
         fcd = self.concrete_type.fcd, self.concrete_type.tcd, self.concrete_type.ec2d
@@ -1102,8 +1098,8 @@ class TCC(SupStrucTCC):
         # Get material properties for wood at design level ULS
         fmd = self.wood_type.fmd
 
-        # Calculate m_u at ULS for t=0, t=3...7years, t=inf in [Nm/m']
-        for i in range(3): 
+        # Calculate m_u at ULS for t=0, t=inf in [Nm/m']
+        for i in range(2): 
             mu[i] = min(fcd * self.EI_ULS[i] / (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*1/(self.gamma_ULS[i]*self.a_ULS[i,0]+self.h_c/2), #concrete edge stress
                         fmd * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2))/self.a_ribs #wood edge stress
         
@@ -1112,13 +1108,13 @@ class TCC(SupStrucTCC):
     def calc_vu(self):
         # Shear resistance
         # Initialize array for v_u at different time points
-        vu = np.zeros(3)
+        vu = np.zeros(2) #vu[0] for t=0, vu[1] for t=inf
 
         # Get material properties for wood at design level ULS
         fvd = self.wood_type.fvd
 
-        # Calculate v_u at ULS for t=0, t=3...7years, t=inf in [N/m']
-        for i in range(3):
+        # Calculate v_u at ULS for t=0, t=inf in [N/m']
+        for i in range(2):
             vu[i] = (fvd * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)**2)/self.a_ribs
 
         return vu
@@ -1338,6 +1334,12 @@ class LoadCombinations:
     def uls(self):
         return self.gamma_g * (self.g0k + self.g1k + self.g2k) + self.gamma_q * self.qk
     
+    def uls_short(self):
+        return self.gamma_q * self.psi[0] * self.qk #short-term combination for short-term effects
+    
+    def uls_per(self):
+        return self.gamma_g * (self.g0k + self.g1k + self.g2k) + self.gamma_q * (1-self.psi[0]) * self.qk #quasi-permanent combination for long-term effects
+    
     def sls_rare(self):
         return self.g0k + self.g1k + self.g2k + self.qk
     
@@ -1375,12 +1377,12 @@ class Member1D:
         self.q_rare = self.load_combinations.sls_rare()
         self.q_freq = self.load_combinations.sls_freq()
         self.q_per = self.load_combinations.sls_per()
+        self.q_uls = self.load_combinations.uls()
 
         self.m = self.q_per / 10
         self.w_install_adm = self.system.li_max / self.requirements.lw_install
         self.w_use_adm = self.system.li_max / self.requirements.lw_use
         self.w_app_adm = self.system.li_max / self.requirements.lw_app
-        self.qu = self.calc_qu()
         self.mkd_n = self.system.alpha_m[0] * (self.gk + self.qk) * self.system.l_tot ** 2
         self.mkd_p = self.system.alpha_m[1] * (self.gk + self.qk) * self.system.l_tot ** 2
         self.qk_zul_gzt = float
@@ -1397,6 +1399,7 @@ class Member1D:
 
         # calculation of deflections uncracked (plus cracked for concrete sections self.section.section_type[0:2] = rc))
         section_material = self.section.section_type[0:2]
+        
         unit_def = self.system.alpha_w * self.system.l_tot ** 4 / self.section.ei1  # deflection for q = 1, phi = 0
 
         if self.requirements.install == "ductile":
@@ -1409,6 +1412,10 @@ class Member1D:
                                                                                    0, self.section.h, self.section.d)
                         - self.q_per
                 )
+            if section_material == "tcc":
+                self.w_install_ger = unit_def * (
+                        self.q_per / self.section.EI_ULS[1] + (self.q_freq - self.q_per) / self.section.EI_ULS[0]
+                )
 
         elif self.requirements.install == "brittle":
             self.w_install = unit_def * (self.q_rare + self.q_per * (self.section.phi - 1))
@@ -1420,17 +1427,29 @@ class Member1D:
                                                                                    0, self.section.h, self.section.d)
                         - self.q_per
                 )
+            if section_material == "tcc":
+                self.w_install_ger = unit_def * (
+                        self.q_per / self.section.EI_ULS[1] + (self.q_rare - self.q_per) / self.section.EI_ULS[0]
+                )
         self.w_use = unit_def * (self.q_freq - self.gk)
         if section_material == "rc":  # Alternative Durchbiegungsberechnung für Betonquerschnitte gem. SIA262,(102)
             self.w_use_ger = unit_def * (
                     (self.q_freq - self.q_per) * RectangularConcrete.f_w_ger(self.section.roh, self.section.rohs, 0,
                                                                              self.section.h, self.section.d)
             )
+        if section_material == "tcc":
+            self.w_use_ger = unit_def * (
+                    (self.q_freq - self.q_per) / self.section.EI_ULS[0]
+            )
         self.w_app = unit_def * (self.q_per * (1 + self.section.phi))
         if section_material == "rc":  # Alternative Durchbiegungsberechnung für Betonquerschnitte gem. SIA262,(102)
             self.w_app_ger = unit_def * (
                     self.q_per * RectangularConcrete.f_w_ger(self.section.roh, self.section.rohs, self.section.phi,
                                                              self.section.h, self.section.d)
+            )
+        if section_material == "tcc":
+            self.w_app_ger = unit_def * (
+                    self.q_per / self.section.EI_ULS[1]
             )
         self.co2 = system.l_tot * (self.floorstruc.co2 + self.section.co2)
 
@@ -1608,11 +1627,12 @@ class Member2D:
         self.q_rare = self.load_combinations.sls_rare()
         self.q_freq = self.load_combinations.sls_freq()
         self.q_per = self.load_combinations.sls_per()
+        self.qu = self.load_combinations.uls()
+
         self.m = self.q_per / 10
         self.w_install_adm = self.li_min / self.requirements.lw_install
         self.w_use_adm = self.li_min / self.requirements.lw_use
         self.w_app_adm = self.li_min / self.requirements.lw_app
-        self.qu = self.calc_qu()
         self.mkd_n = self.system.alpha_m_x[0] * (self.gk + self.qk) * self.li_max ** 2
         self.mkd_p = self.system.alpha_m_x[1] * (self.gk + self.qk) * self.li_max ** 2
         self.mkd_n_y = self.system.alpha_m_y[0] * (self.gk + self.qk) * self.li_min ** 2
