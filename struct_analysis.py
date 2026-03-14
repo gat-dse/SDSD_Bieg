@@ -1013,7 +1013,14 @@ class TCC(SupStrucTCC):
         self.co2 = self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
         self.g0k = self.calc_weight() 
-        self.ei1 = 1 #ei1 dummy as creep is considered in EI_eff
+        self.ei1 = self.EI_SLS[0]  # elastic stiffness at t=0 for SLS checks
+        # Positive capacities (dummy values)
+        self.mu_max = 1
+        self.vu_p = 1
+    
+        # Negative capacities (Never used, just here to prevent crashes)
+        self.mu_min = 0.0
+        self.vu_n = 0.0
         
     
     def calc_gamma(self):
@@ -1099,10 +1106,16 @@ class TCC(SupStrucTCC):
         # Get material properties for wood at design level ULS
         fmd = self.wood_type.fmd
 
+        # k_mod to account for wood stiffness reduction due to load duration EN1995-1-1 (same as eta_t in SIA 265)
+        k_mod = 1
+
         # Calculate m_u at ULS for t=0, t=inf in [Nm/m']
         for i in range(2): 
+            if i == 1: #t=inf, apply k_mod for wood stiffness reduction
+                k_mod = 0.6 # for load duration class 3 (long-term load) according to EN1995-1-1, Table 3.1
             mu[i] = min(fcd * self.EI_ULS[i] / (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*1/(self.gamma_ULS[i]*self.a_ULS[i,0]+self.h_c/2), #concrete edge stress
-                        fmd * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2))/self.a_ribs #wood edge stress
+                        fmd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2))/self.a_ribs #wood edge stress
+            
         
         return mu
     
@@ -1114,9 +1127,14 @@ class TCC(SupStrucTCC):
         # Get material properties for wood at design level ULS
         fvd = self.wood_type.fvd
 
-        # Calculate v_u at ULS for t=0, t=inf in [N/m']
-        for i in range(2):
-            vu[i] = (fvd * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)**2)/self.a_ribs
+        # k_mod to account for wood stiffness reduction due to load duration EN1995-1-1 (same as eta_t in SIA 265)
+        k_mod = 1
+
+        # Calculate m_u at ULS for t=0, t=inf in [Nm/m']
+        for i in range(2): 
+            if i == 1: #t=inf, apply k_mod for wood stiffness reduction
+                k_mod = 0.6 # for load duration class 3 (long-term load) according to EN1995-1-1, Table 3.1
+            vu[i] = (fvd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)**2)/self.a_ribs
 
         return vu
     
@@ -1331,6 +1349,7 @@ class LoadCombinations:
         self.psi = psi #psi factors for combination of actions
         self.gamma_g = gamma_g #partial safety factor for permanent loads
         self.gamma_q = gamma_q #partial safety factor for variable loads
+        self.gk = g0k + g1k + g2k
 
     def uls(self):
         return self.gamma_g * (self.g0k + self.g1k + self.g2k) + self.gamma_q * self.qk
@@ -1372,7 +1391,7 @@ class Member1D:
         self.g0k = self.section.g0k
         self.g1k = self.load_combinations.g1k
         self.g2k = self.load_combinations.g2k
-        self.gk = self.g0k + self.g1k + self.g2k
+        self.gk = self.load_combinations.gk
         self.qk = self.load_combinations.qk
         self.psi = self.load_combinations.psi
         self.q_rare = self.load_combinations.sls_rare()
@@ -1414,7 +1433,7 @@ class Member1D:
                         - self.q_per
                 )
             if section_material == "tcc":
-                self.w_install_ger = unit_def * (
+                self.w_install_ger = unit_def*self.section.ei1 * (
                         self.q_per / self.section.EI_ULS[1] + (self.q_freq - self.q_per) / self.section.EI_ULS[0]
                 )
 
@@ -1429,7 +1448,7 @@ class Member1D:
                         - self.q_per
                 )
             if section_material == "tcc":
-                self.w_install_ger = unit_def * (
+                self.w_install_ger = unit_def*self.section.ei1 * (
                         self.q_per / self.section.EI_ULS[1] + (self.q_rare - self.q_per) / self.section.EI_ULS[0]
                 )
         self.w_use = unit_def * (self.q_freq - self.gk)
@@ -1439,7 +1458,7 @@ class Member1D:
                                                                              self.section.h, self.section.d)
             )
         if section_material == "tcc":
-            self.w_use_ger = unit_def * (
+            self.w_use_ger = unit_def*self.section.ei1 * (
                     (self.q_freq - self.q_per) / self.section.EI_ULS[0]
             )
         self.w_app = unit_def * (self.q_per * (1 + self.section.phi))
@@ -1449,7 +1468,7 @@ class Member1D:
                                                              self.section.h, self.section.d)
             )
         if section_material == "tcc":
-            self.w_app_ger = unit_def * (
+            self.w_app_ger = unit_def*self.section.ei1 * (
                     self.q_per / self.section.EI_ULS[1]
             )
         self.co2 = system.l_tot * (self.floorstruc.co2 + self.section.co2)
@@ -1478,6 +1497,7 @@ class Member1D:
         alpha_v = self.system.alpha_v
         qs_class_erf = self.system.qs_cl_erf  # z.B. [0, 2]
         qs_class_vorh = [self.section.qs_class_n, self.section.qs_class_p]
+
 
         if min(alpha_m) >= 0 or abs(alpha_m[1]) >= abs(alpha_m[0]):
             if qs_class_vorh[1] <= qs_class_erf[1]:
@@ -1529,8 +1549,39 @@ class Member1D:
             qu_shear = self.section.vu_n / (min(alpha_v) * self.system.l_tot)
         return min(qu_bend, qu_shear)
 
-    def calc_qk_zul_gzt(self, gamma_g=1.35, gamma_q=1.5):
-        self.qk_zul_gzt = (self.qu - gamma_g * self.gk) / gamma_q
+    def calc_qk_zul_gzt(self):
+        self.qk_zul_gzt = 0
+        if self.section.section_type == "tcc":
+            # Capacity at t=0
+            self.section.mu_max = self.section.Mu[0]
+            self.section.vu_p = self.section.Vu[0]
+            qu_0 = self.calc_qu()  # Entspricht der reinen Tragfähigkeit bei t=0
+            
+            # Capacity at t=inf
+            self.section.mu_max = self.section.Mu[1]
+            self.section.vu_p = self.section.Vu[1]
+            qu_inf = self.calc_qu() # Entspricht der reinen Tragfähigkeit bei t=inf
+
+            #Set dummy value again for mu_max and vu_p
+            self.section.mu_max = 1
+            self.section.vu_p = 1
+
+            #Calculate degree of utilization solely based on selfweight
+            deg_util_gd = self.gk*self.gamma_g / qu_inf
+            if deg_util_gd >= 1:
+                self.qk_zul_gzt = 0 #failure already under selfweight at design level
+            else:
+                deg_util_qd_inf = (1-self.psi[0])*self.gamma_q / qu_inf
+                deg_util_qd_0 = self.psi[0]*self.gamma_q / qu_0
+                #Calculate the maximum variable load that can be applied without exceeding the capacity
+                self.qk_zul_gzt = max(0, (1 - deg_util_gd) / (deg_util_qd_inf + deg_util_qd_0))
+
+        else:
+            # Standard calc. (Concrete, Wood, etc.)
+            self.qu = self.calc_qu()
+            self.qk_zul_gzt = max((self.qu - self.gamma_g * self.gk) / self.gamma_q, 0)
+
+        return self.qk_zul_gzt
 
     def calc_f1(self):
         # calculates first frequency of system according to HBT, Seite 46
@@ -1588,6 +1639,8 @@ class Member1D:
             fire_resistance = RibbedConcrete.fire_resistance(self.section)
         elif self.section.section_type == "wd_rib":
             fire_resistance = RibWood.fire_resistance(self.section)
+        elif self.section.section_type == "tcc":
+            fire_resistance = TCC.fire_resistance(self.section)
         else:
             #print("fire resistance for is not defined for that cross-section type.")
             fire_resistance = None
@@ -1622,7 +1675,7 @@ class Member2D:
         self.g0k = self.section.g0k
         self.g1k = self.load_combinations.g1k
         self.g2k = self.load_combinations.g2k
-        self.gk = self.g0k + self.g1k + self.g2k
+        self.gk = self.load_combinations.gk
         self.qk = self.load_combinations.qk
         self.psi = self.load_combinations.psi
         self.q_rare = self.load_combinations.sls_rare()

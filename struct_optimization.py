@@ -570,6 +570,102 @@ def wd_rib_rqs(var, add_arg):
         print("criterion has to be 'ULS', 'SLS1', 'SLS2', 'FIRE' or 'ENV'")
     return to_minimize
 
+# TCC cross-section
+# Outer function to find optimal TCC cross-section
+def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.06, hw_min=0.12, bw_min=0.08):
+    #Initial values for optimization variables
+    hc0 = m.section.hc
+    hw0 = m.section.hw
+    bw0 = m.section.bw
+    var0 = [hc0, hw0, bw0]
+    #Bounds for optimization variables
+    bhc = (hc_min, 0.5)  
+    bhw = (hw_min, 1.0)
+    bbw = (bw_min, 1.0)
+    bounds = [bhc, bhw, bbw]
+    #Definition of fixed values for optimization
+    conc, reb, wood, conn = m.section.concrete_type, m.section.rebar_type, m.section.wood_type, m.section.connection_type
+    s, a_ribs, d0, l0 = m.section.s, m.section.a_ribs, m.section.d0, m.section.l0
+    #Extract loads and fire settings to pass to the trail members
+    add_arg = [m.system, conc, reb, wood, conn, s, a_ribs, d0, l0, m.floorstruc, m.requirements, to_opt, criterion, m.loads.g2k, m.loads.qk, m.loads.psi0, m.loads.psi1, m.loads.psi2, m.fire]
+    # Optimize step definition
+    bounded_step = RandomDisplacementBounds(np.array([b[0] for b in bounds]), np.array([b[1] for b in bounds]))
+    # Run Bashinhoppin and return optimized section
+    opt = basinhopping(tcc_rqs, var0, niter=max_iter, T=1, minimizer_kwargs={"args": (add_arg,), "bounds": bounds, "method": "Powell"}, take_step=bounded_step)
+    hc_opt, hw_opt, bw_opt = opt.x
+    optimized_section = struct_analysis.TCC(conc, reb, wood, conn, s, a_ribs, d0, l0, hc_opt, hw_opt, bw_opt)
+    return optimized_section
+
+# Inner function for evaluating penalties
+def tcc_rqs(var, add_arg):
+    hc, hw, bw = var
+    # Unpack static arguments
+    system = add_arg[0]
+    co, st, wd, conn = add_arg[1:5]
+    s, a_ribs, d, l0 = add_arg[5:9]
+    floorstruc = add_arg[9]
+    criteria = add_arg[10]
+    to_opt = add_arg[11]
+    criterion = add_arg[12]
+    g2k, qk, psi0, psi1, psi2 = add_arg[13:18]
+    fire = add_arg[18]
+    
+    # Create trial section and member (passing the individual load kwargs to __init__)
+    section = struct_analysis.TCC(co, st, wd, conn, s, a_ribs, h_c, h_w, b_w, d, l0)
+    member = struct_analysis.Member1D(section, system, floorstruc, criteria, 
+                                      g2k=g2k, qk=qk, psi0=psi0, psi1=psi1, psi2=psi2, 
+                                      fire_b=fire[0], fire_l=fire[1], fire_t=fire[2], fire_r=fire[3])
+    
+    # Trigger structural calculations
+    member.calc_qk_zul_gzt()
+    # ULS penalty 
+    penalty1 = max(member.qk - member.qk_zul_gzt, 0)
+    # SLS1 penalty (deflection)
+    d1, d2, d3 = [member.w_install - member.w_install_adm, member.w_use - member.w_use_adm, member.w_app - member.w_app_adm]
+    penalty2 = 1e5 * max(d1, d2, d3, 0)
+    # SLS2 penalty (vibration)
+    pen_a = member.a_ed - member.requirements.a_cd  
+    pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1  
+    pen_v = member.ve_ed - member.ve_cd
+    if member.f1 < member.requirements.f1:
+        penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
+    else:
+        penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
+    # Fire resistance penalty
+    member.get_fire_resistance()
+    penalty4 = max(member.requirements.t_fire - member.fire_resistance, 0)
+    # Optimization criteria
+    if criterion == "ULS":
+        if to_opt == "GWP":
+            return member.section.co2 * (1 + penalty1)
+        elif to_opt == "h":
+            return member.section.h * (1 + penalty1)
+    elif criterion == "SLS1":
+        if to_opt == "GWP":
+            return member.section.co2 * (1 + penalty2)
+        elif to_opt == "h":
+            return member.section.h * (1 + penalty2)
+    elif criterion == "SLS2":
+        if to_opt == "GWP":
+            return member.section.co2 * (1 + penalty3)
+        elif to_opt == "h":
+            return member.section.h * (1 + penalty3)
+    elif criterion == "FIRE":
+        if to_opt == "GWP":
+            return member.section.co2 * (1 + penalty4)
+        elif to_opt == "h":
+            return member.section.h * (1 + penalty4)
+    elif criterion == "ENV":
+        if to_opt == "GWP":
+            return member.section.co2 * (1 + penalty1 + penalty2 + penalty3 + penalty4)
+        elif to_opt == "h":
+            return member.section.h * (1 + penalty1 + penalty2 + penalty3 + penalty4)
+    else:
+        print("criterion " + criterion + " is not defined")
+        print("criterion has to be 'ULS', 'SLS1', 'SLS2', 'FIRE' or 'ENV'")
+        return 99
+
+
 #-----------------------------------------------------------------------------------------------------------------------
 # function for returning optimal section for defined QS-type, system, requirements, loads, criterion and type of optimum
 def get_optimized_section(member, criterion, to_opt, max_iter, h_min=0.2):
@@ -744,63 +840,20 @@ def rc_rib_crsc(var, add_arg):
 
 ## XXXXXXXXXXX neue funktion (returnwert wird minimiert)
 
-#-----------------------------------------------------------------------------------------------------------------------
-# OPTIMIZATION OF TCC CROSS-SECTIONS
-def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.06, hw_min=0.12, bw_min=0.08):
-    # definition of initial values for variables, which are going to be optimized
-    hc0 = m.section.h_c
-    hw0 = m.section.h_w
-    bw0 = m.section.b_w
-    var0 = np.array([hc0, hw0, bw0])
-    
-    # bounds for dimensions [h_c, h_w, b_w]
-    # Adjust the upper bounds (e.g., 0.4, 1.0, 0.6) based on realistic architectural limits
-    bnds = Bounds([hc_min, hw_min, bw_min], [0.4, 1.0, 0.6])
-    
-    # static arguments passed to the objective function
-    add_arg = [m.section.concrete_type, m.section.rebar_type, m.section.wood_type, m.section.connector_type, 
-               m.section.s, m.section.a_ribs, m.section.d, m.section.l0, 99999] # 99999 = arbitrary high GWP budget
-               
-    # optimization step definition
-    take_step = RandomDisplacementBounds(np.array([hc_min, hw_min, bw_min]), np.array([0.4, 1.0, 0.6]), stepsize=0.05)
-    
-    # Run Basinhopping
-    res = basinhopping(tcc_crsc, var0, niter=max_iter, minimizer_kwargs={'args': add_arg, 'bounds': bnds}, take_step=take_step)
-    
-    # Create the optimized section
-    opt_hc, opt_hw, opt_bw = res.x
-    opt_section = struct_analysis.TCC(m.section.concrete_type, m.section.rebar_type, m.section.wood_type, 
-                                      m.section.connector_type, m.section.s, m.section.a_ribs, 
-                                      opt_hc, opt_hw, opt_bw, m.section.d, m.section.l0)
-                                      
-    # Create and return the optimized member
-    m_opt = struct_analysis.Member1D(opt_section, m.system, m.floorstruc, m.requirements, 
-                                     g2k=m.g2k, qk=m.qk, psi0=m.psi[0], psi1=m.psi[1], psi2=m.psi[2], 
-                                     fire_b=m.fire[0], fire_l=m.fire[1], fire_t=m.fire[2], fire_r=m.fire[3])
-    return m_opt
-
+#inner function for optimizing TCC section in terms of maximal bending moment and within gwp_budget
 def tcc_crsc(var, add_arg):
-    # Unpack variables
     h_c, h_w, b_w = var
-    
     # Unpack static arguments
-    concrete = add_arg[0]
-    reinfsteel = add_arg[1]
-    wood = add_arg[2]
-    connector = add_arg[3]
-    s = add_arg[4]
-    a_ribs = add_arg[5]
-    d = add_arg[6]
-    l0 = add_arg[7]
-    gwp_budget = add_arg[8]
-    
+    co, st, wd, conn = add_arg[0:4]
+    s, a_ribs, d, l0, gwp_budget = add_arg[4:9]
     # Generate updated section
-    section_updated = struct_analysis.TCC(concrete, reinfsteel, wood, connector, s, a_ribs, h_c, h_w, b_w, d, l0)
+    section_updated = struct_analysis.TCC(co, st, wd, conn, s, a_ribs, h_c, h_w, b_w, d, l0)
     
     # Calculate penalty if GWP budget is exceeded
-    penalty = 1e6 * max(section_updated.CO_2 - gwp_budget, 0)
+    penalty = 1e6 * max(section_updated.CO_2 - gwp_budget, 0.0)
     
-    # Minimize penalty minus the capacity (Mu_inf) to force the optimizer to maximize capacity
-    to_minimize = penalty - section_updated.Mu_inf
+    # Mu for t=inf konservatively
+    mu_capacity = section_updated.Mu[1] if hasattr(section_updated, 'Mu') and isinstance(section_updated.Mu, list) else section_updated.Mu_inf
     
+    to_minimize = penalty - mu_capacity 
     return to_minimize
