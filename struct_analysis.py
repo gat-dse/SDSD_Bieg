@@ -1398,6 +1398,8 @@ class Member1D:
         self.q_freq = self.load_combinations.sls_freq()
         self.q_per = self.load_combinations.sls_per()
         self.q_uls = self.load_combinations.uls()
+        self.gamma_g = self.load_combinations.gamma_g
+        self.gamma_q = self.load_combinations.gamma_q
 
         self.m = self.q_per / 10
         self.w_install_adm = self.system.li_max / self.requirements.lw_install

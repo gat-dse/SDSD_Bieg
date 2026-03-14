@@ -24,6 +24,27 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
     connection = sqlite3.connect(database_name)
     cursor = connection.cursor()
     for mat_name in mat_names:
+        if crsec_type == "tcc":
+            concrete_name, wood_name, conn_name = mat_name
+            
+            concrete = struct_analysis.ReadyMixedConcrete(concrete_name, database_name)
+            concrete.get_design_values()
+            
+            timber = struct_analysis.Wood(wood_name, database_name)
+            timber.get_design_values()
+            
+            connector = struct_analysis.ConnectorTCC(conn_name, database_name)
+            rebar = struct_analysis.SteelReinforcingBar("'B500B'", database_name)  # Fix!
+
+            # Create TCC section
+            section = struct_analysis.TCC(concrete, rebar, timber, connector, 0.2, 0.1, 0.05, 5.0, 0.1, 0.2, 0.12)
+
+            # Add section to content-definition of plot-line
+            line_i = [section, floorstruc]
+            to_plot.append(line_i)
+            
+            continue # Wir überspringen die SQL-Suche für diesen Durchlauf
+
         # Wählt alle EPDs vom Material "mat-name" (z.B. ready mixed concrete), welche sich gem. Spalte Statistik zwischen dem 10% und 90% Quantil befindet. Wo Source = Betonsortenrechenr, Ecoinvent oder KBOB ist, wird die Zeile nicht gewählt.
         inquiry = ("""
                 SELECT PRO_ID FROM products
@@ -203,26 +224,7 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                 # add sections to content-definition of plot-line
                 line_i0 = [section_00, floorstruc]
                 line_i1 = [section_01, floorstruc]
-                to_plot.extend([line_i0, line_i1])
-
-            elif crsec_type == "tcc":
-                # create a Concrete material object
-                # create concrete material object
-                concrete = struct_analysis.ReadyMixedConcrete(mech_prop, database_name, prod_id=prod_id_str)
-                concrete.get_design_values()
-                # create rebar material object
-                rebar = struct_analysis.SteelReinforcingBar(mech_prop, database_name, prod_id=prod_id_str)
-                # create wood material object 
-                timber = struct_analysis.Wood(mech_prop, database_name, prod_id=prod_id_str)
-                timber.get_design_values()
-                # create connector material object
-                connector = struct_analysis.ConnectorTCC(mech_prop, database_name, prod_id=prod_id_str)
-                # create initial cross-sections
-                section = struct_analysis.TCC(concrete, rebar, timber, connector, 0.4, 1.0, 0.15, 0.3, 0.18, 0.01, 2)
-                # add sections to content-definition of plot-line
-                line_i = [section, floorstruc]
-                to_plot.append(line_i)
-
+            
             else:
                 print("cross-section type is not defined inside function plot_dataset()")
 
@@ -264,6 +266,8 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                     material_lg = i[0].wood_type.mech_prop
                 elif i[0].section_type == "wd_rib":
                     material_lg = i[0].wood_type_1.mech_prop
+                elif i[0].section_type == "tcc":
+                    material_lg = i[0].concrete_type.mech_prop + " + " + i[0].rebar_type.mech_prop + " + " + i[0].wood_type.mech_prop + " + " + i[0].connector_type.mech_prop
                 else:
                     material_lg = "error: section material is not defined"
                 legend.append([i[0].section_type, material_lg, criterion, optimum])
@@ -324,6 +328,8 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             color = 'limegreen'  # color for reinforced concrete
         elif sec_typ == "wd_rib":
             color = 'sandybrown'  # color for wood
+        elif sec_typ == "tcc":
+            color = 'grey'  # color for timber-concrete composite
 
         else:
             color = "k"
@@ -418,7 +424,15 @@ def plot_section(section):
               f'length = {section.l0} \n'
               f'h, b, a, t2, t3 = {section.h:.2f}, {section.b:.2f}, {section.a:.2f}, {section.t2:.2f}, {section.t3:.2f} \n'
               f'GWP = {section.co2:.0f} kg/m^2')
-
+        
+    elif section.section_type == "tcc":
+        # Zeichnet einen T-Querschnitt (ähnlich Betonrippe) in zwei Farben
+        fig, ax, offset = plot_rib_with_dimensions(section.b_w, section.b_w, section.h_c + section.h_w, section.h_c, 'blue', 'x')
+        legend = (f'Concrete: {section.concrete_type.mech_prop}\n'
+                  f'Wood: {section.wood_type.mech_prop}\n'
+                  f'h_c, h_w, b_w = {section.h_c:.2f}, {section.h_w:.2f}, {section.b_w:.2f}\n'
+                  f'GWP = {section.co2:.0f} kg/m^2')
+        
     else:
         print("no plot for specified section_type defined jet")
         fig, ax = plt.subplots()
