@@ -43,8 +43,8 @@ class Wood:
         connection = sqlite3.connect(database)
         cursor = connection.cursor()
         # get mechanical properties from database
-        inquiry = ("SELECT strength_bend, strength_shea, E_modulus, density_load, burn_rate, phi FROM material_prop WHERE name = ?")
-        cursor.execute(inquiry, (mech_prop,))
+        inquiry = ("SELECT strength_bend, strength_shea, E_modulus, density_load, burn_rate, phi FROM material_prop WHERE name = " + mech_prop)
+        cursor.execute(inquiry)
         result = cursor.fetchall()
         self.fmk, self.fvd, self.Emmean, self.weight, self.burn_rate, self.phi = result[0]
         # get GWP properties from database
@@ -75,6 +75,7 @@ class ReadyMixedConcrete:
     def __init__(self, mech_prop, database, dmax=32,
                  prod_id="undef"):  # retrieve basic mechanical data from database (self, table,
         self.mech_prop = mech_prop
+
         connection = sqlite3.connect(database)
         cursor = connection.cursor()
         # get mechanical properties from database
@@ -147,7 +148,7 @@ class SteelReinforcingBar:
 
 class ConnectorTCC:
     # defines properties of connectors for timber-concrete composite slabs
-    def __init__(self, mech_prop, database, prod_id="undef"):
+    def __init__(self, mech_prop, database):
         # retrieve basic mechanical data from database (self, table, database name)
         self.mech_prop = mech_prop
         connection = sqlite3.connect(database)
@@ -156,7 +157,12 @@ class ConnectorTCC:
         inquiry = "SELECT K_ser FROM connector_TCC WHERE name=" + mech_prop
         cursor.execute(inquiry)
         result = cursor.fetchall()
-        self.K_ser = result[0]
+        self.K_ser = result[0][0]
+        # Now also extract connector name
+        inquiry = "SELECT name FROM connector_TCC WHERE name=" + mech_prop
+        cursor.execute(inquiry)
+        result = cursor.fetchall()
+        self.name = result[0][0]
         # get GWP properties from database
         #TODO: Tabelle für TCC-Verbinder in Datenbank ergänzen, damit GWP und Kosten berücksichtigt werden können
 
@@ -959,6 +965,7 @@ class SupStrucTCC(Section): #takes the geometric parameters of the TCC cross-sec
         self.a_ribs = a_ribs  # spacing of timber beams [m] 
         self.h_c = h_c  # height of concrete layer [m]
         self.h_w = h_w  # height of timber beams [m]
+        self.h = h_c + h_w + d  # total height of cross section
         self.b_w = b_w  # width of timber beams [m]
         self.d = d  # thickness of formwork [m]
         self.l0 = l0  # distance between moment zero points [m]
@@ -995,7 +1002,7 @@ class SupStrucTCC(Section): #takes the geometric parameters of the TCC cross-sec
         return w
     
 class TCC(SupStrucTCC):
-    def __init__(self, concrete_type, rebar_type, wood_type, connector_type, s, a_ribs, h_c, h_w, b_w, d, l0):
+    def __init__(self, concrete_type, rebar_type, wood_type, connector_type, s, a_ribs, h_c, h_w, b_w, d, l0, xi=0.01, eib=0.0):
         section_type = "tcc"
         super().__init__(section_type, a_ribs, h_c, h_w, b_w, d, l0)
         self.concrete_type = concrete_type
@@ -1014,6 +1021,9 @@ class TCC(SupStrucTCC):
         self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
         self.g0k = self.calc_weight() 
         self.ei1 = self.EI_SLS[0]  # elastic stiffness at t=0 for SLS checks
+        self.xi = xi
+        self.ei_b = eib  # stiffness perpendicular to direction of span
+        self.phi = 1 #dummy that is not used, but needed that nothing crashes
         # Positive capacities (dummy values)
         self.mu_max = 1
         self.vu_p = 1
@@ -1032,6 +1042,10 @@ class TCC(SupStrucTCC):
         psi_ULS = np.zeros((2, 3)) # Rows: 0 for t=0, 1 for t=inf; Columns: 0 for concrete, 1 for wood, 2 for connector
         # Initialize 2x3 array for psi values at different time points for concrete, wood, and connector for SLS
         psi_SLS = np.zeros((2, 3)) # Rows: 0 for t=0, 1 for t=inf; Columns: 0 for concrete, 1 for wood, 2 for connector
+
+        # All psi at t=0 are 1
+        psi_ULS[0, :] = 1
+        psi_SLS[0, :] = 1
 
         # t_0
         gamma_ULS[0] = 1 / (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser * 2/3 * self.l0**2))
@@ -1063,6 +1077,10 @@ class TCC(SupStrucTCC):
         K_SLSinf = self.connector_type.K_ser / (1 + psi_SLS[1, 2] * self.wood_type.phi * 2)
         gamma_SLS[1] = 1 / (1 + np.pi**2 * E_c_SLSinf * self.A_c * self.s / (K_SLSinf * self.l0**2)) # gamma SLS at t=inf
 
+        #gamma must be between 0...1
+        gamma_ULS = np.clip(gamma_ULS, 0.0001, 1)
+        gamma_SLS = np.clip(gamma_SLS, 0.0001, 1)
+
         return gamma_ULS, gamma_SLS, psi_ULS, psi_SLS
     
     def calc_EIeff(self):
@@ -1080,8 +1098,38 @@ class TCC(SupStrucTCC):
 
         # Calculate a_i values for SLS at different time points
         for i in range(2):  # Only t=0 and t=inf
-            a_SLS[1, i] = (self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c*((self.h_c+self.h_w)/2+self.d)) / (2*(self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_SLS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at SLS
-            a_SLS[0, i] = (self.h_c+self.h_w)/2 + self.d - a_SLS[1,i] #a_concrete at SLS
+            a_SLS[i, 1] = (self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c*((self.h_c+self.h_w)/2+self.d)) / (2*(self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_SLS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at SLS
+            a_SLS[i, 0] = (self.h_c+self.h_w)/2 + self.d - a_SLS[1,i] #a_concrete at SLS
+
+        # Calculate effective stiffness at ULS for different time points
+        for i in range(2):  # Only t=0 and t=inf
+            EI_ULS[i] += (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_ULS[i]*self.A_c*a_ULS[i,0]**2)
+            EI_ULS[i] += (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_ULS[i,1]**2)
+
+        # Calculate effective stiffness at SLS for different time points
+        for i in range(2):  # Only t=0 and t=inf
+            EI_SLS[i] += (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_SLS[i]*self.A_c*a_SLS[i,0]**2)
+            EI_SLS[i] += (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_SLS[i,1]**2)
+        
+        return EI_ULS, EI_SLS, a_ULS, a_SLS
+    
+    def calc_EIeff(self):
+        # Initialize arrays for effective stiffness at ULS and SLS
+        EI_ULS = np.zeros(2) #EI_ULS[0] for t=0, EI_ULS[1] for t=inf
+        EI_SLS = np.zeros(2) #EI_SLS[0] for t=0, EI_SLS[1] for t=inf
+        # Initialize 2x2 array for a_i values at ULS and SLS
+        a_ULS = np.zeros((2, 2)) #Rows for t=0, t=inf, Columns for concrete and wood 
+        a_SLS = np.zeros((2, 2)) #Rows for t=0, t=inf, Columns for concrete and wood 
+
+        # Calculate a_i values for ULS at different time points i
+        for i in range(2):  # Only t=0 and t=inf
+            a_ULS[i, 1] = (self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i, 0]*self.concrete_type.phi)) * self.A_c*((self.h_c+self.h_w)/2+self.d)) / (2*(self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_ULS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at ULS
+            a_ULS[i, 0] = (self.h_c+self.h_w)/2 + self.d - a_ULS[i,1] #a_concrete at ULS
+
+        # Calculate a_i values for SLS at different time points
+        for i in range(2):  # Only t=0 and t=inf
+            a_SLS[i, 1] = (self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c*((self.h_c+self.h_w)/2+self.d)) / (2*(self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_SLS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at SLS
+            a_SLS[i, 0] = (self.h_c+self.h_w)/2 + self.d - a_SLS[1,i] #a_concrete at SLS
 
         # Calculate effective stiffness at ULS for different time points
         for i in range(2):  # Only t=0 and t=inf
@@ -1101,7 +1149,7 @@ class TCC(SupStrucTCC):
         mu = np.zeros(2) #mu[0] for t=0, mu[1] for t=inf
 
         # Get material properties for concrete at design level ULS
-        fcd = self.concrete_type.fcd, self.concrete_type.tcd, self.concrete_type.ec2d
+        fcd = self.concrete_type.fcd
 
         # Get material properties for wood at design level ULS
         fmd = self.wood_type.fmd
@@ -1149,14 +1197,28 @@ class TCC(SupStrucTCC):
     @staticmethod
     def fire_minimizer(t, args):
         member = args[0]
-        rem_sec = TCC.remaining_section(member.section, member.fire, t)
-        mu_fire = 1.8 * rem_sec.mu[0] #SIA 265 (51)
-        vu_fire = 1.8 * rem_sec.vu[0]  # SIA 265 (51)
+        
+        # FIX: Scipy übergibt t oft als [wert], wir brauchen aber den wert selbst
+        if isinstance(t, (list, np.ndarray)):
+            t_val = float(t[0])
+        else:
+            t_val = float(t)
+            
+        rem_sec = TCC.remaining_section(member.section, member.fire, t_val)
+        
+        # Sicherheitscheck: Falls rem_sec ungültig ist (Querschnitt weggebrannt)
+        if rem_sec is None:
+            return 1e10 
+            
+        mu_fire = 1.8 * rem_sec.Mu[0] # SIA 265 (51)
+        vu_fire = 1.8 * rem_sec.Vu[0] # SIA 265 (51)
+        
         qd_fire = member.psi[2] * member.qk + member.gk
+        
         qd_fire_zul = min(mu_fire / (max(member.system.alpha_m) * member.system.l_tot ** 2),
                           vu_fire / (max(member.system.alpha_v) * member.system.l_tot))
-        to_opt = abs(qd_fire - qd_fire_zul)
-        return to_opt
+                          
+        return abs(qd_fire - qd_fire_zul) #return t_opt
 
     @staticmethod
     def remaining_section(section, fire, t, dred=0.007):
@@ -1190,16 +1252,24 @@ class TCC(SupStrucTCC):
         if section.connector_type.name != "kerve":
             a = (b_w_red - 0.03)/2 #Assume connectors use 3cm of timber width (A46-1) Lignum 3.1
             a_mm = a * 1000 # convert to mm to correctly use the formula from Lignum 3.1, Table 46-1
-            if a_mm<=0.6*t: k_modFi = 0
+            if a_mm<=0.6*t: k_modFi = 0.0001 #prevent division by zero 
             elif a_mm<=0.8*t+3: k_modFi = (0.2*a_mm-0.12*t)/(0.2*t+3)
             elif a_mm<= t+24: k_modFi = (a_mm*0.8-0.6*t+1.8)/(0.2*t+21)
             else: k_modFi = 1
         
-        reduced_connector = copy.deepcopy(section.connector_type)
-        reduced_connector.K_ser = reduced_connector.K_ser * k_modFi
-        # Create and return the reduced TCC section with the new connector stiffness and reduced timber dimensions
-        rem_sec = TCC(section.concrete_type, section.rebar_type, section.wood_type, reduced_connector, section.s, section.a_ribs, section.h_c, h_w_red, b_w_red, section.d, section.l0)
-        return rem_sec
+        try:
+            # reduced connector stiffness
+            reduced_connector = copy.deepcopy(section.connector_type)
+            reduced_connector.K_ser = float(reduced_connector.K_ser) * k_modFi
+            
+            # Return remaining section
+            return TCC(section.concrete_type, section.rebar_type, section.wood_type, 
+                       reduced_connector, section.s, section.a_ribs, section.h_c, 
+                       h_w_red, b_w_red, section.d, section.l0)
+        
+        except Exception as e:
+            # gamma calculation crashes as section becomes to small 
+            return None
     
     
        
@@ -1421,7 +1491,7 @@ class Member1D:
 
         # calculation of deflections uncracked (plus cracked for concrete sections self.section.section_type[0:2] = rc))
         section_material = self.section.section_type[0:2]
-        
+
         unit_def = self.system.alpha_w * self.system.l_tot ** 4 / self.section.ei1  # deflection for q = 1, phi = 0
 
         if self.requirements.install == "ductile":
@@ -1434,7 +1504,7 @@ class Member1D:
                                                                                    0, self.section.h, self.section.d)
                         - self.q_per
                 )
-            if section_material == "tcc":
+            if section_material == "tc":
                 self.w_install_ger = unit_def*self.section.ei1 * (
                         self.q_per / self.section.EI_ULS[1] + (self.q_freq - self.q_per) / self.section.EI_ULS[0]
                 )
@@ -1449,7 +1519,7 @@ class Member1D:
                                                                                    0, self.section.h, self.section.d)
                         - self.q_per
                 )
-            if section_material == "tcc":
+            if section_material == "tc":
                 self.w_install_ger = unit_def*self.section.ei1 * (
                         self.q_per / self.section.EI_ULS[1] + (self.q_rare - self.q_per) / self.section.EI_ULS[0]
                 )
@@ -1459,7 +1529,7 @@ class Member1D:
                     (self.q_freq - self.q_per) * RectangularConcrete.f_w_ger(self.section.roh, self.section.rohs, 0,
                                                                              self.section.h, self.section.d)
             )
-        if section_material == "tcc":
+        if section_material == "tc":
             self.w_use_ger = unit_def*self.section.ei1 * (
                     (self.q_freq - self.q_per) / self.section.EI_ULS[0]
             )
@@ -1469,7 +1539,7 @@ class Member1D:
                     self.q_per * RectangularConcrete.f_w_ger(self.section.roh, self.section.rohs, self.section.phi,
                                                              self.section.h, self.section.d)
             )
-        if section_material == "tcc":
+        if section_material == "tc":
             self.w_app_ger = unit_def*self.section.ei1 * (
                     self.q_per / self.section.EI_ULS[1]
             )
@@ -1479,7 +1549,7 @@ class Member1D:
         self.f1 = self.calc_f1()
         # calculation of further vibration criteria for wooden cross-sections
         section_material = self.section.section_type[0:2]
-        if section_material == "wd" or section_material == "rc":  # check for material type
+        if section_material == "wd" or section_material == "rc" or section_material == "tc":  # check for material type
             self.ei_b = max(self.section.ei_b,
                             self.floorstruc.ei)  # Berücksichtigung n.t. Bodenaufbau gemäss Beispielsammlung HBT)
             self.bm_rech = self.system.li_max / 1.1 * (self.ei_b / self.section.ei1) ** 0.25  # HBT Seite 46
@@ -1553,7 +1623,7 @@ class Member1D:
 
     def calc_qk_zul_gzt(self):
         self.qk_zul_gzt = 0
-        if self.section.section_type == "tcc":
+        if self.section.section_type == "tc":
             # Capacity at t=0
             self.section.mu_max = self.section.Mu[0]
             self.section.vu_p = self.section.Vu[0]
@@ -1569,11 +1639,11 @@ class Member1D:
             self.section.vu_p = 1
 
             #Calculate degree of utilization solely based on selfweight
-            deg_util_gd = self.gk*self.gamma_g / qu_inf
+            deg_util_gd = 1.25*self.gk*self.gamma_g / qu_inf #quasi-permanent loads increased by 25% to cover 3...7years check
             if deg_util_gd >= 1:
                 self.qk_zul_gzt = 0 #failure already under selfweight at design level
             else:
-                deg_util_qd_inf = (1-self.psi[0])*self.gamma_q / qu_inf
+                deg_util_qd_inf = 1.25*(1-self.psi[0])*self.gamma_q / qu_inf #quasi-permanent loads increased by 25% to cover 3...7years check
                 deg_util_qd_0 = self.psi[0]*self.gamma_q / qu_0
                 #Calculate the maximum variable load that can be applied without exceeding the capacity
                 self.qk_zul_gzt = max(0, (1 - deg_util_gd) / (deg_util_qd_inf + deg_util_qd_0))
@@ -1642,7 +1712,7 @@ class Member1D:
         elif self.section.section_type == "wd_rib":
             fire_resistance = RibWood.fire_resistance(self.section)
         elif self.section.section_type == "tcc":
-            fire_resistance = TCC.fire_resistance(self.section)
+            fire_resistance = TCC.fire_resistance(self)
         else:
             #print("fire resistance for is not defined for that cross-section type.")
             fire_resistance = None

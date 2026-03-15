@@ -574,9 +574,9 @@ def wd_rib_rqs(var, add_arg):
 # Outer function to find optimal TCC cross-section
 def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.06, hw_min=0.12, bw_min=0.08):
     #Initial values for optimization variables
-    hc0 = m.section.hc
-    hw0 = m.section.hw
-    bw0 = m.section.bw
+    hc0 = m.section.h_c
+    hw0 = m.section.h_w
+    bw0 = m.section.b_w
     var0 = [hc0, hw0, bw0]
     #Bounds for optimization variables
     bhc = (hc_min, 0.5)  
@@ -584,16 +584,15 @@ def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.06, hw_min=
     bbw = (bw_min, 1.0)
     bounds = [bhc, bhw, bbw]
     #Definition of fixed values for optimization
-    conc, reb, wood, conn = m.section.concrete_type, m.section.rebar_type, m.section.wood_type, m.section.connection_type
-    s, a_ribs, d0, l0 = m.section.s, m.section.a_ribs, m.section.d0, m.section.l0
+    conc, reb, wood, conn = m.section.concrete_type, m.section.rebar_type, m.section.wood_type, m.section.connector_type
+    s, a_ribs, d, l0 = m.section.s, m.section.a_ribs, m.section.d, m.section.l0
     #Extract loads and fire settings to pass to the trail members
-    add_arg = [m.system, conc, reb, wood, conn, s, a_ribs, d0, l0, m.floorstruc, m.requirements, to_opt, criterion, m.loads.g2k, m.loads.qk, m.loads.psi0, m.loads.psi1, m.loads.psi2, m.fire]
-    # Optimize step definition
+    add_arg = [m.system, conc, reb, wood, conn, s, a_ribs, d, l0, m.floorstruc, m.requirements, to_opt, criterion, m.g2k, m.qk, m.psi[0], m.psi[1], m.psi[2], m.fire]    # Optimize step definition
     bounded_step = RandomDisplacementBounds(np.array([b[0] for b in bounds]), np.array([b[1] for b in bounds]))
     # Run Bashinhoppin and return optimized section
     opt = basinhopping(tcc_rqs, var0, niter=max_iter, T=1, minimizer_kwargs={"args": (add_arg,), "bounds": bounds, "method": "Powell"}, take_step=bounded_step)
     hc_opt, hw_opt, bw_opt = opt.x
-    optimized_section = struct_analysis.TCC(conc, reb, wood, conn, s, a_ribs, d0, l0, hc_opt, hw_opt, bw_opt)
+    optimized_section = struct_analysis.TCC(conc, reb, wood, conn, s, a_ribs, d, l0, hc_opt, hw_opt, bw_opt)
     return optimized_section
 
 # Inner function for evaluating penalties
@@ -611,7 +610,7 @@ def tcc_rqs(var, add_arg):
     fire = add_arg[18]
     
     # Create trial section and member (passing the individual load kwargs to __init__)
-    section = struct_analysis.TCC(co, st, wd, conn, s, a_ribs, h_c, h_w, b_w, d, l0)
+    section = struct_analysis.TCC(co, st, wd, conn, s, a_ribs, hc, hw, bw, d, l0)
     member = struct_analysis.Member1D(section, system, floorstruc, criteria, 
                                       g2k=g2k, qk=qk, psi0=psi0, psi1=psi1, psi2=psi2, 
                                       fire_b=fire[0], fire_l=fire[1], fire_t=fire[2], fire_r=fire[3])

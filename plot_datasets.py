@@ -26,22 +26,148 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
     for mat_name in mat_names:
         if crsec_type == "tcc":
             concrete_name, wood_name, conn_name = mat_name
-            
-            concrete = struct_analysis.ReadyMixedConcrete(concrete_name, database_name)
-            concrete.get_design_values()
-            
-            timber = struct_analysis.Wood(wood_name, database_name)
-            timber.get_design_values()
-            
-            connector = struct_analysis.ConnectorTCC(conn_name, database_name)
-            rebar = struct_analysis.SteelReinforcingBar("'B500B'", database_name)  # Fix!
+            # search database for concrete_name with highest and lowest GWP values
+            inquiry = ("""
+                            SELECT PRO_ID FROM products
+                            WHERE Total_GWP = (SELECT MIN(Total_GWP) FROM products
+                                                WHERE "MATERIAL" LIKE """ + concrete_name + """
+                                                AND DENSITY IS NOT NULL
+                                                AND MECH_PROP IS NOT NULL
+                                                AND Statistik = 1
+                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
+                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
+                                                AND "SOURCE" NOT LIKE '%KBOB%')
+                            OR Total_GWP = (SELECT MAX(Total_GWP) FROM products
+                                                WHERE "MATERIAL" LIKE """ + concrete_name + """
+                                                AND DENSITY IS NOT NULL
+                                                AND MECH_PROP IS NOT NULL
+                                                AND Statistik = 1
+                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
+                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
+                                                AND "SOURCE" NOT LIKE '%KBOB%')
+                            """
+                           )          
+            cursor.execute(inquiry)
+            result = cursor.fetchall()
+            concrete_prod_id_low = result[0]
+            concrete_prod_id_low_str = "'" + str(concrete_prod_id_low[0]) + "'"
+            concrete_prod_id_high = result[1]
+            concrete_prod_id_high_str = "'" + str(concrete_prod_id_high[0]) + "'"
+            #Get mechanical properties of concrete with lowest GWP value 
+            inquiry = ("""
+                    SELECT MECH_PROP FROM products
+                    WHERE  PRO_ID LIKE """ + concrete_prod_id_low_str
+            )
+            cursor.execute(inquiry)
+            result = cursor.fetchall()
+            mech_prop_concrete_low = "'" + result[0][0] + "'"
+            #Get mechanical properties of concrete with highest GWP value 
+            inquiry = ("""
+                    SELECT MECH_PROP FROM products
+                    WHERE  PRO_ID LIKE """ + concrete_prod_id_high_str
+            )
+            cursor.execute(inquiry)
+            result = cursor.fetchall()
+            mech_prop_concrete_high = "'" + result[0][0] + "'"
 
-            # Create TCC section
-            section = struct_analysis.TCC(concrete, rebar, timber, connector, 0.2, 0.1, 0.05, 5.0, 0.1, 0.2, 0.12)
+            #search database for wood_name with highest and lowest GWP values
+            inquiry = ("""
+                            SELECT PRO_ID FROM products
+                            WHERE Total_GWP = (SELECT MIN(Total_GWP) FROM products
+                                                WHERE "MATERIAL" LIKE """ + wood_name + """
+                                                AND DENSITY IS NOT NULL
+                                                AND MECH_PROP IS NOT NULL
+                                                AND Statistik = 1
+                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
+                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
+                                                AND "SOURCE" NOT LIKE '%KBOB%')
+
+                            OR Total_GWP = (SELECT MAX(Total_GWP) FROM products
+                                                WHERE "MATERIAL" LIKE """ + wood_name + """
+                                                AND DENSITY IS NOT NULL
+                                                AND MECH_PROP IS NOT NULL
+                                                AND Statistik = 1
+                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
+                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
+                                                AND "SOURCE" NOT LIKE '%KBOB%')
+                            """
+
+                            )
+            cursor.execute(inquiry)
+            result = cursor.fetchall()
+            wood_prod_id_low = result[0]
+            wood_prod_id_low_str = "'" + str(wood_prod_id_low[0]) + "'"
+            wood_prod_id_high = result[1]
+            wood_prod_id_high_str = "'" + str(wood_prod_id_high[0]) + "'"
+
+            # Search database for reinforcing steel with mech prop B500B and highest and lowest GWP values
+            inquiry = ("""
+                            SELECT PRO_ID FROM products
+                            WHERE Total_GWP = (SELECT MIN(Total_GWP) FROM products
+                                                WHERE "MATERIAL" LIKE '%Steel_reinforcing_bar%'
+                                                AND DENSITY IS NOT NULL
+                                                AND MECH_PROP IS NOT NULL
+                                                AND Statistik = 1
+                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
+                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
+                                                AND "SOURCE" NOT LIKE '%KBOB%')
+                            OR Total_GWP = (SELECT MAX(Total_GWP) FROM products
+                                                WHERE "MATERIAL" LIKE '%Steel_reinforcing_bar%'
+                                                AND DENSITY IS NOT NULL
+                                                AND MECH_PROP IS NOT NULL
+                                                AND Statistik = 1
+                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'    
+                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
+                                                AND "SOURCE" NOT LIKE '%KBOB%')
+                            """
+                            )
+
+            cursor.execute(inquiry)
+            result = cursor.fetchall()
+            rebar_prod_id_low = result[0]
+            rebar_prod_id_low_str = "'" + str(rebar_prod_id_low[0]) + "'"
+            rebar_prod_id_high = result[1]
+            rebar_prod_id_high_str = "'" + str(rebar_prod_id_high[0]) + "'"
+            # Get mechanical properties of wood with lowest GWP value
+            inquiry = ("""
+                    SELECT MECH_PROP FROM products
+                    WHERE  PRO_ID LIKE """ + wood_prod_id_low_str
+            )
+            cursor.execute(inquiry)
+            result = cursor.fetchall()
+            mech_prop_wood_low = "'" + result[0][0] + "'"
+            # Get mechanical properties of wood with highest GWP value
+            inquiry = ("""
+                    SELECT MECH_PROP FROM products
+                    WHERE  PRO_ID LIKE """ + wood_prod_id_high_str
+            )
+            cursor.execute(inquiry)
+            result = cursor.fetchall()
+            mech_prop_wood_high = "'" + result[0][0] + "'"
+
+            # create material objects for concrete low/high emissions, wood low/high emissions and connector
+            concrete_low = struct_analysis.ReadyMixedConcrete(mech_prop_concrete_low, database_name, prod_id=concrete_prod_id_low_str)
+            concrete_low.get_design_values()
+            concrete_high = struct_analysis.ReadyMixedConcrete(mech_prop_concrete_high, database_name, prod_id=concrete_prod_id_high_str)
+            concrete_high.get_design_values()
+            timber_low = struct_analysis.Wood(mech_prop_wood_low, database_name, prod_id=wood_prod_id_low_str)
+            timber_low.get_design_values()
+            timber_high = struct_analysis.Wood(mech_prop_wood_high, database_name, prod_id=wood_prod_id_high_str)
+            timber_high.get_design_values()
+            rebar_low = struct_analysis.SteelReinforcingBar("'B500B'", database_name, prod_id=rebar_prod_id_low_str)
+            rebar_high = struct_analysis.SteelReinforcingBar("'B500B'", database_name, prod_id=rebar_prod_id_high_str)
+
+            connector = struct_analysis.ConnectorTCC(conn_name, database_name) #Fix!
+            connector.get_design_values()
+
+            # Create initial TCC sections with low/high emission values for concrete, wood and rebar            
+            section_low = struct_analysis.TCC(concrete_low, rebar_low, timber_low, connector, 0.3, 0.8, 0.1, 0.2, 0.1, 0.02, 5)
+            section_high = struct_analysis.TCC(concrete_high, rebar_high, timber_high, connector, 0.3, 0.8, 0.1, 0.2, 0.1, 0.02, 5)
 
             # Add section to content-definition of plot-line
-            line_i = [section, floorstruc]
-            to_plot.append(line_i)
+            line_i = [section_low, floorstruc]
+            line_i1 = [section_high, floorstruc]
+            to_plot.extend([line_i, line_i1])
             
             continue # Wir überspringen die SQL-Suche für diesen Durchlauf
 
