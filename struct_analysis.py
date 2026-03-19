@@ -962,7 +962,7 @@ class RibWood(SupStrucRibWood):
 class SupStrucTCC(Section): #takes the geometric parameters of the TCC cross-section as input parameters and calculates the geometric cross-sectional values
     def __init__(self, section_type, a_ribs, h_c, h_w, b_w, d, l0):
         super().__init__(section_type)
-        self.a_ribs = a_ribs  # spacing of timber beams [m] 
+        self.a_ribs = a_ribs  # spacing of timber beams [m]  
         self.h_c = h_c  # height of concrete layer [m]
         self.h_w = h_w  # height of timber beams [m]
         self.h = h_c + h_w + d  # total height of cross section
@@ -980,7 +980,7 @@ class SupStrucTCC(Section): #takes the geometric parameters of the TCC cross-sec
         # in: spacing of timber beams [m], width of timber beams [m]
         # out: effective width of concrete layer according to SIA 262 [m]
         b_effi = min(0.2*(a_ribs-b_w)/2+0.1*l0, 0.2*l0) 
-        b_ceff = 2*b_effi + b_w 
+        b_ceff = min(2*b_effi + b_w, a_ribs)
         return b_ceff
     
     def calc_area(self, h, b):
@@ -995,10 +995,10 @@ class SupStrucTCC(Section): #takes the geometric parameters of the TCC cross-sec
         I_y = b * h**3 / 12
         return I_y
     
-    def calc_weight(self, spec_weight_w=5, spec_weight_c=25):
+    def calc_weight(self, spec_weight_w=5000, spec_weight_c=25000):
         # in: specific weight of timber [N/m^3], specific weight of concrete [N/m^3]
         # out: weight of cross section per m length [N/m]
-        w = spec_weight_w * self.A_w + spec_weight_c * self.A_c
+        w = (spec_weight_w * self.A_w + spec_weight_c * self.h_c * self.a_ribs) / self.a_ribs
         return w
     
 class TCC(SupStrucTCC):
@@ -1009,13 +1009,13 @@ class TCC(SupStrucTCC):
         self.rebar_type = rebar_type
         self.wood_type = wood_type
         self.connector_type = connector_type
-        self.qs_class_n, self.qs_class_p = [3, 3]  # Required cross-section class: 1:PP, 2:EP, 3:EE
+        self.qs_class_n, self.qs_class_p = [3, 3] 
 
         self.s = s  # spacing of connectors [m]
         self.gamma_ULS, self.gamma_SLS, self.psi_ULS, self.psi_SLS = self.calc_gamma()
         self.EI_ULS, self.EI_SLS, self.a_ULS, self.a_SLS = self.calc_EIeff()
-        self.Mu = self.calc_mu()
-        self.Vu = self.calc_vu()
+        self.Mu = self.calc_mu() #Nm/m'
+        self.Vu = self.calc_vu() #N/m'
 
         self.co2 = self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
@@ -1161,9 +1161,8 @@ class TCC(SupStrucTCC):
         for i in range(2): 
             if i == 1: #t=inf, apply k_mod for wood stiffness reduction
                 k_mod = 0.6 # for load duration class 3 (long-term load) according to EN1995-1-1, Table 3.1
-            mu[i] = min(fcd * self.EI_ULS[i] / (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*1/(self.gamma_ULS[i]*self.a_ULS[i,0]+self.h_c/2), #concrete edge stress
-                        fmd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2))/self.a_ribs #wood edge stress
-            
+            mu[i] = min(fcd * self.EI_ULS[i] / (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*1/(self.gamma_ULS[i]*self.a_ULS[i,0]+self.h_c/2)/self.a_ribs, #concrete edge stress in Nm/m' (divide by a_ribs to get per m of total width)
+                        fmd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2))/self.a_ribs #wood edge stress in Nm/m' (divide by a_ribs to get per m of total width)
         
         return mu
     
@@ -1178,18 +1177,18 @@ class TCC(SupStrucTCC):
         # k_mod to account for wood stiffness reduction due to load duration EN1995-1-1 (same as eta_t in SIA 265)
         k_mod = 1
 
-        # Calculate m_u at ULS for t=0, t=inf in [Nm/m']
+        # Calculate m_u at ULS for t=0, t=inf in [N/m']
         for i in range(2): 
             if i == 1: #t=inf, apply k_mod for wood stiffness reduction
                 k_mod = 0.6 # for load duration class 3 (long-term load) according to EN1995-1-1, Table 3.1
-            vu[i] = (fvd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)**2)/self.a_ribs
+            vu[i] = (fvd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)**2)/self.a_ribs #wood shear stress in N/m' (divide by a_ribs to get per m of total width)
 
         return vu
     
     @staticmethod
     def fire_resistance(member):
         bnds = [(0, 240)]   #Randbedingungen für Definition Brand - mind. 0 min max. 240 min
-        t0 = 60     #Brandeinwirkungsdauer
+        t0 = 60     #Brandeinwirkungsdauer R60
         max_t = minimize(TCC.fire_minimizer, t0, args=[member], bounds=bnds)    #Brandwiderstanddauer → maximale Brandeinwirkungszeit
         t_max = max_t.x[0]
         return t_max
@@ -1198,7 +1197,6 @@ class TCC(SupStrucTCC):
     def fire_minimizer(t, args):
         member = args[0]
         
-        # FIX: Scipy übergibt t oft als [wert], wir brauchen aber den wert selbst
         if isinstance(t, (list, np.ndarray)):
             t_val = float(t[0])
         else:
@@ -1206,7 +1204,6 @@ class TCC(SupStrucTCC):
             
         rem_sec = TCC.remaining_section(member.section, member.fire, t_val)
         
-        # Sicherheitscheck: Falls rem_sec ungültig ist (Querschnitt weggebrannt)
         if rem_sec is None:
             return 1e10 
             
@@ -1623,7 +1620,7 @@ class Member1D:
 
     def calc_qk_zul_gzt(self):
         self.qk_zul_gzt = 0
-        if self.section.section_type == "tc":
+        if self.section.section_type == "tcc":
             # Capacity at t=0
             self.section.mu_max = self.section.Mu[0]
             self.section.vu_p = self.section.Vu[0]
@@ -1638,15 +1635,15 @@ class Member1D:
             self.section.mu_max = 1
             self.section.vu_p = 1
 
-            #Calculate degree of utilization solely based on selfweight
-            deg_util_gd = 1.25*self.gk*self.gamma_g / qu_inf #quasi-permanent loads increased by 25% to cover 3...7years check
-            if deg_util_gd >= 1:
-                self.qk_zul_gzt = 0 #failure already under selfweight at design level
-            else:
-                deg_util_qd_inf = 1.25*(1-self.psi[0])*self.gamma_q / qu_inf #quasi-permanent loads increased by 25% to cover 3...7years check
-                deg_util_qd_0 = self.psi[0]*self.gamma_q / qu_0
-                #Calculate the maximum variable load that can be applied without exceeding the capacity
-                self.qk_zul_gzt = max(0, (1 - deg_util_gd) / (deg_util_qd_inf + deg_util_qd_0))
+            # Calculate degrees of utilization for permanent loads
+            # Quasi-permament 125% to cover 3...7years check
+            deg_util_gd = 1.25 * self.gk * self.gamma_g / qu_inf 
+            
+            deg_util_qd_inf = 1.25 * (1 - self.psi[0]) * self.gamma_q / qu_inf # Quasi-permament of variable loads
+            deg_util_qd_0 = self.psi[0] * self.gamma_q / qu_0 # Short-term of variable loads
+            
+            # Negative values are wanted for optimization!
+            self.qk_zul_gzt = (1 - deg_util_gd) / (deg_util_qd_inf + deg_util_qd_0)
 
         else:
             # Standard calc. (Concrete, Wood, etc.)

@@ -7,13 +7,13 @@ import plot_datasets  # file with code for plotting results in a standardized wa
 import matplotlib.pyplot as plt
 
 # define system lengths for plot (Datapoints on x-Axis of plot)
-lengths = [4, 5, 10]
+lengths = [2, 4, 6]
 
 # Index of verified length (cross-sections of that length will be plotted)
 idx_vrc = 4
 
 # max. number of iterations per optimization. Higher value leads to better results
-max_iter = 100
+max_iter = 400 
 
 #  define content of plot
 criteria = ["ULS"]  # envelop, all criteria should be fulfilled (ULS, SLS1, SLS2, Fire)
