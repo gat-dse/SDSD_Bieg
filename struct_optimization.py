@@ -591,6 +591,12 @@ def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.06, hw_min=
     opt = basinhopping(tcc_rqs, var0, niter=max_iter, T=1, minimizer_kwargs={"args": (add_arg,), "bounds": bounds, "method": "Powell"}, take_step=bounded_step)
     hc_opt, hw_opt = opt.x
     optimized_section = struct_analysis.TCC(conc, reb, wood, conn, s, a_ribs, hc_opt, hw_opt, bw, d, l0)
+    
+    
+    ########Print final optimized variables for control
+    print(l0, round(hc_opt,5), round(hw_opt,5))
+
+
     return optimized_section
 
 # Inner function for evaluating penalties
@@ -611,7 +617,7 @@ def tcc_rqs(var, add_arg):
     section = struct_analysis.TCC(co, st, wd, conn, s, a_ribs, hc, hw, bw, d, l0)
     member = struct_analysis.Member1D(section, system, floorstruc, criteria, 
                                       g2k=g2k, qk=qk, psi0=psi0, psi1=psi1, psi2=psi2, 
-                                      fire_b=fire[0], fire_l=fire[1], fire_t=fire[2], fire_r=fire[3])
+                                      fire=fire)
     
     # Trigger structural calculations
     member.calc_qk_zul_gzt()
@@ -631,20 +637,6 @@ def tcc_rqs(var, add_arg):
     # Fire resistance penalty
     member.get_fire_resistance()
     penalty4 = max(member.requirements.t_fire - member.fire_resistance, 0)
-
-    # ==========================================
-    # --- DEBUG MONITOR START ---
-    # ==========================================
-    if criterion in ["ULS", "ENV"]:
-        # Lese die Werte sicher aus, um Abstürze zu vermeiden
-        m_rd = getattr(section, 'Mu', 'Fehlt')
-        qk_zul = getattr(member, 'qk_zul_gzt', 0)
-        
-        # Ausgabe in der Konsole
-        print(f"L={l0}m | h_c={hc:.2f}, h_w={hw:.2f} | M_rd={m_rd} | qk_zul={qk_zul:.2f} | Pen_ULS={penalty1:.2f}")
-    # ==========================================
-    # --- DEBUG MONITOR END ---
-    # ==========================================
 
     # Optimization criteria
     if criterion == "ULS":
@@ -864,7 +856,7 @@ def tcc_crsc(var, add_arg):
     # Calculate penalty if GWP budget is exceeded
     penalty = 1e6 * max(section_updated.CO_2 - gwp_budget, 0.0)
     
-    # Mu for t=inf konservatively
+    # Mu for t=inf conservatively
     mu_capacity = section_updated.Mu[1] if hasattr(section_updated, 'Mu') and isinstance(section_updated.Mu, list) else section_updated.Mu_inf
     
     to_minimize = penalty - mu_capacity 

@@ -31,7 +31,7 @@
 import copy
 import sqlite3  # import modul for SQLite
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import minimize, root_scalar
 
 
 #DEFINITONS OF MATERIAL PROPERTIES--------------------------------------------------------------------------------------
@@ -1187,15 +1187,28 @@ class TCC(SupStrucTCC):
     
     @staticmethod
     def fire_resistance(member):
-        bnds = [(0, 240)]   #Randbedingungen für Definition Brand - mind. 0 min max. 240 min
-        t0 = 60     #Brandeinwirkungsdauer R60
-        max_t = minimize(TCC.fire_minimizer, t0, args=[member], bounds=bnds)    #Brandwiderstanddauer → maximale Brandeinwirkungszeit
-        t_max = max_t.x[0]
-        return t_max
+        t_max_limit = 240.0
+        
+        # Check interval endpoints first
+        diff_0 = TCC.fire_minimizer(0.0, member)
+        if diff_0 < 0:
+            return 0.0 # member fails even at t=0, so fire resistance is 0 minutes
+        diff_max = TCC.fire_minimizer(t_max_limit, member)
+        if diff_max > 0:
+            return t_max_limit #member still safe at t=240, so fire resistance is at least 240 minutes
+            
+        # Find the root between 0 and t_max_limit 
+        try:
+            sol = root_scalar(TCC.fire_minimizer, args=(member,), bracket=[0.0, t_max_limit],  method='brentq')
+            if sol.converged:
+                return sol.root
+            else:
+                return 0.0
+        except ValueError:
+            return 0.0
 
     @staticmethod
-    def fire_minimizer(t, args):
-        member = args[0]
+    def fire_minimizer(t, member):
         
         if isinstance(t, (list, np.ndarray)):
             t_val = float(t[0])
@@ -1205,7 +1218,7 @@ class TCC(SupStrucTCC):
         rem_sec = TCC.remaining_section(member.section, member.fire, t_val)
         
         if rem_sec is None:
-            return 1e10 
+            return -qd_fire 
             
         mu_fire = 1.8 * rem_sec.Mu[0] # SIA 265 (51)
         vu_fire = 1.8 * rem_sec.Vu[0] # SIA 265 (51)
@@ -1214,19 +1227,24 @@ class TCC(SupStrucTCC):
         
         qd_fire_zul = min(mu_fire / (max(member.system.alpha_m) * member.system.l_tot ** 2),
                           vu_fire / (max(member.system.alpha_v) * member.system.l_tot))
+        
+        #Print remaining section and capacities for debugging
+        print(f"t={t_val:.2f} min: Remaining section: h_w={rem_sec.h_w:.4f} m, b_w={rem_sec.b_w:.4f} m, Mu={rem_sec.Mu[0]:.2f} Nm/m', Vu={rem_sec.Vu[0]:.2f} N/m', qd_fire={qd_fire:.2f} N/m', qd_fire_zul={qd_fire_zul:.2f} N/m'")
+
                           
-        return abs(qd_fire - qd_fire_zul) #return t_opt
+        return qd_fire_zul - qd_fire #return t_opt
 
     @staticmethod
     def remaining_section(section, fire, t, dred=0.007):
         # Fire is a list of integers: [bottom, left, top, right] 1: means exposed to fire, 0 means not exposed to fire.
         # For TCC ribbed, [1,1,0,1] 
         # For TCC slab, [1,0,0,0] 
+        print(f"DEBUG: burn_rate = {section.wood_type.burn_rate} m/min, fire_array = {fire}")
     
         # Wood charring rate (beta_n)
-        dcharn = section.wood_type.burn_rate / 1000 #  mm/min to m/min for compatibility with other dimensions in m
+        dcharn = section.wood_type.burn_rate #  m/min for compatibility with other dimensions in m
         if t > 0:
-            d_ef = dcharn * t + dred / 1000  # Effective charring depth m
+            d_ef = dcharn * t + dred # Effective charring depth m
         else:
             d_ef = 0
 
@@ -1240,9 +1258,10 @@ class TCC(SupStrucTCC):
         h_w_red -= d_ef*fire[0]  # Bottom
         
         # Wood has completely burned away
+        # CS has to be limited, otherwise Gamma calculation will crash
         if b_w_red <= 0 or h_w_red <= 0:
-            b_w_red = 0.001 # Prevent division by zero errors
-            h_w_red = 0.001
+            b_w_red = 0.06 # Prevent division by zero errors
+            h_w_red = 0.08 # Prevent division by zero errors
 
         # Reduce the connector stiffness if screws are used as connectors
         k_modFi = 1 # Modification factor for connector stiffness according to Lignum 3.1, Table 46-1
@@ -1440,7 +1459,7 @@ class LoadCombinations:
 
 class Member1D:
     def __init__(self, section, system, floorstruc, requirements, g2k=0.0, qk=2e3, psi0=0.7, psi1=0.5, psi2=0.3,
-                 fire_b=True, fire_l=False, fire_t=False, fire_r=False):
+                 fire=None):
         self.section = section
         self.system = system
         self.floorstruc = floorstruc
@@ -1475,16 +1494,10 @@ class Member1D:
         self.mkd_n = self.system.alpha_m[0] * (self.gk + self.qk) * self.system.l_tot ** 2
         self.mkd_p = self.system.alpha_m[1] * (self.gk + self.qk) * self.system.l_tot ** 2
         self.qk_zul_gzt = float
-        self.fire = [0, 0, 0, 0]  # fire from bottom, left, top, right (0: no fire; 1: fire)
-        if fire_b is True:
-            self.fire[0] = 1
-        if fire_l is True:
-            self.fire[1] = 1
-        if fire_t is True:
-            self.fire[2] = 1
-        if fire_r is True:
-            self.fire[3] = 1
-        self.fire_resistance = []
+        if fire is not None:
+            self.fire = fire
+        else: 
+            self.fire = [1, 0, 0, 0] #default: no fire only on bottom
 
         # calculation of deflections uncracked (plus cracked for concrete sections self.section.section_type[0:2] = rc))
         section_material = self.section.section_type[0:2]

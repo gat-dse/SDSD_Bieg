@@ -12,7 +12,7 @@ from scipy.spatial import ConvexHull
 # PLOT DATASETS OF MEMBERS WITH DEFINED CROSS_SECTIONS AND VARIED MATERIALS
 # ----------------------------------------------------------------------------------------------------------------------
 def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requirements, crsec_type, mat_names,
-                 g2k=0.75, qk=2.0, max_iter=100, idx_vrfctn=-1):
+                 g2k=0.75, qk=2.0, max_iter=100, idx_vrfctn=-1, fire_array=None):
 
     if idx_vrfctn == -1:
         idx_vrfctn = random.randint(0, len(lengths)-1)
@@ -162,8 +162,8 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
 
             # Create initial TCC sections with low/high emission values for concrete, wood and rebar   
             # def __init__(self, concrete_type, rebar_type, wood_type, connector_type, s, a_ribs, h_c, h_w, b_w, d, l0, xi=0.01, eib=0.0):
-            section_low = struct_analysis.TCC(concrete_low, rebar_low, timber_low, connector, 0.2, 0.8, 0.06, 0.08, 0.18, 0.015, 2)
-            section_high = struct_analysis.TCC(concrete_high, rebar_high, timber_high, connector, 0.2, 0.8, 0.06, 0.08, 0.18, 0.015, 2)
+            section_low = struct_analysis.TCC(concrete_low, rebar_low, timber_low, connector, 0.2, 0.6, 0.06, 0.08, 0.18, 0.015, 2)
+            section_high = struct_analysis.TCC(concrete_high, rebar_high, timber_high, connector, 0.2, 0.6, 0.06, 0.08, 0.18, 0.015, 2)
 
             # Add section to content-definition of plot-line
             line_i = [section_low, floorstruc]
@@ -370,6 +370,8 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                     section0 = i[0]
                     floorstruc = i[1]
                     member0 = struct_analysis.Member1D(section0, sys, floorstruc, requirements, g2k, qk)
+                    if fire_array is not None:
+                        member0.fire = fire_array
                     opt_section = struct_optimization.get_optimized_section(member0, criterion, optimum, max_iter)
                     opt_member = struct_analysis.Member1D(opt_section, sys, floorstruc, requirements, g2k, qk)
                     # search for an alternative solution for rectangular concrete section with lower minimal h and fill in floorstructure

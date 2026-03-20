@@ -7,16 +7,16 @@ import plot_datasets  # file with code for plotting results in a standardized wa
 import matplotlib.pyplot as plt
 
 # define system lengths for plot (Datapoints on x-Axis of plot)
-lengths = [2, 4, 6]
+lengths = [3, 6, 9]
 
 # Index of verified length (cross-sections of that length will be plotted)
 idx_vrc = 4
 
 # max. number of iterations per optimization. Higher value leads to better results
-max_iter = 400 
+max_iter = 100 
 
 #  define content of plot
-criteria = ["ULS"]  # envelop, all criteria should be fulfilled (ULS, SLS1, SLS2, Fire)
+criteria = ["FIRE"]  # envelop, all criteria should be fulfilled (ULS, SLS1, SLS2, Fire)
 optima = ["GWP"]  # optimizing cross-sections for minimal GWP
 
 # define database
@@ -50,10 +50,11 @@ vrfctn_members = []
 # CREATE AND PLOT DATASET FOR TCC CROSS-SECTION
 # define materials for which date is searched in the database (table products, attribute material)
 mat_names = [("'ready_mixed_concrete'", "'solid_structural_timber'", "'DBS_10'")]
+fire = [1,1,0,1] 
 # retrieve data from database, find optimal cross-sections and plot results for TCC cross-section
 data_max_new, vrfctn_members_new = plot_datasets.plot_dataset(lengths, database_name, criteria, optima, bodenaufbau_TCC_solid,
                                                               req, "tcc", mat_names, g2k, qk, max_iter,
-                                                              idx_vrc)
+                                                              idx_vrc, fire_array=fire)
 data_max = max_of_arrays(data_max, data_max_new)
 vrfctn_members.append(vrfctn_members_new)
 
