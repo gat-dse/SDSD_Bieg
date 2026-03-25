@@ -1161,8 +1161,8 @@ class TCC(SupStrucTCC):
         for i in range(2): 
             if i == 1: #t=inf, apply k_mod for wood stiffness reduction
                 k_mod = 0.6 # for load duration class 3 (long-term load) according to EN1995-1-1, Table 3.1
-            mu[i] = min(fcd * self.EI_ULS[i] / (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*1/(self.gamma_ULS[i]*self.a_ULS[i,0]+self.h_c/2)/self.a_ribs, #concrete edge stress in Nm/m' (divide by a_ribs to get per m of total width)
-                        fmd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2))/self.a_ribs #wood edge stress in Nm/m' (divide by a_ribs to get per m of total width)
+            mu[i] = min(fcd * self.EI_ULS[i] / (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi))*1/(self.gamma_ULS[i]*self.a_ULS[i,0]+self.h_c/2)/self.a_ribs, #concrete edge stress in Nm/m' (divide by a_ribs to get per m of total width)
+                        fmd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2))/self.a_ribs #Nm/m' (divide by a_ribs to get per m of total width)
         
         return mu
     
@@ -1181,7 +1181,7 @@ class TCC(SupStrucTCC):
         for i in range(2): 
             if i == 1: #t=inf, apply k_mod for wood stiffness reduction
                 k_mod = 0.6 # for load duration class 3 (long-term load) according to EN1995-1-1, Table 3.1
-            vu[i] = (fvd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)**2)/self.a_ribs #wood shear stress in N/m' (divide by a_ribs to get per m of total width)
+            vu[i] = (2*fvd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)**2)/self.a_ribs #N/m' (divide by a_ribs to get per m of total width)
 
         return vu
     
@@ -1226,12 +1226,7 @@ class TCC(SupStrucTCC):
         qd_fire = member.psi[2] * member.qk + member.gk
         
         qd_fire_zul = min(mu_fire / (max(member.system.alpha_m) * member.system.l_tot ** 2),
-                          vu_fire / (max(member.system.alpha_v) * member.system.l_tot))
-        
-        #Print remaining section and capacities for debugging
-        print(f"t={t_val:.2f} min: Remaining section: h_w={rem_sec.h_w:.4f} m, b_w={rem_sec.b_w:.4f} m, Mu={rem_sec.Mu[0]:.2f} Nm/m', Vu={rem_sec.Vu[0]:.2f} N/m', qd_fire={qd_fire:.2f} N/m', qd_fire_zul={qd_fire_zul:.2f} N/m'")
-
-                          
+                          vu_fire / (max(member.system.alpha_v) * member.system.l_tot))     
         return qd_fire_zul - qd_fire #return t_opt
 
     @staticmethod
@@ -1239,7 +1234,6 @@ class TCC(SupStrucTCC):
         # Fire is a list of integers: [bottom, left, top, right] 1: means exposed to fire, 0 means not exposed to fire.
         # For TCC ribbed, [1,1,0,1] 
         # For TCC slab, [1,0,0,0] 
-        print(f"DEBUG: burn_rate = {section.wood_type.burn_rate} m/min, fire_array = {fire}")
     
         # Wood charring rate (beta_n)
         dcharn = section.wood_type.burn_rate #  m/min for compatibility with other dimensions in m

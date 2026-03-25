@@ -591,12 +591,8 @@ def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.06, hw_min=
     opt = basinhopping(tcc_rqs, var0, niter=max_iter, T=1, minimizer_kwargs={"args": (add_arg,), "bounds": bounds, "method": "Powell"}, take_step=bounded_step)
     hc_opt, hw_opt = opt.x
     optimized_section = struct_analysis.TCC(conc, reb, wood, conn, s, a_ribs, hc_opt, hw_opt, bw, d, l0)
-    
-    
-    ########Print final optimized variables for control
-    print(l0, round(hc_opt,5), round(hw_opt,5))
 
-
+    print(f"Optimized TCC section: hc = {hc_opt:.3f} m, hw = {hw_opt:.3f} m, l0 = {l0:.3f} m, GWP = {optimized_section.co2:.2f} kg CO2e, height = {optimized_section.h:.3f} m")
     return optimized_section
 
 # Inner function for evaluating penalties
