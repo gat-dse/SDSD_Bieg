@@ -7,15 +7,15 @@ import plot_datasets  # file with code for plotting results in a standardized wa
 import matplotlib.pyplot as plt
 
 # define system lengths for plot (Datapoints on x-Axis of plot)
-lengths = [3, 6, 9]
+lengths = [3, 6, 9, 12]
 # Index of verified length (cross-sections of that length will be plotted)
 idx_vrc = 0
 
 # max. number of iterations per optimization. Higher value leads to better results
-max_iter = 100 
+max_iter = 150 
 
 #  define content of plot
-criteria = ["ULS"]  # envelop, all criteria should be fulfilled (ULS, SLS1, SLS2, Fire)
+criteria = ["ENV"]  # ENV envelop, all criteria should be fulfilled (ULS, SLS1, SLS2, Fire)
 optima = ["GWP"]  # optimizing cross-sections for minimal GWP
 
 # define database
@@ -30,11 +30,18 @@ bodenaufbau_vollholzdecke = [["'Parkett 2-Schicht werkversiegelt, 11 mm'", False
                                  ["'Kies gebrochen'", 0.12, False]]
 bodenaufbau_wd_solid = struct_analysis.FloorStruc(bodenaufbau_vollholzdecke, database_name)
 
+# create floor structure for concrete rectangular cross-section
+bodenaufbau_rcdecke = [["'Parkett 2-Schicht werkversiegelt, 11 mm'", False, False],
+                       ["'Unterlagsboden Zement, 85 mm'", False, False],
+                       ["'Glaswolle'", 0.03, False]]
+bodenaufbau_rc = struct_analysis.FloorStruc(bodenaufbau_rcdecke, database_name)
+
 # create floor structure for TCC cross-section
 bodenaufbau_TCC= [["'Parkett 2-Schicht werkversiegelt, 11 mm'", False, False],
                        ["'Unterlagsboden Zement, 85 mm'", False, False],
                        ["'Glaswolle'", 0.03, False]]
 bodenaufbau_TCC_solid = struct_analysis.FloorStruc(bodenaufbau_TCC, database_name)
+#-----------------------------------------------------------------------------------------------------------------------
 
 # define loads on member
 g2k = 0.75e3  # n.t. Einbauten
@@ -63,9 +70,20 @@ data_max = max_of_arrays(data_max, data_max_new)
 vrfctn_members.append(vrfctn_members_new)
 
 #-----------------------------------------------------------------------------------------------------------------------
+# CREATE AND PLOT DATASET FOR CONCRETE CROSS-SECTION
+# define materials for which date is searched in the database (table products, attribute material)
+mat_names_rc = ["'ready_mixed_concrete'"]
+fire_rc = [1,0,0,0]
+# retrieve data from database, find optimal cross-sections and plot results for concrete cross-section
+data_max_new, vrfctn_members_new = plot_datasets.plot_dataset(lengths, database_name, criteria, optima, bodenaufbau_rc,
+                                                                req, "rc_rec", mat_names_rc, g2k, qk, max_iter,
+                                                                idx_vrc, fire_array=fire_rc)
+data_max = max_of_arrays(data_max, data_max_new)
+
+#-----------------------------------------------------------------------------------------------------------------------
 # CREATE AND PLOT DATASET FOR TCC CROSS-SECTION
 # define materials for which date is searched in the database (table products, attribute material)
-mat_names_TCC_rib = [("'ready_mixed_concrete'", "'Glue_laminated_timber'", "'DBS_10'")]
+mat_names_TCC_rib = [("'ready_mixed_concrete'", "'Glue_laminated_timber'", "'kerve'")]
 fire_TCC_rib = [1,0,0,0] 
 # retrieve data from database, find optimal cross-sections and plot results for TCC cross-section
 data_max_new, vrfctn_members_new = plot_datasets.plot_dataset(lengths, database_name, criteria, optima, bodenaufbau_TCC_solid,

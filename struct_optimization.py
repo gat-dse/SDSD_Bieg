@@ -404,7 +404,7 @@ def wd_rqs_h(h, args):
                       member.w_app - member.w_app_adm]
         # return penalty if w_adm =! w
         penalty2 = 1e5*max(d1, d2, d3, 0)
-        to_minimize = member.section.h*(1000+penalty2)
+        to_minimize = member.section.h*(1+penalty2)
     elif criterion == "SLS2":
         pen_a = member.a_ed - member.requirements.a_cd  # Grössenordnung 1e-2
         pen_w = member.wf_ed - member.requirements.w_f_cdr1*member.r1  # HBT S. 48. r2 wird gleich 1 gesetzt
@@ -429,6 +429,7 @@ def wd_rqs_h(h, args):
         pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
         penalty1 = max(member.qk - member.qk_zul_gzt, 0)
         penalty2 = 1e5 * max(d1, d2, d3, 0)
+        
         if member.f1 < member.requirements.f1:
             penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
         else:
@@ -572,7 +573,7 @@ def wd_rib_rqs(var, add_arg):
 
 # TCC cross-section
 # Outer function to find optimal TCC cross-section
-def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.06, hw_min=0.08):
+def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.08, hw_min=0.08):
     #Initial values for optimization variables
     hc0 = m.section.h_c
     hw0 = m.section.h_w
@@ -618,15 +619,17 @@ def tcc_rqs(var, add_arg):
     # Trigger structural calculations
     member.calc_qk_zul_gzt()
     # ULS penalty 
-    penalty1 = max(member.qk - member.qk_zul_gzt, 0)
+    penalty1 = max(member.qk - member.qk_zul_gzt, 0) 
+
     # SLS1 penalty (deflection)
     d1, d2, d3 = [member.w_install - member.w_install_adm, member.w_use - member.w_use_adm, member.w_app - member.w_app_adm]
-    penalty2 = 1e5 * max(d1, d2, d3, 0)
+    penalty2 = 1e5 * max(d1, d2, d3, 0) 
+    
     # SLS2 penalty (vibration)
     pen_a = member.a_ed - member.requirements.a_cd  
     pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1  
     pen_v = member.ve_ed - member.ve_cd
-    if member.f1 < member.requirements.f1:
+    if member.f1 < member.requirements.f1: #low frequency vibration limit not fulfilled
         penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
     else:
         penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
@@ -780,7 +783,7 @@ def get_opt_sec(section, gwp_budget):
 
     elif section.section_type == "tcc":
         var0 = np.array([section.h_c, section.h_w])
-        hc_min, hw_min = 0.06, 0.12
+        hc_min, hw_min = 0.08, 0.12
         bnds = Bounds([hc_min, hw_min], [0.4, 1.0])
         add_arg = [section.concrete_type, section.rebar_type, section.wood_type, section.connector_type, 
                    section.s, section.a_ribs, section.b_w, section.d, section.l0, gwp_budget]

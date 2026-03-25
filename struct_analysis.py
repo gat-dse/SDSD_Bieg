@@ -1002,7 +1002,7 @@ class SupStrucTCC(Section): #takes the geometric parameters of the TCC cross-sec
         return w
     
 class TCC(SupStrucTCC):
-    def __init__(self, concrete_type, rebar_type, wood_type, connector_type, s, a_ribs, h_c, h_w, b_w, d, l0, xi=0.01, eib=0.0):
+    def __init__(self, concrete_type, rebar_type, wood_type, connector_type, s, a_ribs, h_c, h_w, b_w, d, l0, xi=0.02, ):
         section_type = "tcc"
         super().__init__(section_type, a_ribs, h_c, h_w, b_w, d, l0)
         self.concrete_type = concrete_type
@@ -1017,12 +1017,12 @@ class TCC(SupStrucTCC):
         self.Mu = self.calc_mu() #Nm/m'
         self.Vu = self.calc_vu() #N/m'
 
-        self.co2 = self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
+        self.co2 = (self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * (self.concrete_type.GWP * self.concrete_type.density + 0.002 * self.rebar_type.GWP * self.rebar_type.density))/a_ribs  # [kg_CO2_eq/m], 0.2% minimal reinforcement
         self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
         self.g0k = self.calc_weight() 
         self.ei1 = self.EI_SLS[0]  # elastic stiffness at t=0 for SLS checks
         self.xi = xi
-        self.ei_b = eib  # stiffness perpendicular to direction of span
+        self.ei_b = self.concrete_type.Ecm * self.h_c**3 / 12  # stiffness perpendicular to direction of span per m witdh
         self.phi = 1 #dummy that is not used, but needed that nothing crashes
         # Positive capacities (dummy values)
         self.mu_max = 1
@@ -1031,6 +1031,9 @@ class TCC(SupStrucTCC):
         # Negative capacities (Never used, just here to prevent crashes)
         self.mu_min = 0.0
         self.vu_n = 0.0
+
+        # Define string as plot label that names connector type and fixed geometric parameters of TCC for plotting purposes
+        #self.plot_label = f"TCC: {connector_type.name}, b_w={b_w}m, a_ribs={a_ribs}, s={s}m, d={d}m"
         
     
     def calc_gamma(self):
@@ -1083,35 +1086,6 @@ class TCC(SupStrucTCC):
 
         return gamma_ULS, gamma_SLS, psi_ULS, psi_SLS
     
-    def calc_EIeff(self):
-        # Initialize arrays for effective stiffness at ULS and SLS
-        EI_ULS = np.zeros(2) #EI_ULS[0] for t=0, EI_ULS[1] for t=inf
-        EI_SLS = np.zeros(2) #EI_SLS[0] for t=0, EI_SLS[1] for t=inf
-        # Initialize 2x2 array for a_i values at ULS and SLS
-        a_ULS = np.zeros((2, 2)) #Rows for t=0, t=inf, Columns for concrete and wood 
-        a_SLS = np.zeros((2, 2)) #Rows for t=0, t=inf, Columns for concrete and wood 
-
-        # Calculate a_i values for ULS at different time points i
-        for i in range(2):  # Only t=0 and t=inf
-            a_ULS[i, 1] = (self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i, 0]*self.concrete_type.phi)) * self.A_c*((self.h_c+self.h_w)/2+self.d)) / (2*(self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_ULS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at ULS
-            a_ULS[i, 0] = (self.h_c+self.h_w)/2 + self.d - a_ULS[i,1] #a_concrete at ULS
-
-        # Calculate a_i values for SLS at different time points
-        for i in range(2):  # Only t=0 and t=inf
-            a_SLS[i, 1] = (self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c*((self.h_c+self.h_w)/2+self.d)) / (2*(self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_SLS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at SLS
-            a_SLS[i, 0] = (self.h_c+self.h_w)/2 + self.d - a_SLS[1,i] #a_concrete at SLS
-
-        # Calculate effective stiffness at ULS for different time points
-        for i in range(2):  # Only t=0 and t=inf
-            EI_ULS[i] += (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_ULS[i]*self.A_c*a_ULS[i,0]**2)
-            EI_ULS[i] += (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_ULS[i,1]**2)
-
-        # Calculate effective stiffness at SLS for different time points
-        for i in range(2):  # Only t=0 and t=inf
-            EI_SLS[i] += (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_SLS[i]*self.A_c*a_SLS[i,0]**2)
-            EI_SLS[i] += (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_SLS[i,1]**2)
-        
-        return EI_ULS, EI_SLS, a_ULS, a_SLS
     
     def calc_EIeff(self):
         # Initialize arrays for effective stiffness at ULS and SLS
@@ -1133,13 +1107,13 @@ class TCC(SupStrucTCC):
 
         # Calculate effective stiffness at ULS for different time points
         for i in range(2):  # Only t=0 and t=inf
-            EI_ULS[i] += (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_ULS[i]*self.A_c*a_ULS[i,0]**2)
-            EI_ULS[i] += (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_ULS[i,1]**2)
+            EI_ULS[i] += (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_ULS[i]*self.A_c*a_ULS[i,0]**2)/self.a_ribs #divide by a_ribs to get per m of total width
+            EI_ULS[i] += (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_ULS[i,1]**2)/self.a_ribs #divide by a_ribs to get per m of total width
 
         # Calculate effective stiffness at SLS for different time points
         for i in range(2):  # Only t=0 and t=inf
-            EI_SLS[i] += (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_SLS[i]*self.A_c*a_SLS[i,0]**2)
-            EI_SLS[i] += (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_SLS[i,1]**2)
+            EI_SLS[i] += (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_SLS[i]*self.A_c*a_SLS[i,0]**2)/self.a_ribs #divide by a_ribs to get per m of total width
+            EI_SLS[i] += (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_SLS[i,1]**2)/self.a_ribs #divide by a_ribs to get per m of total width
         
         return EI_ULS, EI_SLS, a_ULS, a_SLS
     
@@ -1161,8 +1135,8 @@ class TCC(SupStrucTCC):
         for i in range(2): 
             if i == 1: #t=inf, apply k_mod for wood stiffness reduction
                 k_mod = 0.6 # for load duration class 3 (long-term load) according to EN1995-1-1, Table 3.1
-            mu[i] = min(fcd * self.EI_ULS[i] / (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi))*1/(self.gamma_ULS[i]*self.a_ULS[i,0]+self.h_c/2)/self.a_ribs, #concrete edge stress in Nm/m' (divide by a_ribs to get per m of total width)
-                        fmd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2))/self.a_ribs #Nm/m' (divide by a_ribs to get per m of total width)
+            mu[i] = min(fcd * self.EI_ULS[i] / (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi))*1/(self.gamma_ULS[i]*self.a_ULS[i,0]+self.h_c/2), #concrete edge stress in Nm/m'
+                        fmd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)) #Nm/m'
         
         return mu
     
@@ -1181,7 +1155,7 @@ class TCC(SupStrucTCC):
         for i in range(2): 
             if i == 1: #t=inf, apply k_mod for wood stiffness reduction
                 k_mod = 0.6 # for load duration class 3 (long-term load) according to EN1995-1-1, Table 3.1
-            vu[i] = (2*fvd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)**2)/self.a_ribs #N/m' (divide by a_ribs to get per m of total width)
+            vu[i] = (2*fvd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)**2) #N/m'
 
         return vu
     
@@ -1481,7 +1455,7 @@ class Member1D:
         self.gamma_g = self.load_combinations.gamma_g
         self.gamma_q = self.load_combinations.gamma_q
 
-        self.m = self.q_per / 10
+        self.m = self.q_per / 10 # Mass per unit length in kg/m, assuming q_per is in N/m and dividing by 10 to convert to kg/m (assuming g=10 m/s^2)
         self.w_install_adm = self.system.li_max / self.requirements.lw_install
         self.w_use_adm = self.system.li_max / self.requirements.lw_use
         self.w_app_adm = self.system.li_max / self.requirements.lw_app
@@ -1509,9 +1483,10 @@ class Member1D:
                         - self.q_per
                 )
             if section_material == "tc":
-                self.w_install_ger = unit_def*self.section.ei1 * (
-                        self.q_per / self.section.EI_ULS[1] + (self.q_freq - self.q_per) / self.section.EI_ULS[0]
-                )
+                #Not adjusting for installation time
+                #self.w_install = unit_def*self.section.ei1 * (self.q_per / self.section.EI_SLS[1] + (self.q_freq - self.q_per) / self.section.EI_SLS[0])
+                #Adjusting for installation time by substracting the elastic deflection due to permanent loads
+                self.w_install = unit_def*self.section.ei1 * (self.q_per / self.section.EI_SLS[1] - self.q_per / self.section.EI_SLS[0] + (self.q_freq - self.q_per) / self.section.EI_SLS[0])
 
         elif self.requirements.install == "brittle":
             self.w_install = unit_def * (self.q_rare + self.q_per * (self.section.phi - 1))
@@ -1524,9 +1499,11 @@ class Member1D:
                         - self.q_per
                 )
             if section_material == "tc":
-                self.w_install_ger = unit_def*self.section.ei1 * (
-                        self.q_per / self.section.EI_ULS[1] + (self.q_rare - self.q_per) / self.section.EI_ULS[0]
-                )
+                #Not adjusting for installation time
+                #self.w_install = unit_def*self.section.ei1 * (self.q_per / self.section.EI_SLS[1] + (self.q_rare - self.q_per) / self.section.EI_SLS[0])
+                #Adjusting for installation time by substracting the elastic deflection due to permanent loads
+                self.w_install = unit_def*self.section.ei1 * (self.q_per / self.section.EI_SLS[1] - self.q_per / self.section.EI_SLS[0] + (self.q_freq - self.q_per) / self.section.EI_SLS[0])
+
         self.w_use = unit_def * (self.q_freq - self.gk)
         if section_material == "rc":  # Alternative Durchbiegungsberechnung für Betonquerschnitte gem. SIA262,(102)
             self.w_use_ger = unit_def * (
@@ -1534,8 +1511,8 @@ class Member1D:
                                                                              self.section.h, self.section.d)
             )
         if section_material == "tc":
-            self.w_use_ger = unit_def*self.section.ei1 * (
-                    (self.q_freq - self.q_per) / self.section.EI_ULS[0]
+            self.w_use = unit_def*self.section.ei1 * (
+                    (self.q_freq - self.q_per) / self.section.EI_SLS[0]
             )
         self.w_app = unit_def * (self.q_per * (1 + self.section.phi))
         if section_material == "rc":  # Alternative Durchbiegungsberechnung für Betonquerschnitte gem. SIA262,(102)
@@ -1544,8 +1521,8 @@ class Member1D:
                                                              self.section.h, self.section.d)
             )
         if section_material == "tc":
-            self.w_app_ger = unit_def*self.section.ei1 * (
-                    self.q_per / self.section.EI_ULS[1]
+            self.w_app = unit_def*self.section.ei1 * (
+                    self.q_per / self.section.EI_SLS[1]
             )
         self.co2 = system.l_tot * (self.floorstruc.co2 + self.section.co2)
 
@@ -1643,13 +1620,13 @@ class Member1D:
             self.section.vu_p = 1
 
             # Calculate degrees of utilization for permanent loads
-            # Quasi-permament 125% to cover 3...7years check
+            # Quasi-permament 125% to cover 3...7years check 
             deg_util_gd = 1.25 * self.gk * self.gamma_g / qu_inf 
             
             deg_util_qd_inf = 1.25 * (1 - self.psi[0]) * self.gamma_q / qu_inf # Quasi-permament of variable loads
             deg_util_qd_0 = self.psi[0] * self.gamma_q / qu_0 # Short-term of variable loads
             
-            # Negative values are wanted for optimization!
+            # Negative values are wanted for optimization 
             self.qk_zul_gzt = (1 - deg_util_gd) / (deg_util_qd_inf + deg_util_qd_0)
 
         else:
