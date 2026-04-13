@@ -1017,7 +1017,7 @@ class TCC(SupStrucTCC):
         self.Mu = self.calc_mu() #Nm/m'
         self.Vu = self.calc_vu() #N/m'
 
-        self.co2 = (self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * (self.concrete_type.GWP * self.concrete_type.density + 0.002 * self.rebar_type.GWP * self.rebar_type.density))/a_ribs  # [kg_CO2_eq/m], 0.2% minimal reinforcement
+        self.co2 = (self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * (self.concrete_type.GWP * self.concrete_type.density + self.a_ribs*self.h_c*0.002 * self.rebar_type.GWP * self.rebar_type.density))/a_ribs  # [kg_CO2_eq/m], 0.2% minimal reinforcement
         self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
         self.g0k = self.calc_weight() 
         self.ei1 = self.EI_SLS[0]  # elastic stiffness at t=0 for SLS checks
@@ -1027,6 +1027,7 @@ class TCC(SupStrucTCC):
         # Positive capacities (dummy values)
         self.mu_max = 1
         self.vu_p = 1
+        
     
         # Negative capacities (Never used, just here to prevent crashes)
         self.mu_min = 0.0
@@ -1137,6 +1138,16 @@ class TCC(SupStrucTCC):
                 k_mod = 0.6 # for load duration class 3 (long-term load) according to EN1995-1-1, Table 3.1
             mu[i] = min(fcd * self.EI_ULS[i] / (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi))*1/(self.gamma_ULS[i]*self.a_ULS[i,0]+self.h_c/2), #concrete edge stress in Nm/m'
                         fmd * k_mod * self.EI_ULS[i] / (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*1/(self.a_ULS[i,1]+self.h_w/2)) #Nm/m'
+            
+        # Calculate m_u of the concrete cross section alone for t=0
+        # Find minimal reinforcement
+        A_s = 0.002*self.b_ceff*self.h_c/2 #minimal reinforcement area lower reinforcement
+        d = self.h_c-2e-2-0.5e-2 #effective depth of reinforcement, assume 2cm concrete cover and 1cm rebar diameter
+        m_cmin = A_s * self.rebar_type.fsd * (d - A_s * self.rebar_type.fsd / (2 * self.b_ceff * fcd))
+        mr = self.b_ceff * self.h_c ** 2 / 6 * 1.3 * self.concrete_type.fctm  #cracking moment
+        print("m_cmin= ", m_cmin, "mr= ", mr, mu[0])
+
+        mu[0] = max(mu[0], max(m_cmin/self.a_ribs, mr/self.a_ribs)) #ensure that the moment resistance is at least as high as the cracking moment and the moment resistance of the minimal reinforced concrete section, divide by a_ribs to get per m of total width
         
         return mu
     
@@ -1622,7 +1633,6 @@ class Member1D:
             # Calculate degrees of utilization for permanent loads
             # Quasi-permament 125% to cover 3...7years check 
             deg_util_gd = 1.25 * self.gk * self.gamma_g / qu_inf 
-            
             deg_util_qd_inf = 1.25 * (1 - self.psi[0]) * self.gamma_q / qu_inf # Quasi-permament of variable loads
             deg_util_qd_0 = self.psi[0] * self.gamma_q / qu_0 # Short-term of variable loads
             
@@ -1650,7 +1660,8 @@ class Member1D:
             eil = self.section.ei1
         m = self.m
  #       print("m =", m)
-        f1 = kf2 * np.pi / (2 * l_rech ** 2) * (eil / m) ** 0.5  # HBT, Seite 46    #FEHLER WARNUNG IN COMPARISON ULS SLS
+        
+        f1 = kf2 * np.pi / (2 * (l_rech) ** 2) * (abs(eil) / abs(m))**0.5  # HBT, Seite 46    #FEHLER WARNUNG IN COMPARISON ULS SLS
         return f1
 
     def calc_vib1(self, f0=700):
@@ -1667,19 +1678,20 @@ class Member1D:
         else:
             alpha = 0.06
             ff = 6.9
-        a_ed = 0.4 * f0 * alpha / m_gen * 1 / (
-                    ((f1 / ff) ** 2 - 1) ** 2 + (2 * xi * f1 / ff) ** 2) ** 0.5  # HBT, Seite 47
+        a_ed = 0.4 * f0 * alpha / m_gen * 1 / (((f1 / ff) ** 2 - 1) ** 2 + (2 * xi * f1 / ff) ** 2)**0.5  # HBT, Seite 47
         return a_ed
 
     def calc_vib2(self, f=1000):
         # calculates W_F,ED according to to HBT, Seite 48
         wf_ed = self.system.alpha_w_f_cd * f * self.system.li_max ** 3 / (self.bm_rech * self.section.ei1)
+        
+
         section_material = self.section.section_type[0:2]
         if section_material == "rc":  # take cracked stiffness for calculation of concrete sections
             eil = self.section.ei2
         else:
             eil = self.section.ei1
-        ve_ed = 364 / (self.bm_rech * (self.m ** 3 * eil * 1e6) ** 0.25)        #FEHLER WARNUNG IN COMPARISON ULS SLS
+        ve_ed = 364 / (abs(self.bm_rech) * (abs(self.m) ** 3 * abs(eil) * 1e6)**0.25)        #FEHLER WARNUNG IN COMPARISON ULS SLS
         return wf_ed, ve_ed
 
     def get_fire_resistance(self):
@@ -1698,10 +1710,6 @@ class Member1D:
             #print("fire resistance for is not defined for that cross-section type.")
             fire_resistance = None
         self.fire_resistance = fire_resistance
-
-
-
-
 
 class Member2D:
     def __init__(self, section, system, floorstruc, requirements, g2k=0.0, qk=2e3, psi0=0.7, psi1=0.5, psi2=0.3,

@@ -201,6 +201,7 @@ def rc_rqs(var, add_arg):
     else:
         penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
 
+
     # define penalty4, if fire resistance is not fulfilled
     member.get_fire_resistance()
     penalty4 = max(member.requirements.t_fire-member.fire_resistance, 0)
@@ -335,6 +336,7 @@ def rc_rib_rqs(var, add_arg):
         penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
     else:
         penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
+
 
     # define penalty4, if fire resistance is not fulfilled
     member.get_fire_resistance()

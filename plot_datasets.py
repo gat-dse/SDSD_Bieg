@@ -162,8 +162,8 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
 
             # Create initial TCC sections with low/high emission values for concrete, wood and rebar   
             # def __init__(self, concrete_type, rebar_type, wood_type, connector_type, s, a_ribs, h_c, h_w, b_w, d, l0, xi=0.01, eib=0.0):
-            section_low = struct_analysis.TCC(concrete_low, rebar_low, timber_low, connector, 0.8, 0.2, 0.08, 0.12, 0.2, 0.0, 2)
-            section_high = struct_analysis.TCC(concrete_high, rebar_high, timber_high, connector, 0.8, 0.2, 0.08, 0.12, 0.2, 0.0, 2)
+            section_low = struct_analysis.TCC(concrete_low, rebar_low, timber_low, connector, 0.4, 0.2, 0.08, 0.12, 0.2, 0.0, 2)
+            section_high = struct_analysis.TCC(concrete_high, rebar_high, timber_high, connector, 0.4, 0.2, 0.08, 0.12, 0.2, 0.0, 2)
 
             # Add section to content-definition of plot-line
             line_i = [section_low, floorstruc]

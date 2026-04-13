@@ -1,7 +1,13 @@
+import sys
+import os
+
 # file contains code for generating fundamental plots of first example (simple supported beam)
 
+# Enable access to parent directory for importing files
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # IMPORT
-import create_dummy_database  # file for creating a "dummy database", as long as no real database is available
+#import create_dummy_database  # file for creating a "dummy database", as long as no real database is available
 import struct_analysis  # file with code for structural analysis
 import struct_optimization  # file with code for structural optimization
 import matplotlib.pyplot as plt
@@ -9,8 +15,8 @@ import plot_datasets  # file with code for plotting results in a standardized wa
 
 # INPUT
 # create dummy-database
-database_name = "dummy_sustainability_1.db"  # define database name
-create_dummy_database.create_database(database_name)  # create database
+database_name = "database_260126.db"
+#create_dummy_database.create_database(database_name)  # create database
 
 # create materials for reinforced concrete cross-section, derive corresponding design values
 concrete1 = struct_analysis.ReadyMixedConcrete("'C25/30'", database_name)
