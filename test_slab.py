@@ -10,7 +10,7 @@ import struct_optimization  # file with code for structural optimization
 
 # INPUT
 # create dummy-database
-database_name = "database_250702.db"  # define database name
+database_name = "database_260126.db"  # define database name
 #create_dummy_database.create_database(database_name)  # create database
 
 # create material for reinforced concrete cross-section, derive corresponding design values
@@ -36,8 +36,8 @@ qk = 2e3  # Nutzlast
 # define service limit state criteria
 req = struct_analysis.Requirements()
 
-length_x = 8
-length_y = 8
+length_x = 6
+length_y = 6
 support = "LL-frei"
 
 # create slab system

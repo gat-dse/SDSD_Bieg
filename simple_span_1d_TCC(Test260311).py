@@ -15,7 +15,7 @@ idx_vrc = 0
 max_iter = 150 
 
 #  define content of plot
-criteria = ["FIRE"]  # ENV envelop, all criteria should be fulfilled (ULS, SLS1, SLS2, FIRE)
+criteria = ["ENV"]  # ENV envelop, all criteria should be fulfilled (ULS, SLS1, SLS2, FIRE)
 optima = ["GWP"]  # optimizing cross-sections for minimal GWP
 
 # define database

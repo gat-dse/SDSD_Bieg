@@ -1048,8 +1048,8 @@ class TCC(SupStrucTCC):
         psi_SLS = np.zeros((2, 3)) # Rows: 0 for t=0, 1 for t=inf; Columns: 0 for concrete, 1 for wood, 2 for connector
 
         # All psi at t=0 are 1
-        psi_ULS[0, :] = 1
-        psi_SLS[0, :] = 1
+        psi_ULS[0, :] = 0
+        psi_SLS[0, :] = 0
 
         # t_0
         gamma_ULS[0] = 1 / (1 + np.pi**2 * self.concrete_type.Ecm * self.A_c * self.s / (self.connector_type.K_ser * 2/3 * self.l0**2))
@@ -1098,23 +1098,31 @@ class TCC(SupStrucTCC):
 
         # Calculate a_i values for ULS at different time points i
         for i in range(2):  # Only t=0 and t=inf
-            a_ULS[i, 1] = (self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i, 0]*self.concrete_type.phi)) * self.A_c*((self.h_c+self.h_w)/2+self.d)) / (2*(self.gamma_ULS[i] * (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_ULS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at ULS
-            a_ULS[i, 0] = (self.h_c+self.h_w)/2 + self.d - a_ULS[i,1] #a_concrete at ULS
+            Ec = self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi)
+            Ew = self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi)
+            a_ULS[i, 1] = (self.gamma_ULS[i] * Ec * self.A_c*((self.h_c+self.h_w)/2+self.d)) / ((self.gamma_ULS[i] * Ec * self.A_c + Ew * self.A_w)) #a_wood at ULS
+            a_ULS[i, 0] = ((self.h_c+self.h_w)/2 + self.d) - a_ULS[i,1] #a_concrete at ULS
 
         # Calculate a_i values for SLS at different time points
-        for i in range(2):  # Only t=0 and t=inf
-            a_SLS[i, 1] = (self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c*((self.h_c+self.h_w)/2+self.d)) / (2*(self.gamma_SLS[i] * (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)) * self.A_c + (self.wood_type.Emmean/(self.psi_SLS[i,1]*self.wood_type.phi)) * self.A_w)) #a_wood at SLS
-            a_SLS[i, 0] = (self.h_c+self.h_w)/2 + self.d - a_SLS[1,i] #a_concrete at SLS
+        for i in range(2):  # Only t=0 and t=inf 
+            Ec = self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)
+            Ew = self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi)
+            a_SLS[i, 1] = (self.gamma_SLS[i] * Ec * self.A_c*((self.h_c+self.h_w)/2+self.d)) / ((self.gamma_SLS[i] * Ec * self.A_c + Ew * self.A_w)) #a_wood at SLS
+            a_SLS[i, 0] = ((self.h_c+self.h_w)/2 + self.d) - a_SLS[i,1] #a_concrete at SLS
 
         # Calculate effective stiffness at ULS for different time points
         for i in range(2):  # Only t=0 and t=inf
-            EI_ULS[i] += (self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_ULS[i]*self.A_c*a_ULS[i,0]**2)/self.a_ribs #divide by a_ribs to get per m of total width
-            EI_ULS[i] += (self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_ULS[i,1]**2)/self.a_ribs #divide by a_ribs to get per m of total width
+            Ec = self.concrete_type.Ecm/(1+self.psi_ULS[i,0]*self.concrete_type.phi)
+            Ew = self.wood_type.Emmean/(1+self.psi_ULS[i,1]*self.wood_type.phi)
+            EI_ULS[i] += Ec*(self.I_yc + self.gamma_ULS[i]*self.A_c*a_ULS[i,0]**2)/self.a_ribs #divide by a_ribs to get per m of total width
+            EI_ULS[i] += Ew*(self.I_yw + self.A_w*a_ULS[i,1]**2)/self.a_ribs #divide by a_ribs to get per m of total width
 
         # Calculate effective stiffness at SLS for different time points
         for i in range(2):  # Only t=0 and t=inf
-            EI_SLS[i] += (self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi))*(self.I_yc + self.gamma_SLS[i]*self.A_c*a_SLS[i,0]**2)/self.a_ribs #divide by a_ribs to get per m of total width
-            EI_SLS[i] += (self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi))*(self.I_yw + self.A_w*a_SLS[i,1]**2)/self.a_ribs #divide by a_ribs to get per m of total width
+            Ec = self.concrete_type.Ecm/(1+self.psi_SLS[i,0]*self.concrete_type.phi)
+            Ew = self.wood_type.Emmean/(1+self.psi_SLS[i,1]*self.wood_type.phi)
+            EI_SLS[i] += Ec*(self.I_yc + self.gamma_SLS[i]*self.A_c*a_SLS[i,0]**2)/self.a_ribs #divide by a_ribs to get per m of total width
+            EI_SLS[i] += Ew*(self.I_yw + self.A_w*a_SLS[i,1]**2)/self.a_ribs #divide by a_ribs to get per m of total width
         
         return EI_ULS, EI_SLS, a_ULS, a_SLS
     
@@ -1145,7 +1153,6 @@ class TCC(SupStrucTCC):
         d = self.h_c-2e-2-0.5e-2 #effective depth of reinforcement, assume 2cm concrete cover and 1cm rebar diameter
         m_cmin = A_s * self.rebar_type.fsd * (d - A_s * self.rebar_type.fsd / (2 * self.b_ceff * fcd))
         mr = self.b_ceff * self.h_c ** 2 / 6 * 1.3 * self.concrete_type.fctm  #cracking moment
-        print("m_cmin= ", m_cmin, "mr= ", mr, mu[0])
 
         mu[0] = max(mu[0], max(m_cmin/self.a_ribs, mr/self.a_ribs)) #ensure that the moment resistance is at least as high as the cracking moment and the moment resistance of the minimal reinforced concrete section, divide by a_ribs to get per m of total width
         
@@ -1172,7 +1179,7 @@ class TCC(SupStrucTCC):
     
     @staticmethod
     def fire_resistance(member):
-        t_max_limit = 240.0
+        t_max_limit = 60.0
         
         # Check interval endpoints first
         diff_0 = TCC.fire_minimizer(0.0, member)
