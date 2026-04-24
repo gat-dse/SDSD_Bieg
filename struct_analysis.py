@@ -253,6 +253,7 @@ class RectangularWood(SupStrucRectangular, Section):
         self.cost = self.a_brutt * self.wood_type.cost # [CHF] #TODO: Not implemented yet!
         self.ei_b = ei_b  # stiffness perpendicular to direction of span [Nm^2]
         self.xi = xi  # damping factor, preset value see: HBT, Page 47 (higher value for some buildups possible)
+        self.h_installation = 0 # no room for installation of services
 
     @staticmethod
     def fire_resistance(member):
@@ -320,6 +321,7 @@ class RectangularConcrete(SupStrucRectangular):
         self.ei_b = self.ei1
         self.xi = xi  # XXXXXXX preset value is an assumption. Has to be verified with literature. XXXXXXX
         self.ei2 = self.ei1 / self.f_w_ger(self.roh, self.rohs, 0, self.h, self.d)
+        self.h_installation = self.h - 2*self.c_nom - self.bw[0][0] - self.bw[1][0] - self.bw[2][0] - self.bw[3][0]  # height available for installation of services
 
     def calc_d(self):
         d = self.h - self.c_nom - self.bw_bg[0] - self.bw[0][0] / 2 #Statische Höhe für Positives Biegemoment
@@ -562,6 +564,7 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         self.ei_b = self.ei1  #!!!!!!!ANPASSEN AUF PB
         self.xi = xi  # XXXXXXX preset value is an assumption. Has to be verified with literature. XXXXXXX
         self.ei2 = self.ei1 / self.f_w_ger(self.roh, self.rohs, 0, self.h, self.d_PB)  #!!!!!ANPASSEN AUF PB
+        self.h_installation = self.h_w # height available for installation of services. 
 
     def calc_d(self):
         d = self.h_f - self.c_nom - self.bw[0][0] / 2  # Statische Höhe 1. Lage Platte
@@ -855,6 +858,8 @@ class RibWood(SupStrucRibWood):
         self.cost = self.b * self.h / self.a * self.wood_type_1.cost + (self.t2 + self.t3)  * self.wood_type_2.cost
         self.ei_b = ei_b  # stiffness perpendicular to direction of span
         self.xi = xi  # damping factor, preset value see: HBT, Page 47 (higher value for some buildups possible)
+        self.h_installation = self.h # height available for installation of services. In case of box beam floor, this is the web height. 
+    
 
     def calc_n(self):
         ft0d = 8.5 #C24
@@ -1027,15 +1032,19 @@ class TCC(SupStrucTCC):
         # Positive capacities (dummy values)
         self.mu_max = 1
         self.vu_p = 1
-        
     
         # Negative capacities (Never used, just here to prevent crashes)
         self.mu_min = 0.0
         self.vu_n = 0.0
 
+        self.h_installation = self.get_h_installation() # height available for installation of services. In case of box beam floor, this is the web height.
         # Define string as plot label that names connector type and fixed geometric parameters of TCC for plotting purposes
         #self.plot_label = f"TCC: {connector_type.name}, b_w={b_w}m, a_ribs={a_ribs}, s={s}m, d={d}m"
-        
+    def get_h_installation(self):
+        if self.b_w == self.a_ribs: #Solid slab
+            return max(self.h_c - 0.04*2,0)
+        else: #Ribbed slab
+            return self.h_w
     
     def calc_gamma(self):
         # Initialize array for gamma values at different time points
