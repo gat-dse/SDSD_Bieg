@@ -10,17 +10,30 @@ import sqlite3
 excel_file = "/Users/jonathanbieg/Documents/Master Thesis/1_Code/Python Repository/SDSD_Bieg/Database/260424_MIVES_weights.xlsx"  
 # read excel
 df_weights= pd.read_excel(excel_file, sheet_name="Balanced", engine="openpyxl") # Scenario "Balanced"
+df_input = pd.read_excel(excel_file, sheet_name="Input", engine="openpyxl") # Input values for MIVES cost evaluation
 # create database connection
-weights = sqlite3.connect("MIVES_260424.db")
+conn = sqlite3.connect("MIVES_260424.db")
 # write data to database
-df_weights.to_sql("Balanced", weights, if_exists="replace", index=False)
+df_weights.to_sql("Balanced", conn, if_exists="replace", index=False)
+df_input.to_sql("Input", conn, if_exists="replace", index=False)
 
+#Check if data is written correctly
+print(df_weights.head())
+print(df_input.head())
 
 class MIVESEvaluator:
-    def __init__(self, weights=df_weights):
+    def __init__(self, member):
         # Read weights from the database
-        self.weights = {
-        }
+        self.weights = df_weights['Wt (%)']
+        self.cost = self.member.section.cost 
+        self.construction_time = getConstructionTime(self.member)  # Funktion, um Bauzeit zu berechnen
+        self.co2 = self.member.section.co2
+        self.h_installation = self.section.h_installation
+
+    def getCost(self, member):
+        # Floor structure costs
+        
+
 
     def mives_value_function(x, x_min, x_max, c, k, p):
         """

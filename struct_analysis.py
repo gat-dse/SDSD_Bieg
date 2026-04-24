@@ -50,17 +50,18 @@ class Wood:
         # get GWP properties from database
         if prod_id == "undef":  # no specific product is defined, chose first product entry with required mechanical
             # properties in database
-            inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost FROM products WHERE MECH_PROP=" + mech_prop
+            inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost, T_construction FROM products WHERE PRO_ID=" + prod_id
         else:
-            inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost FROM products WHERE PRO_ID=" + prod_id
+            inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost, T_construction FROM products WHERE PRO_ID=" + prod_id
         cursor.execute(inquiry)
         result = cursor.fetchall()
         # self.prod_id, self.density, self.GWP, self.cost, self.cost2 = result[0]
-        self.prod_id, density, GWP, self.cost = result[0]
+        self.prod_id, density, GWP, cost, construction_time = result[0]
         self.GWP = GWP/1e3  # transform unit from [kg-Co2-eq/t] to [kg-Co2-eq/kg]
         self.density = float(density)
-        self.cost = 0
-        self.cost2 = 0
+        self.cost = cost #CHF/m3
+        self.construction_time = construction_time #h/m3
+        self.cost2 = 0 
         self.fmd = self.get_design_values()
 
     def get_design_values(self, gamma_m=1.7, eta_m=1, eta_t=1, eta_w=1):  # calculate design values
@@ -90,21 +91,23 @@ class ReadyMixedConcrete:
             # inquiry = ("""
             #         SELECT PRO_ID, density, Total_GWP, cost, cost2 FROM products WHERE "material [string]" LIKE """ + mech_prop
             #            )
-            inquiry = ("""SELECT PRO_ID, DENSITY, Total_GWP, Cost FROM products WHERE MECH_PROP LIKE """
+            inquiry = ("""SELECT PRO_ID, DENSITY, Total_GWP, Cost, T_construction FROM products WHERE MECH_PROP LIKE """
                        + mech_prop)
         else:
             # inquiry = ("""SELECT PRO_ID, density, Total_GWP, cost, cost2 FROM products WHERE PRO_ID LIKE """ + prod_id
             #            )
-            inquiry = ("""SELECT PRO_ID, DENSITY, Total_GWP, Cost FROM products WHERE PRO_ID LIKE """
+            inquiry = ("""SELECT PRO_ID, DENSITY, Total_GWP, Cost, T_construction FROM products WHERE PRO_ID LIKE """
                        + prod_id)
         cursor.execute(inquiry)
         result = cursor.fetchall()
         # self.prod_id, self.density, self.GWP, self.cost, self.cost2 = result[0]
-        self.prod_id, density, GWP, self.cost = result[0]
+        self.prod_id, density, GWP, cost, construction_time = result[0]
         self.GWP = GWP/1e3  # transform unit from [kg-Co2-eq/t] to [kg-Co2-eq/kg]
         self.density = float(density)
-        self.cost = 0
-        self.cost2 = 0
+        self.cost = cost #CHF/m3
+        self.cost2 = 75 #CHF/m2 additional cost for formwork (flat slabs)
+        self.construction_time = construction_time #h/m3
+        self.construction_time_scaffold = 0.7 #h/m2 additional construction time for scaffolding
         self.dmax = dmax
         self.fcd, self.tcd, self.ec2d = self.get_design_values()
 
@@ -130,16 +133,17 @@ class SteelReinforcingBar:
         # get GWP properties from database
         if prod_id == "undef":  # no specific product is defined, chose first product entry with required mechanical
             # properties in database
-            inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost FROM products WHERE MECH_PROP=" + mech_prop
+            inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost, T_construction FROM products WHERE MECH_PROP=" + mech_prop
         else:
-            inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost FROM products WHERE PRO_ID=" + prod_id
+            inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost, T_construction FROM products WHERE PRO_ID=" + prod_id
         cursor.execute(inquiry)
         result = cursor.fetchall()
         #self.prod_id, density, self.GWP, self.cost = result[0]
-        self.prod_id, density, GWP, self.cost = result[0]
+        self.prod_id, density, GWP, cost, construction_time = result[0]
         self.GWP = GWP/1e3  # transform unit from [kg-Co2-eq/t] to [kg-Co2-eq/kg]
         self.density = float(density)
-        self.cost = 0
+        self.cost = cost #CHF/m3
+        self.construction_time = construction_time #h/m3
         self.fsd = self.get_design_values()
 
     def get_design_values(self, gamma_s=1.15):  # calculate design values
@@ -250,7 +254,8 @@ class RectangularWood(SupStrucRectangular, Section):
         self.g0k = self.calc_weight(wood_type.weight) # dead weight of cross section [N/m]
         self.ei1 = self.wood_type.Emmean * self.iy  # elastic stiffness [Nm^2]
         self.co2 = self.a_brutt * self.wood_type.GWP * self.wood_type.density  # [kg_CO2_eq/m]
-        self.cost = self.a_brutt * self.wood_type.cost # [CHF] #TODO: Not implemented yet!
+        self.cost = self.a_brutt * self.wood_type.cost # [CHF/m]
+        self.construction_time = self.a_brutt * self.wood_type.construction_time # [h/m]
         self.ei_b = ei_b  # stiffness perpendicular to direction of span [Nm^2]
         self.xi = xi  # damping factor, preset value see: HBT, Page 47 (higher value for some buildups possible)
         self.h_installation = 0 # no room for installation of services
@@ -317,7 +322,8 @@ class RectangularConcrete(SupStrucRectangular):
         self.ei1 = self.concrete_type.Ecm * self.iy  # elastic stiffness concrete (uncracked behaviour) [Nm^2]
         self.co2 = (co2_rebar + co2_concrete)
         self.cost = (a_s_tot * self.rebar_type.cost + (self.a_brutt - a_s_tot) * self.concrete_type.cost
-                     + self.concrete_type.cost2)
+                     + self.concrete_type.cost2*self.b) # [CHF/m]
+        self.construction_time = (a_s_tot * self.rebar_type.construction_time + (self.a_brutt - a_s_tot) * self.concrete_type.construction_time + self.concrete_type.construction_type_scaffold * self.b) # [h/m]
         self.ei_b = self.ei1
         self.xi = xi  # XXXXXXX preset value is an assumption. Has to be verified with literature. XXXXXXX
         self.ei2 = self.ei1 / self.f_w_ger(self.roh, self.rohs, 0, self.h, self.d)
@@ -560,7 +566,8 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         self.ei1 = self.concrete_type.Ecm * self.iy  # elastic stiffness concrete (uncracked behaviour) [Nm^2]
         self.co2 = (co2_rebar + co2_concrete)/self.b
         self.cost = (a_s_tot * self.rebar_type.cost + (self.a_brutt - a_s_tot) * self.concrete_type.cost
-                     + self.concrete_type.cost2)
+                     + self.concrete_type.cost2*2*self.b) # [CHF/m] 
+        self.construction_time = (a_s_tot * self.rebar_type.construction_time + (self.a_brutt - a_s_tot) * self.concrete_type.construction_time + self.concrete_type.construction_type_scaffold*2*self.b) # [h/m]
         self.ei_b = self.ei1  #!!!!!!!ANPASSEN AUF PB
         self.xi = xi  # XXXXXXX preset value is an assumption. Has to be verified with literature. XXXXXXX
         self.ei2 = self.ei1 / self.f_w_ger(self.roh, self.rohs, 0, self.h, self.d_PB)  #!!!!!ANPASSEN AUF PB
@@ -856,6 +863,7 @@ class RibWood(SupStrucRibWood):
 
         self.co2 = (self.b*self.h * self.wood_type_1.GWP * self.wood_type_1.density)/self.a +self.t2 * self.wood_type_2.GWP * self.wood_type_2.density + self.t3 * self.wood_type_3.GWP * self.wood_type_3.density # [kg_CO2_eq/m]
         self.cost = self.b * self.h / self.a * self.wood_type_1.cost + (self.t2 + self.t3)  * self.wood_type_2.cost
+        self.construction_time = self.b * self.h / self.a * self.wood_type_1.construction_time + (self.t2 + self.t3)  * self.wood_type_2.construction_time
         self.ei_b = ei_b  # stiffness perpendicular to direction of span
         self.xi = xi  # damping factor, preset value see: HBT, Page 47 (higher value for some buildups possible)
         self.h_installation = self.h # height available for installation of services. In case of box beam floor, this is the web height. 
@@ -1022,8 +1030,9 @@ class TCC(SupStrucTCC):
         self.Mu = self.calc_mu() #Nm/m'
         self.Vu = self.calc_vu() #N/m'
 
-        self.co2 = (self.A_w * self.wood_type.GWP * self.wood_type.density + self.a_ribs * self.h_c * (self.concrete_type.GWP * self.concrete_type.density + self.a_ribs*self.h_c*0.002 * self.rebar_type.GWP * self.rebar_type.density))/a_ribs  # [kg_CO2_eq/m], 0.2% minimal reinforcement
-        self.cost = self.A_w * self.wood_type.cost + self.a_ribs * self.h_c * self.concrete_type.cost 
+        self.co2 = (self.A_w * self.wood_type.GWP * self.wood_type.density + 0.998 * self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density + self.a_ribs*self.h_c*0.002 * self.rebar_type.GWP * self.rebar_type.density)/a_ribs  # [kg_CO2_eq/m], 0.2% minimal reinforcement
+        self.cost = (self.A_w * self.wood_type.cost + 0.998 * self.a_ribs * self.h_c * self.concrete_type.cost + self.a_ribs*self.h_c*0.002 * self.rebar_type.cost)/a_ribs  # [CHF/m], 0.2% minimal reinforcement 
+        self.construction_time = (self.A_w * self.wood_type.construction_time + 0.998 * self.a_ribs * self.h_c * self.concrete_type.construction_time + self.a_ribs*self.h_c*0.002 * self.rebar_type.construction_time)/a_ribs  # [h/m], 0.2% minimal reinforcement, no formwork needed
         self.g0k = self.calc_weight() 
         self.ei1 = self.EI_SLS[0]  # elastic stiffness at t=0 for SLS checks
         self.xi = xi
@@ -1295,10 +1304,10 @@ class MatLayer:  # create a material layer
         cursor = connection.cursor()
         # get properties from database
         inquiry = ("""SELECT "h_fix [float, m]", "E [float, N/m^2]", "density [float, kg/m^3]", "weight [float, N/m^3]",
-         "GWP [float, kg/kg]" FROM floor_struc_prop WHERE "name[string]"=""" + mat_name)
+         "GWP [float, kg/kg]", "Cost [float, CHF/m3]", "T_construction [h/m2]" FROM floor_struc_prop WHERE "name[string]"=""" + mat_name)
         cursor.execute(inquiry)
         result = cursor.fetchall()
-        h_fix, e, density, weight, self.GWP = result[0]
+        h_fix, e, density, weight, self.GWP, cost, self.construction_time = result[0]
         if h_input is False:
             self.h = h_fix
         else:
@@ -1316,12 +1325,15 @@ class MatLayer:  # create a material layer
             self.ei = e * i
         self.gk = self.weight * self.h  # weight per area in N/m^2
         self.co2 = self.density * self.h * self.GWP  # CO2-eq per area in kg-C02/m^2
+        self.cost = self.h * cost  # cost per area in CHF/m^2
 
 
 class FloorStruc:  # create a floor structure
     def __init__(self, mat_layers, database_name):
         self.layers = []
         self.co2 = 0
+        self.cost = 0 #CHF/m^2
+        self.construction_time = 0 #h/m^2
         self.gk_area = 0
         self.h = 0
         self.ei = 0
@@ -1329,6 +1341,8 @@ class FloorStruc:  # create a floor structure
             current_layer = MatLayer(mat_name, h_input, roh_input, database_name)
             self.layers.append(current_layer)
             self.co2 += current_layer.co2
+            self.cost += current_layer.cost
+            self.construction_time += current_layer.construction_time
             self.gk_area += current_layer.gk
             self.h += current_layer.h
             self.ei = max(self.ei, current_layer.ei)
