@@ -4,6 +4,7 @@
 # import create_dummy_database  # file for creating a "dummy database", for test propose
 import struct_analysis  # file with code for structural analysis
 import plot_datasets  # file with code for plotting results in a standardized way
+import MIVES  # file with code for MIVES evaluation of members
 import matplotlib.pyplot as plt
 
 # define system lengths for plot (Datapoints on x-Axis of plot)
