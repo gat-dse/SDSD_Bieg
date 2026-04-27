@@ -136,7 +136,12 @@ class MIVESEvaluator:
         p_h_installation = 1
 
         # Evaluate value functions for each member and each indicator
-        # Continue here 
+        v_cost = self.mives_value_function(self.members_data['cost'], x_min_cost, x_max_cost, c_cost, k_cost, p_cost)
+        v_time = self.mives_value_function(self.members_data['construction_time'], x_min_time, x_max_time, c_time, k_time, p_time)
+        v_co2 = self.mives_value_function(self.members_data['co2'], x_min_co2, x_max_co2, c_co2, k_co2, p_co2)
+        v_h_tot = self.mives_value_function(self.members_data['h_tot'], x_min_h_tot, x_max_h_tot, c_h_tot, k_h_tot, p_h_tot)
+        v_weight = self.mives_value_function(self.members_data['weight'], x_min_weight, x_max_weight, c_weight, k_weight, p_weight)
+        v_h_installation = self.mives_value_function(self.members_data['h_installation'], x_min_h_installation, x_max_h_installation, c_h_installation, k_h_installation, p_h_installation)
         
         # Ecology Score (I3, I4, I5)
         v_eco = self.weights[2] * v_co2 + self.weights[3] * v_h_tot + self.weights[4] * v_weight
