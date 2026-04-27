@@ -24,7 +24,7 @@ df_input.to_sql("Input", conn, if_exists="replace", index=False)
 class MIVESEvaluator:
     def __init__(self, members, weights = df_weights):
         # Read weights from the database
-        self.weights = weights['Wt (%)']
+        self.weights = weights['Wt (%)']/100  # Convert percentage to decimal
         self.members_data = []
         for member in members:
             member_data = {
@@ -37,37 +37,37 @@ class MIVESEvaluator:
             }
             self.members_data.append(member_data)
 
-    def getCost(member):
+    def getCost(self, member):
         cost = 0
-        cost += member.floor_structure.cost # Floor structure cost
+        cost += member.floorstruc.cost # Floor structure cost
         cost += member.section.cost # Section cost
         return cost
     
-    def getConstructionTime(member):
+    def getConstructionTime(self, member):
         time = 0
-        time += member.floor_structure.construction_time
+        time += member.floorstruc.construction_time
         time += member.section.construction_time
         return time
     
-    def getCO2(member):
+    def getCO2(self, member):
         co2 = 0
-        co2 += member.floor_structure.co2
+        co2 += member.floorstruc.co2
         co2 += member.section.co2
         return co2
     
-    def getWeight(member):
+    def getWeight(self, member):
         weight = 0
-        weight += member.floor_structure.gk_area
+        weight += member.floorstruc.gk_area
         weight += member.section.w
         return weight
     
-    def geth_tot(member):
+    def geth_tot(self, member):
         h_tot = 0
-        h_tot += member.floor_structure.h
+        h_tot += member.floorstruc.h
         h_tot += member.section.h
         return h_tot
 
-    def mives_value_function(x, x_min, x_max, c, k, p):
+    def mives_value_function(self, x, x_min, x_max, c, k, p):
         """
         Implementierung der MIVES Wertfunktion nach der Formel:
         Vi = B * (1 - exp(-k * (|x - x_min| / c)^p))
@@ -89,67 +89,122 @@ class MIVESEvaluator:
         # Die eigentliche Wertfunktion Vi
         diff_x = abs(x - x_min)
         v_i = b * (1 - np.exp(-k * (diff_x / c)**p))
-    
+
         return v_i
 
     def evaluate(self):
         # I1: Cost - linear
-        x_min_cost = self.members_data['cost'].min()
-        x_max_cost = self.members_data['cost'].max()
+        costs = [member['cost'] for member in self.members_data]
+        x_min_cost = max(costs) # higher cost = worse, so max cost is the min value for the value function
+        x_max_cost = min(costs)
         c_cost = abs(x_max_cost - x_min_cost)
-        k_cost = 0.01  #nearly linear
-        p_cost = 1 # linear
-                
+        k_cost = 0.01  # nearly linear
+        p_cost = 1  # linear
+
         # I2: Construction Time - linear
-        x_min_time = self.members_data['construction_time'].min()
-        x_max_time = self.members_data['construction_time'].max()
+        times = [member['construction_time'] for member in self.members_data]
+        x_min_time = max(times) # higher time = worse, so max time is the min value for the value function
+        x_max_time = min(times)
         c_time = abs(x_max_time - x_min_time)
-        k_time = 0.01  #nearly linear
+        k_time = 0.01  # nearly linear
         p_time = 1
 
         # I3: CO2 Emissions - linear
-        x_min_co2 = self.members_data['co2'].min()
-        x_max_co2 = self.members_data['co2'].max()
+        co2_values = [member['co2'] for member in self.members_data]
+        x_min_co2 = max(co2_values) # higher CO2 = worse, so max CO2 is the min value for the value function
+        x_max_co2 = min(co2_values)
         c_co2 = abs(x_max_co2 - x_min_co2)
         k_co2 = 0.01
         p_co2 = 1
 
         # I4: Total Height - linear
-        x_min_h_tot = self.members_data['h_tot'].min()
-        x_max_h_tot = self.members_data['h_tot'].max()
+        heights = [member['h_tot'] for member in self.members_data]
+        x_min_h_tot = max(heights) # higher height = worse, so max height is the min value for the value function
+        x_max_h_tot = min(heights)
         c_h_tot = abs(x_max_h_tot - x_min_h_tot)
         k_h_tot = 0.01
         p_h_tot = 1
 
         # I5: Weight - linear
-        x_min_weight = self.members_data['weight'].min()
-        x_max_weight = self.members_data['weight'].max()
+        weights = [member['weight'] for member in self.members_data]
+        x_min_weight = max(weights) # higher weight = worse, so max weight is the min value for the value function
+        x_max_weight = min(weights)
         c_weight = abs(x_max_weight - x_min_weight)
         k_weight = 0.01
         p_weight = 1
 
         # I6: Installation Height - linear
-        x_min_h_installation = self.members_data['h_installation'].min()
-        x_max_h_installation = self.members_data['h_installation'].max()
+        installation_heights = [member['h_installation'] for member in self.members_data]
+        x_min_h_installation = min(installation_heights) # lower installation height = better, so min installation height is the min value for the value function
+        x_max_h_installation = max(installation_heights)
         c_h_installation = abs(x_max_h_installation - x_min_h_installation)
         k_h_installation = 0.01
         p_h_installation = 1
 
         # Evaluate value functions for each member and each indicator
-        v_cost = self.mives_value_function(self.members_data['cost'], x_min_cost, x_max_cost, c_cost, k_cost, p_cost)
-        v_time = self.mives_value_function(self.members_data['construction_time'], x_min_time, x_max_time, c_time, k_time, p_time)
-        v_co2 = self.mives_value_function(self.members_data['co2'], x_min_co2, x_max_co2, c_co2, k_co2, p_co2)
-        v_h_tot = self.mives_value_function(self.members_data['h_tot'], x_min_h_tot, x_max_h_tot, c_h_tot, k_h_tot, p_h_tot)
-        v_weight = self.mives_value_function(self.members_data['weight'], x_min_weight, x_max_weight, c_weight, k_weight, p_weight)
-        v_h_installation = self.mives_value_function(self.members_data['h_installation'], x_min_h_installation, x_max_h_installation, c_h_installation, k_h_installation, p_h_installation)
-        
-        # Ecology Score (I3, I4, I5)
-        v_eco = self.weights[2] * v_co2 + self.weights[3] * v_h_tot + self.weights[4] * v_weight
-        # Economy Score (I1, I2)
-        v_cost = self.weights[0] * v_cost + self.weights[1] * v_time
-        # Social Score (I6)
-        v_social = self.weights[5] * v_h_installation
-        # Total Sustainability Index
-        S = v_eco + v_cost + v_social
-        
-        return S, v_eco, v_cost, v_social
+        v_cost = [self.mives_value_function(cost, x_min_cost, x_max_cost, c_cost, k_cost, p_cost) for cost in costs]
+        v_time = [self.mives_value_function(time, x_min_time, x_max_time, c_time, k_time, p_time) for time in times]
+        v_co2 = [self.mives_value_function(co2, x_min_co2, x_max_co2, c_co2, k_co2, p_co2) for co2 in co2_values]
+        v_h_tot = [self.mives_value_function(height, x_min_h_tot, x_max_h_tot, c_h_tot, k_h_tot, p_h_tot) for height in heights]
+        v_weight = [self.mives_value_function(weight, x_min_weight, x_max_weight, c_weight, k_weight, p_weight) for weight in weights]
+        v_h_installation = [self.mives_value_function(h_installation, x_min_h_installation, x_max_h_installation, c_h_installation, k_h_installation, p_h_installation) for h_installation in installation_heights]
+
+        # Calculate scores for each member
+        scores = []
+        for i in range(len(self.members_data)):
+            # Ecology Score (I3, I4, I5)
+            v_eco = self.weights[2] * v_co2[i] + self.weights[3] * v_h_tot[i] + self.weights[4] * v_weight[i]
+            # Economy Score (I1, I2)
+            v_cost_score = self.weights[0] * v_cost[i] + self.weights[1] * v_time[i]
+            # Social Score (I6)
+            v_social = self.weights[5] * v_h_installation[i]
+            # Total Sustainability Index
+            S = v_eco + v_cost_score + v_social
+            scores.append((S, v_eco, v_cost_score, v_social))
+
+        return scores
+    
+    # Create MIVES plots
+    def plot_mives_scores(self, scores):
+        """
+        Plot MIVES scores on a triangle with S in the middle.
+        Each system is represented as a point on the triangle.
+        """
+        fig, ax = plt.subplots(figsize=(8, 8))
+
+        # Define triangle vertices
+        triangle = np.array([[0, 0], [1, 0], [0.5, np.sqrt(3) / 2]])
+        labels = ['Economy', 'Ecology', 'Social']
+
+        # Draw triangle
+        for i in range(3):
+            ax.plot([triangle[i][0], triangle[(i + 1) % 3][0]],
+                    [triangle[i][1], triangle[(i + 1) % 3][1]], 'k-')
+            ax.text(triangle[i][0], triangle[i][1] + 0.05, labels[i],
+                    ha='center', fontsize=12, fontweight='bold')
+
+        # Normalize scores for plotting
+        normalized_scores = []
+        for score in scores:
+            S, v_eco, v_cost_score, v_social = score
+            total = v_eco + v_cost_score + v_social
+            normalized_scores.append([v_cost_score / total, v_eco / total, v_social / total])
+
+        # Plot each system
+        for i, norm_score in enumerate(normalized_scores):
+            x = (norm_score[0] * triangle[0][0] +
+                 norm_score[1] * triangle[1][0] +
+                 norm_score[2] * triangle[2][0])
+            y = (norm_score[0] * triangle[0][1] +
+                 norm_score[1] * triangle[1][1] +
+                 norm_score[2] * triangle[2][1])
+            ax.plot(x, y, 'o', label=f'System {i + 1}')
+            ax.text(x, y, f'S{i + 1}', fontsize=10, ha='center', va='center')
+
+        # Set plot limits and labels
+        ax.set_xlim(-0.1, 1.1)
+        ax.set_ylim(-0.1, np.sqrt(3) / 2 + 0.1)
+        ax.axis('off')
+        ax.legend(loc='upper right', fontsize=10)
+        plt.title('MIVES Scores on Triangle', fontsize=14, fontweight='bold')
+        plt.show()

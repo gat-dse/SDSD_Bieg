@@ -50,7 +50,7 @@ class Wood:
         # get GWP properties from database
         if prod_id == "undef":  # no specific product is defined, chose first product entry with required mechanical
             # properties in database
-            inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost, T_construction FROM products WHERE PRO_ID=" + prod_id
+            inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost, T_construction FROM products LIMIT 1"
         else:
             inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost, T_construction FROM products WHERE PRO_ID=" + prod_id
         cursor.execute(inquiry)
@@ -158,10 +158,10 @@ class ConnectorTCC:
         connection = sqlite3.connect(database)
         cursor = connection.cursor()
         # get mechanical properties from database
-        inquiry = "SELECT K_ser FROM connector_TCC WHERE name=" + mech_prop
+        inquiry = "SELECT K_ser, Cost, T_construction FROM connector_TCC WHERE name=" + mech_prop
         cursor.execute(inquiry)
         result = cursor.fetchall()
-        self.K_ser = result[0][0]
+        self.K_ser, self.cost, self.construction_time = result[0]
         # Now also extract connector name
         inquiry = "SELECT name FROM connector_TCC WHERE name=" + mech_prop
         cursor.execute(inquiry)
@@ -253,12 +253,13 @@ class RectangularWood(SupStrucRectangular, Section):
         self.qs_class_n, self.qs_class_p = [3, 3]  # Required cross-section class: 1:PP, 2:EP, 3:EE
         self.g0k = self.calc_weight(wood_type.weight) # dead weight of cross section [N/m]
         self.ei1 = self.wood_type.Emmean * self.iy  # elastic stiffness [Nm^2]
-        self.co2 = self.a_brutt * self.wood_type.GWP * self.wood_type.density  # [kg_CO2_eq/m]
-        self.cost = self.a_brutt * self.wood_type.cost # [CHF/m]
-        self.construction_time = self.a_brutt * self.wood_type.construction_time # [h/m]
+        self.co2 = self.a_brutt * self.wood_type.GWP * self.wood_type.density/self.b  # [kg_CO2_eq/m]
+        self.cost = self.a_brutt * self.wood_type.cost/self.b # [CHF/m]
+        self.construction_time = self.a_brutt * self.wood_type.construction_time/self.b # [h/m]
         self.ei_b = ei_b  # stiffness perpendicular to direction of span [Nm^2]
         self.xi = xi  # damping factor, preset value see: HBT, Page 47 (higher value for some buildups possible)
         self.h_installation = 0 # no room for installation of services
+        self.w = self.calc_weight(5000)/self.b # weight of cross section per m length [N/m]
 
     @staticmethod
     def fire_resistance(member):
@@ -320,14 +321,14 @@ class RectangularConcrete(SupStrucRectangular):
         co2_rebar = a_s_tot * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
         co2_concrete = (self.a_brutt - a_s_tot) * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.ei1 = self.concrete_type.Ecm * self.iy  # elastic stiffness concrete (uncracked behaviour) [Nm^2]
-        self.co2 = (co2_rebar + co2_concrete)
-        self.cost = (a_s_tot * self.rebar_type.cost + (self.a_brutt - a_s_tot) * self.concrete_type.cost
-                     + self.concrete_type.cost2*self.b) # [CHF/m]
-        self.construction_time = (a_s_tot * self.rebar_type.construction_time + (self.a_brutt - a_s_tot) * self.concrete_type.construction_time + self.concrete_type.construction_type_scaffold * self.b) # [h/m]
+        self.co2 = (co2_rebar + co2_concrete)/self.b
+        self.cost = (a_s_tot * self.rebar_type.cost + (self.a_brutt - a_s_tot) * self.concrete_type.cost)/self.b + self.concrete_type.cost2# [CHF/m]
+        self.construction_time = (a_s_tot * self.rebar_type.construction_time + (self.a_brutt - a_s_tot) * self.concrete_type.construction_time)/self.b + self.concrete_type.construction_time_scaffold # [h/m]
         self.ei_b = self.ei1
         self.xi = xi  # XXXXXXX preset value is an assumption. Has to be verified with literature. XXXXXXX
         self.ei2 = self.ei1 / self.f_w_ger(self.roh, self.rohs, 0, self.h, self.d)
         self.h_installation = self.h - 2*self.c_nom - self.bw[0][0] - self.bw[1][0] - self.bw[2][0] - self.bw[3][0]  # height available for installation of services
+        self.w = self.calc_weight(25000)/self.b # weight of cross section per m length [N/m]
 
     def calc_d(self):
         d = self.h - self.c_nom - self.bw_bg[0] - self.bw[0][0] / 2 #Statische Höhe für Positives Biegemoment
@@ -473,7 +474,7 @@ class SupStrucRibbedConcrete(Section):
         self.a_brutt = self.calc_area()             #Bruttoquerschnittsfläche [m2]
         self.z_s = self.calc_center_of_gravity()    #center of gravity [m]
         self.iy = self.calc_moment_of_inertia()     #moment of inertia [m4]
-        self.w = self.calc_weight()                 #Eigengewicht [n/m]
+        self.w = self.calc_weight()/self.b                #Eigengewicht [N/m]
         self.phi = phi                              #Kriechzahl
 
     def calc_area(self):
@@ -519,10 +520,10 @@ class SupStrucRibbedConcrete(Section):
     #def calc_strength_plast(self, fy, ty):
 
     def calc_weight(self,
-                    spec_weight=25):  #README: Spec-Weight muss automatisch aus Tabelle eingelesen werden können! Ergänzen!
+                    spec_weight=25000):  #README: Spec-Weight muss automatisch aus Tabelle eingelesen werden können! Ergänzen!
         #  in: specific weight [N/m^3]
         #  out: weight of cross section per m length [N/m]
-        w = spec_weight * self.a_brutt
+        w = spec_weight * self.a_brutt 
         return w
 
 
@@ -565,9 +566,8 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         co2_concrete = (self.a_brutt - a_s_tot) * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.ei1 = self.concrete_type.Ecm * self.iy  # elastic stiffness concrete (uncracked behaviour) [Nm^2]
         self.co2 = (co2_rebar + co2_concrete)/self.b
-        self.cost = (a_s_tot * self.rebar_type.cost + (self.a_brutt - a_s_tot) * self.concrete_type.cost
-                     + self.concrete_type.cost2*2*self.b) # [CHF/m] 
-        self.construction_time = (a_s_tot * self.rebar_type.construction_time + (self.a_brutt - a_s_tot) * self.concrete_type.construction_time + self.concrete_type.construction_type_scaffold*2*self.b) # [h/m]
+        self.cost = (a_s_tot * self.rebar_type.cost + (self.a_brutt - a_s_tot) * self.concrete_type.cost)/self.b + self.concrete_type.cost2*2 # [CHF/m] 
+        self.construction_time = (a_s_tot * self.rebar_type.construction_time + (self.a_brutt - a_s_tot) * self.concrete_type.construction_time)/self.b + self.concrete_type.construction_time_scaffold*2 # [h/m]
         self.ei_b = self.ei1  #!!!!!!!ANPASSEN AUF PB
         self.xi = xi  # XXXXXXX preset value is an assumption. Has to be verified with literature. XXXXXXX
         self.ei2 = self.ei1 / self.f_w_ger(self.roh, self.rohs, 0, self.h, self.d_PB)  #!!!!!ANPASSEN AUF PB
@@ -764,7 +764,7 @@ class SupStrucRibWood(Section):
         self.n_inf = n_inf
         self.z_s = self.calc_center_of_gravity()
         self.iy, self.iy_inf = self.calc_moment_of_inertia()
-        self.w = self.calc_weight()
+        self.w = self.calc_weight()/self.a
 
     def calc_area(self):
         # in: width b and bw [m], height h and h_f[m]
@@ -824,10 +824,10 @@ class SupStrucRibWood(Section):
     #     #def calc_strength_elast(self, fy, ty):
     #     #def calc_strength_plast(self, fy, ty):
 
-    def calc_weight(self, spec_weight=5):
+    def calc_weight(self, spec_weight=5000):
         #  in: specific weight [N/m^3]
         #  out: weight of cross section per m length [N/m]
-        w = spec_weight * self.a_brutt
+        w = spec_weight * self.a_brutt 
         return w
 
 #................................................................
@@ -1031,8 +1031,8 @@ class TCC(SupStrucTCC):
         self.Vu = self.calc_vu() #N/m'
 
         self.co2 = (self.A_w * self.wood_type.GWP * self.wood_type.density + 0.998 * self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density + self.a_ribs*self.h_c*0.002 * self.rebar_type.GWP * self.rebar_type.density)/a_ribs  # [kg_CO2_eq/m], 0.2% minimal reinforcement
-        self.cost = (self.A_w * self.wood_type.cost + 0.998 * self.a_ribs * self.h_c * self.concrete_type.cost + self.a_ribs*self.h_c*0.002 * self.rebar_type.cost)/a_ribs  # [CHF/m], 0.2% minimal reinforcement 
-        self.construction_time = (self.A_w * self.wood_type.construction_time + 0.998 * self.a_ribs * self.h_c * self.concrete_type.construction_time + self.a_ribs*self.h_c*0.002 * self.rebar_type.construction_time)/a_ribs  # [h/m], 0.2% minimal reinforcement, no formwork needed
+        self.cost = (self.connector_type.cost/self.s + self.A_w * self.wood_type.cost + 0.998 * self.a_ribs * self.h_c * self.concrete_type.cost + self.a_ribs*self.h_c*0.002 * self.rebar_type.cost)/a_ribs  # [CHF/m], 0.2% minimal reinforcement 
+        self.construction_time = (self.connector_type.construction_time/self.s + self.A_w * self.wood_type.construction_time + 0.998 * self.a_ribs * self.h_c * self.concrete_type.construction_time + self.a_ribs*self.h_c*0.002 * self.rebar_type.construction_time)/a_ribs  # [h/m], 0.2% minimal reinforcement, no formwork needed
         self.g0k = self.calc_weight() 
         self.ei1 = self.EI_SLS[0]  # elastic stiffness at t=0 for SLS checks
         self.xi = xi
