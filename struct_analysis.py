@@ -344,11 +344,9 @@ class RectangularConcrete(SupStrucRectangular):
         self.roh, self.rohs = self.as_p / self.d, self.as_n / self.ds
         [self.vu_p, self.vu_n, self.as_bw] = self.calc_shear_resistance()
         self.g0k = self.calc_weight(concrete_type.weight)
-        a_s_stat = self.as_p + self.as_n + self.as_bw  # rebar area without reinforcement joint surcharge
-        self.joint_surcharge = jnt_srch  # joint surcharge
-        #TODO: a_s_tot: Hat erst 1. & 4. Lage drin
+        a_s_stat = (self.as_p + self.as_n) + self.as_bw  # rebar area without reinforcement joint surcharge
+        #TODO: Add all reinforcement layers also for GWP, Cost and construction time calculation, 1. and 4. layer
         a_s_tot = a_s_stat * (1 + self.joint_surcharge)  # rebar area without reinforcement joint surcharge
-        #TODO: Im GWP vom Gesamtquerschnitt müssen alle 4 Bewehrungslagen berücksichtigt werden! Prüfen ob alle 4 Lagen berücksichtigt werden
         co2_rebar = a_s_tot * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
         co2_concrete = (self.a_brutt - a_s_tot) * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.ei1 = self.concrete_type.Ecm * self.iy  # elastic stiffness concrete (uncracked behaviour) [Nm^2]
@@ -488,7 +486,75 @@ class RectangularConcrete(SupStrucRectangular):
         else:
             resistance = 0
         return resistance
+    
+# ........................................................................
+class PostTensionedConcrete(RectangularConcrete):
+    # defines properties of rectangular, post-tensioned concrete cross-section
+    def __init__(self, concrete_type, rebar_type, pt_steel_type, l_x, l_y, b, h, di_xu, s_xu, di_xo, s_xo,  di_yu=0.006, s_yu=0.15, di_yo=0.006, s_yo=0.15, di_bw=0.0, s_bw=0.15, n_bw=0,
+                  phi=2.0, c_nom=0.02, xi=0.02, jnt_srch=0.1, layout=[1,0,1,0], c_nom_pt=0.03):
+        super().__init__(concrete_type, rebar_type, b, h, di_xu, s_xu, di_xo, s_xo, di_yu, s_yu, di_yo, s_yo, di_bw, s_bw, n_bw, phi, c_nom, xi, jnt_srch)
+        bw = self.set_minimalReinforcement() # minimal reinforcement for post-tensioned concrete sections, to ensure sufficient ductility and to avoid brittle failure modes. 
+        self.bw, self.d, self.ds = bw
+        self.as_p = (np.pi()*self.bw[0][0]**2/4/self.bw[0][1]) # as for negative bending (upper layers) [m2/m]
+        self.as_n = (np.pi()*self.bw[1][0]**2/4/self.bw[1][1]) # as for positive bending (lower layers) [m2/m]
 
+        self.pt_steel_type = pt_steel_type
+        self.l_x = l_x # span in x direction [m]
+        self.l_y = l_y # span in y direction [m]
+        self.layout = layout #layout of post-tensioning tendons, 1: tendon present, 0: no tendon. Order of layout definition: [Drop beam x, Distributed x, Drop beam y , Distributed y]
+        self.c_nom_pt = c_nom_pt #nominal cover for post-tensioning tendons [m]
+        self.e_support, self.e_midspan = self.calc_eccentricity()  # eccentricity of post-tensioning tendons [m]
+        self.P_beam_inf = 0 # post-tensioning force in drop beams [N]
+        self.P_dist_inf = 0 # post-tensioning force in distributed tendons [N]
+
+        self.apt = 0
+
+        # C02, cost and construction time per m2 of cross-section
+        self.joint_surcharge = jnt_srch  # joint surcharge
+        volume_reinforcement = (2*(self.as_p+self.as_n)+self.as_bw/self.b)*self.joint_surcharge # volume of reinforcement per m2 of cross-section [m3/m2] with joint surcharge
+        volume_pt_steel = self.apt/self.b # volume of post-tensioning steel per m2 of cross-section [m3/m2]
+        volume_concrete = self.b*self.h - volume_reinforcement - volume_pt_steel # volume of concrete per m2 of cross-section [m3/m2]
+        co2_rebar = volume_reinforcement * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
+        co2_pt_steel = volume_pt_steel * self.pt_steel_type.GWP * self.pt_steel_type.density  # [kg_CO2_eq/m]
+        co2_concrete = volume_concrete * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
+        self.co2 = co2_rebar + co2_concrete + co2_pt_steel # [kg_CO2_eq/m]
+        self.cost = volume_reinforcement * self.rebar_type.cost + volume_concrete * self.concrete_type.cost + volume_pt_steel * self.pt_steel_type.cost + self.concrete_type.cost2# [CHF/m]
+        self.construction_time = volume_reinforcement * self.rebar_type.construction_time + volume_concrete * self.concrete_type.construction_time + volume_pt_steel * self.pt_steel_type.construction_time  + self.concrete_type.construction_time_scaffold # [h/m]
+        
+
+        def calc_eccentricity(self, A_p = 150e-6):
+            # in: self, A_p (cross-sectional area of post-tensioning tendon [m2])
+            # out: eccentricity of post-tensioning tendons at supports and midspan [m]
+            r_P = np.sqrt(A_p / np.pi) # radius of post-tensioning tendon [m]  
+            e_support = -(self.h / 2 - max(self.c_nom_pt, - (self.c_nom+self.bw[1][0]+self.bw[3][0]+self.bw_bg[0])) - r_P) 
+            e_midspan = (self.h / 2 - max(self.c_nom_pt, - (self.c_nom+self.bw[0][0]+self.bw[2][0]+self.bw_bg[0])) - r_P) 
+            return e_support, e_midspan
+        
+        def set_minimalReinforcement(self):
+            #d_rebar=0.006m with s=0.15m as start
+            d_rebar = 0.006 # minimal diameter of reinforcement [m]
+            s =0.15 # minimal spacing of reinforcement [m]
+            self.bw = [[d_rebar, s], [d_rebar, s], [d_rebar, s],[d_rebar, s]] #Definition Biegebewehrung 4-Lagig. x-Richtung ist dabei die Haupttragrichtung, di = Durchmesser, s = Abstand, u = untere Lagen (positives Biegemoment), o = obere Lagen (negatives Biegemoment)
+            [self.d, self.ds] = self.calc_d() #Statische Höhe. d für positive Biegung (untere Lagen), ds für negative Biegung (obere Lagen)
+            # For-loop where d_rebar is increased until moment resistance is higher than cracking moment of concrete
+            while self.mr_p > self.mu_unsigned(self.bw[0][0], self.bw[0][1], self.d, self.b, self.rebar_type.fsd, self.concrete_type.fcd, self.mr_p)[0]:
+                d_rebar += 0.002 # increase diameter of reinforcement [m]
+                self.bw = [[d_rebar, s], [d_rebar, s], [d_rebar, s],[d_rebar, s]]
+                [self.d, self.ds] = self.calc_d()
+            return self.bw, self.d, self.ds
+
+        def set_P_inf(self):
+            V_p = self.g0k * self.l_x * self.l_y
+
+            return
+        
+
+        def calc_mr_pt(self):
+            # in: self
+            # out: cracking moment mr_pt [Nm]
+            return 
+
+            
 
 # ........................................................................
 
@@ -505,7 +571,7 @@ class SupStrucRibbedConcrete(Section):
         self.a_brutt = self.calc_area()             #Bruttoquerschnittsfläche [m2]
         self.z_s = self.calc_center_of_gravity()    #center of gravity [m]
         self.iy = self.calc_moment_of_inertia()     #moment of inertia [m4]
-        self.w = self.calc_weight()/self.b                #Eigengewicht [N/m]
+        self.w = self.calc_weight()/self.b          #Eigengewicht [N/m]
         self.phi = phi                              #Kriechzahl
 
     def calc_area(self):
