@@ -16,13 +16,15 @@ idx_vrc = 0
 max_iter = 150 
 
 #  define content of plot
-criteria = ["SLS2"]  # ENV envelop, all criteria should be fulfilled (ULS, SLS1, SLS2, FIRE)
+criteria = ["ENV"]  # ENV envelop, all criteria should be fulfilled (ULS, SLS1, SLS2, FIRE)
+
 optima = ["GWP"]  # optimizing cross-sections for minimal GWP
 
 # define database
 database_name = "database_260126.db"
 # database_name = "dummy_sustainability.db"  # define database name
 # create_dummy_database.create_database(database_name)  # create database
+
 
 #-----------------------------------------------------------------------------------------------------------------------
 #create floor structure for solid wooden cross-section

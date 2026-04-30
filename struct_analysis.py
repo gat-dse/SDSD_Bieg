@@ -1031,8 +1031,8 @@ class TCC(SupStrucTCC):
         self.Vu = self.calc_vu() #N/m'
 
         self.co2 = (self.A_w * self.wood_type.GWP * self.wood_type.density + 0.998 * self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density + self.a_ribs*self.h_c*0.002 * self.rebar_type.GWP * self.rebar_type.density)/a_ribs  # [kg_CO2_eq/m], 0.2% minimal reinforcement
-        self.cost = (self.connector_type.cost/self.s + self.A_w * self.wood_type.cost + 0.998 * self.a_ribs * self.h_c * self.concrete_type.cost + self.a_ribs*self.h_c*0.002 * self.rebar_type.cost)/a_ribs  # [CHF/m], 0.2% minimal reinforcement 
-        self.construction_time = (self.connector_type.construction_time/self.s + self.A_w * self.wood_type.construction_time + 0.998 * self.a_ribs * self.h_c * self.concrete_type.construction_time + self.a_ribs*self.h_c*0.002 * self.rebar_type.construction_time)/a_ribs  # [h/m], 0.2% minimal reinforcement, no formwork needed
+        self.cost = (self.connector_type.cost/self.s + (self.d+self.A_w) * self.wood_type.cost + 0.998 * self.a_ribs * self.h_c * self.concrete_type.cost + self.a_ribs*self.h_c*0.002 * self.rebar_type.cost)/a_ribs  # [CHF/m], 0.2% minimal reinforcement 
+        self.construction_time = (self.connector_type.construction_time/self.s + (self.d+self.A_w) * self.wood_type.construction_time + 0.998 * self.a_ribs * self.h_c * self.concrete_type.construction_time + self.a_ribs*self.h_c*0.002 * self.rebar_type.construction_time)/a_ribs  # [h/m], 0.2% minimal reinforcement, no formwork needed
         self.g0k = self.calc_weight() 
         self.ei1 = self.EI_SLS[0]  # elastic stiffness at t=0 for SLS checks
         self.xi = xi
