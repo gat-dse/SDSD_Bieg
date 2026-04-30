@@ -149,6 +149,37 @@ class SteelReinforcingBar:
     def get_design_values(self, gamma_s=1.15):  # calculate design values
         fsd = self.fsk / gamma_s  # SIA 262, 2.3.2.5, Formel (4)
         return fsd
+    
+class PrestressingSteel:
+    #defines properties of prestressing steel material
+    def __init__(self, mech_prop, database, prod_id="undef"):
+        # retrieve basic mechanical data from database (self, table, database name)
+        self.mech_prop = mech_prop
+        connection = sqlite3.connect(database)
+        cursor = connection.cursor()
+        # get mechanical properties from database
+        inquiry = "SELECT strength_tens, E_modulus FROM material_prop WHERE name=" + mech_prop
+        cursor.execute(inquiry)
+        result = cursor.fetchall()
+        self.fp01k, self.Ep = result[0]
+        # get GWP properties from database
+        if prod_id == "undef":
+            inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost, T_construction FROM products WHERE MECH_PROP=" + mech_prop
+        else:
+            inquiry = "SELECT PRO_ID, DENSITY, Total_GWP, Cost, T_construction FROM products WHERE PRO_ID=" + prod_id
+        cursor.execute(inquiry)
+        result = cursor.fetchall()
+        self.prod_id, density, GWP, cost, construction_time = result[0]
+        self.GWP = GWP/1e3  # transform unit from [kg-Co2-eq/t] to [kg-Co2-eq/kg]
+        self.density = float(density)
+        self.cost = cost    #CHF/m3
+        self.construction_time = construction_time #h/m3
+        self.fpd = self.get_design_values()
+
+    def get_design_values(self, gamma_p=1.15):  # calculate design values
+        fpd = self.fp01k / gamma_p
+        return fpd
+
 
 class ConnectorTCC:
     # defines properties of connectors for timber-concrete composite slabs
