@@ -504,6 +504,8 @@ class PostTensionedConcrete(RectangularConcrete):
         self.layout = layout #layout of post-tensioning tendons, 1: tendon present, 0: no tendon. Order of layout definition: [Drop beam x, Distributed x, Drop beam y , Distributed y]
         self.c_nom_pt = c_nom_pt #nominal cover for post-tensioning tendons [m]
         self.e_support, self.e_midspan = self.calc_eccentricity()  # eccentricity of post-tensioning tendons [m]
+        self.f_x = self.e_support + self.e_midspan #Pfeilhöhe
+        self.f_y = self.e_support + self.e_midspan #Pfeilhöhe
         self.P_beam_inf = 0 # post-tensioning force in drop beams [N]
         self.P_dist_inf = 0 # post-tensioning force in distributed tendons [N]
 
@@ -545,7 +547,14 @@ class PostTensionedConcrete(RectangularConcrete):
 
         def set_P_inf(self):
             V_p = self.g0k * self.l_x * self.l_y
-
+            if self.layout[0] == 1: # drop beam in x direction 
+                if self.layout[2] == 1: # drop beam in x and y direction
+                    # Px and Py are equal (rectangular slab layout)
+                    self.P_beam_inf = V_p*l_x/(16*self.f_x) # l_x and l_y are equal for rectangular slab layout
+                    
+                else: # drop beam only in x direction
+                    self.P_beam_inf = V_p*l_x/(8*self.f_x)
+            elif self.layout[1] == 1:
             return
         
 
