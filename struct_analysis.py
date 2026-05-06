@@ -503,7 +503,6 @@ class PostTensionedConcrete(RectangularConcrete):
         self.as_n = (np.pi()*self.bw[1][0]**2/4/self.bw[1][1]) # as for positive bending (lower layers) [m2/m]
         self.i = self.h**3/12 # moment of inertia of the plate [m4/m]
 
-
         self.pt_steel_type = pt_steel_type
         self.A_p = A_p # cross-sectional area of post-tensioning tendon [m2]
         self.l_x = l_x # span in x direction [m]
@@ -583,6 +582,7 @@ class PostTensionedConcrete(RectangularConcrete):
                     if self.layout[2] == 1: # drop beam in y direction
                         Psy = u_x*self.l_x*self.l_y**2/(8*self.f_y) # post tensioning force in drop beam in y direction [N]
                 else: # distributed only in y direction
+                    pass  # Add your logic here
                     u_y = u_0 # deviation force in y direction [N/m2]
                     pdx = 0
                     pdy = u_y * self.l_y**2/(8*self.f_y) # post tensioning force distributed tendons in y direction [N]
@@ -694,12 +694,47 @@ class PostTensionedConcrete(RectangularConcrete):
             f = EIeff_inf / self.ei1 # stiffness reduction factor due to cracking
             return f, EIeff_inf
         
+        def calc_mu_pt(self, P_total, l, sign='pos'):
+            #in: self
+            #out: Biegewiderstand mu [Nm], Druckzonenhöhe x [m], Bewehrungsfläche a_s [m2], Querschnittsklasse qs_klasse []
+            fpd = self.pt_steel_type.fpd
+            fsd = self.rebar_type.fsd
+            fcd = self.concrete_type.fcd
+            dp = self.dp
+            ds = self.ds
+            dis = self.d
+            s = self.bw[0][1] # spacing of reinforcement 
+
+            if sign == 'pos':
+                [mu, x, a_s, qs_klasse] = self.mu_unsigned(P_total, l, fpd, fsd, fcd, dp, ds, dis, s)
+            elif sign == 'neg':
+                [mus, x, a_s, qs_klasse] = self.mu_unsigned(P_total, l, fpd, fsd, fcd, dp, ds, dis, s)
+                mu = -mus
+            else:
+                [mu, x, a_s, qs_klasse] = [0, 0, 0, 0]
+                print("sign of moment resistance has to be 'neg' or 'pos'")
+            return mu, x, a_s, qs_klasse
         
-            
-
-
-
-            
+        
+        
+        @staticmethod
+        def mu_unsigned_pt(P_total, l, fpd, fsd, fcd, dp, ds, dis, s):
+        #in: Total post tensioning force in one direction [N], l span in this direction, fpd design post tensioning strength [N/m2], fsd design reinforcement strength [N/m2]), fcd concrete compressive strength, dp static dept of tendons [m]), ds static dept of reinforcement [m], dis diameter of reinforcement[m], s spacing of reinforcement [m], Ap cross-sectional area of post-tensioning tendon [m2])
+        #out: mu, x, a_s, qs_klasse
+        # units input: [m, m, m, m, N/m^2, N/m^2]pas
+            a_s = np.pi * dis ** 2 / (4 * s)  # [m^2/m']
+            x = (a_s*fsd+P_total/l)/(fcd*1) # Druckzonenhöhe [m]
+            mu = P_total/l * (dp-0.85*x/2) + a_s*fsd*(ds-0.85*x/2) # Biegewiderstand [Nm/m']
+            d_avg = (P_total/l/fpd*dp + a_s*ds) / (P_total/l + a_s) # average static height of the section [m]
+            if x / d_avg <= 0.35:
+                return mu, x, a_s, 1
+            elif x / d_avg <= 0.5:
+                return mu, x, a_s, 2
+            else:  # zero resistance for x/d>0.5
+                epsilon = 1.0e-3
+                shift = 0.5
+                factor = 1 - 0.5 * (1 + 2 / np.pi * np.arctan((x/d_avg - shift) / epsilon)) #irgendein Faktor, um die Funktion richtig auf 0 gehen zu lassen. Ist keine Formel aus irgendeiner Norm o.Ä., hat auch nichts mit der Statik zu tun#
+                return factor*mu, x, a_s, 99  # Querschnitt hat ungenügendes Verformungsvermögen
 
 # ........................................................................
 
