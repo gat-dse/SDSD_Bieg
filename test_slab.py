@@ -10,13 +10,13 @@ import struct_optimization  # file with code for structural optimization
 
 # INPUT
 # create dummy-database
-database_name = "database_260126.db"  # define database name
+database_name = "database_260126.db"
 #create_dummy_database.create_database(database_name)  # create database
 
 # create material for reinforced concrete cross-section, derive corresponding design values
-concrete1 = struct_analysis.ReadyMixedConcrete("'C25/30'", database_name)  # create a Wood material object
+concrete1 = struct_analysis.ReadyMixedConcrete("'C25/30'", database_name)  # create a concrete material object
 concrete1.get_design_values()
-rebar1 = struct_analysis.SteelReinforcingBar("'B500B'", database_name)  # create a Wood material object
+rebar1 = struct_analysis.SteelReinforcingBar("'B500B'", database_name)  # create a concrete material object
 rebar1.get_design_values()
 
 # create reinforced concrete rectangular cross-section

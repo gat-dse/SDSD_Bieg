@@ -14,7 +14,7 @@ lengths = [4, 5, 6, 7, 9, 10]
 idx_vrc = 0
 
 # max. number of iterations per optimization. Higher value leads to better results
-max_iter = 50
+max_iter = 150
 
 #  define content of plot
 criteria = ["ENV"]  # envelop, all criteria should be fulfilled (ULS, SLS1, SLS2, Fire)

@@ -350,6 +350,7 @@ class RectangularConcrete(SupStrucRectangular):
         self.g0k = self.calc_weight(concrete_type.weight)
         a_s_stat = (self.as_p + self.as_n) + self.as_bw  # rebar area without reinforcement joint surcharge
         #TODO: Add all reinforcement layers also for GWP, Cost and construction time calculation, 1. and 4. layer
+        self.joint_surcharge = jnt_srch  # surcharge for reinforcement joints, preset value is an assumption and has to be verified with literature
         a_s_tot = a_s_stat * (1 + self.joint_surcharge)  # rebar area without reinforcement joint surcharge
         co2_rebar = a_s_tot * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
         co2_concrete = (self.a_brutt - a_s_tot) * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
@@ -465,6 +466,25 @@ class RectangularConcrete(SupStrucRectangular):
             vrdc = bw * z * kc * fcd * np.sin(alpha) * np.cos(alpha)  # unit of alpha: [rad]
             return min(vrds, vrdc) #Querkraftwiderstand MIT Querkraftbewehrung SIA 262
 
+    def calc_punching_shear_resistance(self, column_width=0.25, column_length=0.25, ke=0.9,
+                                       l_x=None, l_y=None, m_ed=None, m_rd=None):
+        """
+        Punching shear resistance for slabs without punching shear reinforcement.
+
+        LoA 3 is represented through a rotation-based k_psi factor. The member passes the governing
+        design moment m_ed; if no moment is provided, the method falls back to the cracking moment.
+        """
+        d_v = self.d
+        u_1 = 2 * (column_width + column_length) + 2 * np.pi * d_v
+        m_rd = abs(m_rd) if m_rd is not None else max(abs(self.mu_max), 1e-9)
+        m_ed = abs(m_ed) if m_ed is not None else abs(self.mr_p)
+        r_s = 0.22 * max(l_x if l_x is not None else 0, l_y if l_y is not None else 0, d_v)
+        k_dg = max(32 / (16 + self.concrete_type.dmax), 0.75)
+        psi = 1.5 * r_s / d_v * self.rebar_type.fsd / self.rebar_type.Es * (m_ed / m_rd) ** 1.5
+        k_psi = min(0.6, 1 / (1.5 + 0.9 * k_dg * d_v * psi))
+        v_rd = k_psi * self.concrete_type.tcd * u_1 * d_v
+        return max(v_rd * ke, 0)
+
     @staticmethod
     def f_w_ger(roh, rohs, phi, h, d):
         f = (1 - 20 * rohs) / (10 * roh ** 0.7) * (0.75 + 0.1 * phi) * (h / d) ** 3
@@ -501,8 +521,8 @@ class PostTensionedConcrete(RectangularConcrete):
         self.section_type = "pc_rec"
         bw = self.set_minimalReinforcement() # minimal reinforcement for post-tensioned concrete sections, to ensure sufficient ductility and to avoid brittle failure modes. 
         self.bw, self.d, self.ds = bw
-        self.as_p = (np.pi()*self.bw[0][0]**2/4/self.bw[0][1]) # as for negative bending (upper layers) [m2/m]
-        self.as_n = (np.pi()*self.bw[1][0]**2/4/self.bw[1][1]) # as for positive bending (lower layers) [m2/m]
+        self.as_p = (np.pi*self.bw[0][0]**2/4/self.bw[0][1]) # as for positive bending (lower layers) [m2/m]
+        self.as_n = (np.pi*self.bw[1][0]**2/4/self.bw[1][1]) # as for negative bending (upper layers) [m2/m]
         self.i = self.h**3/12 # moment of inertia of the plate [m4/m]
 
         self.pt_steel_type = pt_steel_type
@@ -512,7 +532,9 @@ class PostTensionedConcrete(RectangularConcrete):
         self.layout = layout #layout of post-tensioning tendons, 1: tendon present, 0: no tendon. Order of layout definition: [Drop beam x, Distributed x, Drop beam y , Distributed y]
         self.c_nom_pt = c_nom_pt #nominal cover for post-tensioning tendons [m]
         self.e_support, self.e_midspan, self.dp = self.calc_eccentricity()  # eccentricity of post-tensioning tendons [m]
-        self.f = self.e_support + self.e_midspan #Pfeilhöhe
+        self.f = self.e_midspan - self.e_support #Pfeilhöhe
+        self.f_x = self.f
+        self.f_y = self.f
 
         # Set the post tensioning system
         tendon_info = self.set_loadBalancing() # post-tensioning forces [N]
@@ -526,19 +548,20 @@ class PostTensionedConcrete(RectangularConcrete):
 
         # Cracking moment of concrete
         self.m_r = self.calc_mr_pt(self.Px_total,self.l_x)
+        self.mr_p, self.mr_n = self.m_r, -self.m_r
         #cracked stiffness and uncracked stiffness
-        self.f_w_ger, self.ei2, self.ei1 = self.calc_stiffness(self.Px_total, self.l_x, 0, 0, self.m_r) # calculate stiffness of post-tensioned concrete section, considering the effect of cracking and post-tensioning
+        self.f_w_ger, self.ei2, self.ei1 = self.calc_EIeff(self.Px_total, self.l_x, 0, 0, self.m_r) # calculate stiffness of post-tensioned concrete section, considering the effect of cracking and post-tensioning
 
         # Moment resistance x direction
         [self.mu_max, self.x_p, self.as_p, self.qs_class_p] = self.calc_mu_pt(self.Px_total, self.l_x, 'pos')
         [self.mu_min, self.x_n, self.as_n, self.qs_class_n] = self.calc_mu_pt(self.Px_total, self.l_x, 'neg')
 
         # Get the total area of post-tensioning steel per m2 of cross-section [m2/m2]
-        number_of_tendons = tendon_info['drop_beam_x']['number'] + tendon_info['distributed_x']['number'] + tendon_info['drop_beam_y']['number'] + tendon_info['distributed_y']['number']
+        number_of_tendons = tendon_info['drop_beam_x']['n_tendons'] + tendon_info['distributed_x']['n_tendons'] + tendon_info['drop_beam_y']['n_tendons'] + tendon_info['distributed_y']['n_tendons']
 
         # C02, cost and construction time per m2 of cross-section
         self.joint_surcharge = jnt_srch  # joint surcharge
-        volume_reinforcement = (2*(self.as_p+self.as_n)+self.as_bw/self.b)*self.joint_surcharge # volume of reinforcement per m2 of cross-section [m3/m2] with joint surcharge
+        volume_reinforcement = (2*(self.as_p+self.as_n)+self.as_bw/self.b)*(1 + self.joint_surcharge) # volume of reinforcement per m2 of cross-section [m3/m2] with joint surcharge
         volume_pt_steel = number_of_tendons*self.A_p/(self.l_x*self.l_y) # volume of post-tensioning steel per m2 of cross-section [m3/m2]
         volume_concrete = self.b*self.h - volume_reinforcement - volume_pt_steel # volume of concrete per m2 of cross-section [m3/m2]
         co2_rebar = volume_reinforcement * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
@@ -643,7 +666,7 @@ class PostTensionedConcrete(RectangularConcrete):
     def calc_EIeff(self, P_total, l, MEd_SLS, M_sec, m_r):
         # in: self
         # out: f (factor cracked/uncracked), cracked bending stiffness, uncracked bending stiffness
-        zeta = 1 - 0.5 * (MEd_SLS / m_r)**2  # degree of partial cracking
+        zeta = max(0.0, min(1.0, 1 - 0.5 * (MEd_SLS / m_r)**2))  # degree of partial cracking
         E_c = self.concrete_type.Ecm  # effective modulus of elasticity of concrete (creep is considered in member)
         EI_uncracked_inf = E_c * self.i  # bending stiffness of uncracked section [Nm2/m]
         EI_cracked_inf = 0
@@ -703,13 +726,14 @@ class PostTensionedConcrete(RectangularConcrete):
         fcd = self.concrete_type.fcd
         dp = self.dp
         ds = self.ds
-        dis = self.d
-        s = self.bw[0][1]  # spacing of reinforcement
-
         if sign == 'pos':
-            [mu, x, a_s, qs_klasse] = self.mu_unsigned_pt(P_total, l, fpd, fsd, fcd, dp, ds, dis, s)
+            di = self.bw[0][0]
+            s = self.bw[0][1]
+            [mu, x, a_s, qs_klasse] = self.mu_unsigned_pt(P_total, l, fpd, fsd, fcd, dp, self.d, di, s)
         elif sign == 'neg':
-            [mus, x, a_s, qs_klasse] = self.mu_unsigned_pt(P_total, l, fpd, fsd, fcd, dp, ds, dis, s)
+            di = self.bw[1][0]
+            s = self.bw[1][1]
+            [mus, x, a_s, qs_klasse] = self.mu_unsigned_pt(P_total, l, fpd, fsd, fcd, dp, ds, di, s)
             mu = -mus
         else:
             [mu, x, a_s, qs_klasse] = [0, 0, 0, 0]
@@ -720,33 +744,48 @@ class PostTensionedConcrete(RectangularConcrete):
         # in: self, system (structural system of the member)
         # out: secondary moments [Nm/m'] or secondary shear forces [N/m] 
         #Check whether there are drop beams
-        M_sec_x = [0,0] # secondary moments positive and negative bending x direction [Nm/m']
-        M_sec_y = [0,0] # secondary moments positive and negative bending y direction [Nm/m']
-        V_sec = [0,0] # secondary shear forces in x and y direction [N/m]
+        M_sec_x = np.array([0.0, 0.0]) # secondary moments positive and negative bending x direction [Nm/m']
+        M_sec_y = np.array([0.0, 0.0]) # secondary moments positive and negative bending y direction [Nm/m']
+        V_sec = np.array([0.0, 0.0]) # secondary shear forces in pos and neg [N/m]
 
         if self.layout[0] == 1 or self.layout[2] == 1:
             # Initialize slab system with drop beams
             system_drop = Slab(self.l_x, self.l_y, "drop_beam")
             # get alphas
-            alpha_m_x = system_drop.alpha_m_x 
-            alpha_m_y = system_drop.alpha_m_y
-            alpha_v = system_drop.alpha_v
+            alpha_m_x = np.array(system_drop.alpha_m_x) #[pos,neg] bending in x direction
+            alpha_m_y = np.array(system_drop.alpha_m_y) #[pos,neg] bending in y direction
+            alpha_v = np.array(system_drop.alpha_v) #[pos,neg] shear forces
             # Calculate total moments and shear forces due to post-tensioning in drop beams
-            M_sec_x += 8*self.Psx * self.f * alpha_m_x # secondary moment in x direction due to drop beam post-tensioning force [Nm/m']
-            M_sec_y += 8*self.Psy * self.f * alpha_m_y # secondary moment in y direction due to drop beam post-tensioning force [Nm/m']
-            V_sec += 8*self.Psx * self.f / self.l_x * alpha_v # secondary shear force (in x direction) due to drop beam post-tensioning force [N/m]
+            # Post tensioning acts upwards: Field moment negative, support moment positive
+            M_sec_x += 8*self.Psx * self.f * -alpha_m_x # secondary moment in x direction due to drop beam post-tensioning force [Nm/m'], - as post tensioning acts upwards
+            M_sec_y += 8*self.Psy * self.f * -alpha_m_y # secondary moment in y direction due to drop beam post-tensioning force [Nm/m'], - as post tensioning acts upwards
+            V_sec += 8*self.Psx * self.f / self.l_x * -alpha_v # secondary shear force (in x direction) due to drop beam post-tensioning force [N/m]
 
         # get alphas of the true system for uniform distributed load
-        alpha_m_x = system.alpha_m_x
-        alpha_m_y = system.alpha_m_y
-        alpha_v = system.alpha_v
+        alpha_m_x = np.array(system.alpha_m_x)
+        alpha_m_y = np.array(system.alpha_m_y)
+        alpha_v = np.array(system.alpha_v)
         
         # Calculate total moments and shear forces due to post-tensioning in drop beams
-        M_sec_x += 8*self.psx * self.f * alpha_m_x # secondary moment in x direction due to drop beam post-tensioning force [Nm/m']
-        M_sec_y += 8*self.psy * self.f * alpha_m_y # secondary moment in y direction due to drop beam post-tensioning force [Nm/m']
-        V_sec += 8*self.Psx * self.f / self.l_x * alpha_v # secondary shear force (in x direction) due to drop beam post-tensioning force [N/m]
+        M_sec_x += 8*self.pdx * self.f * -alpha_m_x # secondary moment in x direction due to distributed post-tensioning force [Nm/m']
+        M_sec_y += 8*self.pdy * self.f * -alpha_m_y # secondary moment in y direction due to distributed post-tensioning force [Nm/m']
+        V_sec += 8*self.pdx * self.f / self.l_x * -alpha_v # secondary shear force (in x direction) due to distributed post-tensioning force [N/m]
 
-        return M_sec_x, M_sec_y, V_sec
+        # Save total moments and shear forces for post-tensioning
+        M_tot_x = M_sec_x.copy() # total moment in x direction due to post-tensioning force [Nm/m']
+        M_tot_y = M_sec_y.copy() # total moment in y direction due to post-tensioning force [Nm/m']
+        V_tot = V_sec.copy() # total shear force in x direction due to post-tensioning force [N/m]
+
+        #Secondary moments are M_sec = M_tot - P*e and V_sec = V_tot - P*de/dx
+        M_sec_x[0] = M_tot_x[0] - self.Px_total/self.l_x * self.e_midspan # secondary moment at midspan in x direction [Nm/m']
+        M_sec_x[1] = M_tot_x[1] - self.Px_total/self.l_x * self.e_support # secondary moment at support in x direction [Nm/m']
+        M_sec_y[0] = M_tot_y[0] - self.Py_total/self.l_y * self.e_midspan # secondary moment at midspan in y direction [Nm/m']
+        M_sec_y[1] = M_tot_y[1] - self.Py_total/self.l_y * self.e_support # secondary moment at support in y direction [Nm/m']
+        V_sec[0] = V_tot[0] + self.Px_total/self.l_x * 4*self.f/self.l_x # secondary shear force [N/m]
+        V_sec[1] = V_tot[1] - self.Px_total/self.l_x * 4*self.f/self.l_x # secondary shear force [N/m]
+
+
+        return M_sec_x.tolist(), M_sec_y.tolist(), V_sec.tolist()
 
     @staticmethod
     def mu_unsigned_pt(P_total, l, fpd, fsd, fcd, dp, ds, dis, s):
@@ -1727,19 +1766,25 @@ class BeamContinuousSupPl:
         self.alpha_w = 1 / 384  # Faktor zur Berechung der Durchbiegung unter verteilter Last
         self.kf2 = 1.0  # Hilfsfaktor zur Brücksichtigung der Spannweitenverhältnisse bei Berechnung f1 gem. HBT, S. 46
         self.alpha_w_f_cd = 1/192  # Faktor zur Berechung der Durchbiegung unter Einzellast
-
+ 
 class Slab:
     """
     Nimmt die Faktoren für die Beanspruchung der Platte aus der Tabelle slab_properties.db, welche mit FE (Cedrus) ermittelt wurden
     Tabelle wird direkt im Skript "create_slab_properties.py" erstellt.
     """
 
-    def __init__(self, length_x, length_y, support):
+    def __init__(self, length_x, length_y, support, column_width=0.25, column_length=0.25,
+                 column_ke=0.9, column_tributary_area=None):
         self.raender = support
         self.lx = length_x
         self.ly = length_y
         self.li_max = max(length_x, length_y)
         self.l_tot = max(length_x, length_y)
+        self.has_columns = support in ("PL-eingespannt", "drop_beam")
+        self.column_width = column_width
+        self.column_length = column_length
+        self.column_ke = column_ke #0.9 for internal columns
+        self.column_tributary_area = column_tributary_area if column_tributary_area is not None else length_x * length_y
         conn = sqlite3.connect("slab_properties.db")
         cursor = conn.cursor()
         # get mechanical properties from database
@@ -2137,14 +2182,15 @@ class Member2D:
                         + (self.q_freq - self.q_per) * RectangularConcrete.f_w_ger(self.section.roh, self.section.rohs,0, self.section.h,self.section.d)
                         - self.q_per
                         )
-            elif section_material == "pc": #    def calc_EIeff(self, P_total, l, MEd_SLS, M_sec, m_r):
-                MEd_SLS = self.q_freq * self.system.alpha_m_x * self.system.l_tot ** 2
-                M_sec = 
-                self.w_install = unit_def * unit_def * (
-                        self.q_per * PostTensionedConcrete.calc_EIeff(self.section.P_total, self.system.l_tot, MEd_SLS, self.section.M_sec, self.section.m_r)
-                        + (self.q_freq - self.q_per) * RectangularConcrete.f_w_ger(self.section.roh, self.section.rohs,0, self.section.h,self.section.d)
-                        - self.q_per
-                        )
+            elif section_material == "pc":
+                M_sec_x, _, _ = self.section.get_secondaryInternalForces(self.system)
+                alpha_m_x = max(abs(self.system.alpha_m_x[0]), abs(self.system.alpha_m_x[1])) #maximum alpha_m_x
+                # Calculate MEd_SLS based on the maximum alpha_m_x and the total load q_freq-g0k as this is the deviation force of the pt system
+                MEd_SLS = (self.q_freq-self.g0k) * alpha_m_x * self.system.l_tot ** 2
+                M_sec = M_sec_x[0] if abs(M_sec_x[0]) >= abs(M_sec_x[1]) else M_sec_x[1] #select maximum moment for calculation of deflection
+                _, ei_eff, _ = self.section.calc_EIeff(self.section.Px_total, self.system.l_tot, MEd_SLS, M_sec, self.section.m_r)
+                unit_def_pc = self.system.alpha_w * self.system.l_tot ** 4 / ei_eff
+                self.w_install = unit_def_pc * ((self.q_freq-self.g0k) + (self.q_per-self.g0k) * (self.section.phi - 1))
         elif self.requirements.install == "brittle":
             self.w_install = unit_def * (self.q_rare + self.q_per * (self.section.phi - 1))
             if section_material == "rc":  # Alternative Durchbiegungsberechnung für Betonquerschnitte gem. SIA262,(102)
@@ -2160,6 +2206,14 @@ class Member2D:
                                                                                  self.section.rohs, 0,
                                                                                  self.section.h, self.section.d)
                 )
+        elif section_material == "pc":
+            M_sec_x, _, _ = self.section.get_secondaryInternalForces(self.system)
+            alpha_m_x = max(abs(self.system.alpha_m_x[0]), abs(self.system.alpha_m_x[1]))
+            MEd_SLS = (self.q_freq - self.gk) * alpha_m_x * self.system.l_tot ** 2
+            M_sec = M_sec_x[0] if abs(M_sec_x[0]) >= abs(M_sec_x[1]) else M_sec_x[1]
+            _, ei_eff, _ = self.section.calc_EIeff(self.section.Px_total, self.system.l_tot, MEd_SLS, M_sec, self.section.m_r)
+            unit_def_pc = self.system.alpha_w * self.system.l_tot ** 4 / ei_eff
+            self.w_use = unit_def_pc * ((self.q_freq - self.gk) + (self.q_per - self.gk) * (self.section.phi - 1))
         self.w_app = unit_def * (self.q_per * (1 + self.section.phi))
         if section_material == "rc":  # Alternative Durchbiegungsberechnung für Betonquerschnitte gem. SIA262,(102)
             self.w_app_ger = unit_def * (
@@ -2167,33 +2221,35 @@ class Member2D:
                                                              self.section.phi,
                                                              self.section.h, self.section.d)
                 )
+        elif section_material == "pc":
+            M_sec_x, _, _ = self.section.get_secondaryInternalForces(self.system)
+            alpha_m_x = max(abs(self.system.alpha_m_x[0]), abs(self.system.alpha_m_x[1]))
+            MEd_SLS = (self.q_per-self.g0k) * alpha_m_x * self.system.l_tot ** 2
+            M_sec = M_sec_x[0] if abs(M_sec_x[0]) >= abs(M_sec_x[1]) else M_sec_x[1]
+            _, ei_eff, _ = self.section.calc_EIeff(self.section.Px_total, self.system.l_tot, MEd_SLS, M_sec, self.section.m_r)
+            unit_def_pc = self.system.alpha_w * self.system.l_tot ** 4 / ei_eff
+            self.w_app = unit_def_pc * ((self.q_per-self.g0k) * (1 + self.section.phi))
         self.co2 = system.l_tot * (self.floorstruc.co2 + self.section.co2)
 
-        # calculation first frequency (uncracked cross-section, method for cracked cross-section is not implemented jet)
-        """
-                self.f1 = self.calc_f1()
-                # calculation of further vibration criteria for wooden cross-sections
-                section_material = self.section.section_type[0:2]
-                if section_material == "wd" or section_material == "rc":  # check for material type
-                    self.ei_b = max(self.section.ei_b,
-                                    self.floorstruc.ei)  # Berücksichtigung n.t. Bodenaufbau gemäss Beispielsammlung HBT)
-                    self.bm_rech = self.system.li_max / 1.1 * (self.ei_b / self.section.ei1) ** 0.25  # HBT Seite 46
-                    self.a_ed = self.calc_vib1()
-                    self.wf_ed, self.ve_ed = self.calc_vib2()
-                    if self.section.xi < 0.015:
-                        self.r1 = 1.0  # HBT S. 48
-                    elif self.section.xi < 0.025:
-                        self.r1 = 1.15  # HBT S. 48
-                    else:
-                        self.r1 = 1.25  # HBT S. 48
-                    self.ve_cd = self.requirements.alpha_ve_cd * 100 ** (self.f1 * self.section.xi - 1)
-                """
+        # calculation first frequency and vibration criteria
+        self.f1 = self.calc_f1()
         self.a_ed = 0
         self.wf_ed = 0
         self.ve_cd = 0
         self.ve_ed = 0
         self.r1 = 1.15
-        self.f1 = 100
+        if section_material in ("wd", "rc", "pc", "tc"):
+            self.ei_b = max(getattr(self.section, "ei_b", self.section.ei1), self.floorstruc.ei)
+            self.bm_rech = self.system.li_max / 1.1 * (self.ei_b / self.section.ei1) ** 0.25
+            self.a_ed = self.calc_vib1()
+            self.wf_ed, self.ve_ed = self.calc_vib2()
+            if self.section.xi < 0.015:
+                self.r1 = 1.0
+            elif self.section.xi < 0.025:
+                self.r1 = 1.15
+            else:
+                self.r1 = 1.25
+            self.ve_cd = self.requirements.alpha_ve_cd * 100 ** (self.f1 * self.section.xi - 1)
 
     def calc_qu(self):
         """
@@ -2215,7 +2271,7 @@ class Member2D:
                 # if the cross-section is not fulfilling the ductility criterion (e.g. required: EP, present PP) then
                 # assign a value, which drops from the full bending strength fast towards 0 (for concrete sections)
                 # or a value of 0 (for all other sections)
-                if self.section.section_type[0:2] == "rc":
+                if self.section.section_type[0:2] in ("rc", "pc"):
                     # for reinforced concrete cross-sections: smooth change to 0 load bearing capacity when roh<roh_min
                     # or roh>roh_zul (enables more efficient optimization)
                     epsilon = 1.0e-3
@@ -2224,32 +2280,56 @@ class Member2D:
                     else:
                         shift = 0.5
                     x_d = self.section.x_p / self.section.d
-                    factor = min(0.5 * (1 + 2 / np.pi * np.arctan((self.section.mu_max - self.section.mr_p) / epsilon)),    #README: Wieso wird hier mit diesem factor gearbeitet? und nicht ienfahc mit qu_bend = 0 wie beim Mehrfehldträger?
+                    cracking_moment = self.section.mr_p if self.section.section_type[0:2] == "rc" else self.section.m_r
+                    factor = min(0.5 * (1 + 2 / np.pi * np.arctan((self.section.mu_max - cracking_moment) / epsilon)),    #README: Wieso wird hier mit diesem factor gearbeitet? und nicht ienfahc mit qu_bend = 0 wie beim Mehrfehldträger?
                                  1 - 0.5 * (1 + 2 / np.pi * np.arctan((x_d - shift) / epsilon)))
                     qu_bend = factor * self.section.mu_max / (max(alpha_m) * self.system.l_tot ** 2)
                 else:
                     # for all other cross-sections bending strength = 0
                     qu_bend = 0
-            qu_shear = self.section.vu_p / (max(alpha_v) * self.system.l_tot)
+            if self.system.has_columns:
+                qu_shear = self.calc_punching_qu()
+            else:
+                qu_shear = self.section.vu_p / (max(alpha_v) * self.system.l_tot)
         else:
-            if qs_class_vorh[0] <= qs_class_erf[0] & qs_class_vorh[1] <= qs_class_erf[1]:
+            if qs_class_vorh[0] <= qs_class_erf[0] and qs_class_vorh[1] <= qs_class_erf[1]:
                 qu_bend = min(self.section.mu_max / (max(alpha_m) * self.system.l_tot ** 2), self.section.mu_min /
                               (min(alpha_m) * self.system.l_tot ** 2))
             else:
                 qu_bend = 0
-            qu_shear = min(self.section.vu_p / (max(alpha_v) * self.system.l_tot),
-                           self.section.vu_n / (min(alpha_v) * self.system.l_tot))
+            if self.system.has_columns:
+                qu_shear = self.calc_punching_qu()
+            else:
+                qu_shear = min(self.section.vu_p / (max(alpha_v) * self.system.l_tot),
+                               self.section.vu_n / (min(alpha_v) * self.system.l_tot))
         return min(qu_bend, qu_shear)
 
+    def calc_punching_qu(self):
+        if not hasattr(self.section, "calc_punching_shear_resistance"):
+            return float("inf")
+        m_ed = max(abs(self.mkd_n), abs(self.mkd_p), abs(self.mkd_n_y), abs(self.mkd_p_y))
+        m_rd = max(abs(self.section.mu_max), abs(self.section.mu_min), abs(getattr(self.section, "m_r", 0)), 1e-9)
+        v_rd = self.section.calc_punching_shear_resistance(
+            column_width=self.system.column_width,
+            column_length=self.system.column_length,
+            ke=self.system.column_ke,
+            l_x=self.system.lx,
+            l_y=self.system.ly,
+            m_ed=m_ed,
+            m_rd=m_rd,
+        )
+        return v_rd / self.system.column_tributary_area
+
     def calc_qk_zul_gzt(self, gamma_g=1.35, gamma_q=1.5):
-        self.qk_zul_gzt = (self.qu - gamma_g * self.gk) / gamma_q
-    '''
+        self.qu = self.calc_qu()
+        self.qk_zul_gzt = max((self.qu - gamma_g * self.gk) / gamma_q, 0)
+
     def calc_f1(self):
         # calculates first frequency of system according to HBT, Seite 46
         kf2 = self.system.kf2
         l_rech = self.system.li_max
         section_material = self.section.section_type[0:2]
-        if section_material == "rc":  # take cracked stiffness for calculation of concrete sections if section is cracked
+        if section_material in ("rc", "pc"):  # take cracked stiffness for concrete sections if section is cracked
             if self.mkd_p < self.section.mr_p and self.mkd_n > self.section.mr_n:
                 eil = self.section.ei1
             else:
@@ -2258,7 +2338,7 @@ class Member2D:
             eil = self.section.ei1
         m = self.m
  #       print("m =", m)
-        f1 = kf2 * np.pi / (2 * l_rech ** 2) * (eil / m) ** 0.5  # HBT, Seite 46    #FEHLER WARNUNG IN COMPARISON ULS SLS
+        f1 = kf2 * np.pi / (2 * l_rech ** 2) * (abs(eil) / abs(m)) ** 0.5  # HBT, Seite 46
         return f1
 
     def calc_vib1(self, f0=700):
@@ -2283,17 +2363,19 @@ class Member2D:
         # calculates W_F,ED according to to HBT, Seite 48
         wf_ed = self.system.alpha_w_f_cd * f * self.system.li_max ** 3 / (self.bm_rech * self.section.ei1)
         section_material = self.section.section_type[0:2]
-        if section_material == "rc":  # take cracked stiffness for calculation of concrete sections
+        if section_material in ("rc", "pc"):  # take cracked stiffness for calculation of concrete sections
             eil = self.section.ei2
         else:
             eil = self.section.ei1
-        ve_ed = 364 / (self.bm_rech * (self.m ** 3 * eil * 1e6) ** 0.25)        #FEHLER WARNUNG IN COMPARISON ULS SLS
+        ve_ed = 364 / (abs(self.bm_rech) * (abs(self.m) ** 3 * abs(eil) * 1e6) ** 0.25)
         return wf_ed, ve_ed
-    '''
+
     def get_fire_resistance(self):
         # evaluate fire resistance
         if self.section.section_type == "rc_rec":
             fire_resistance = RectangularConcrete.fire_resistance(self.section)
+        elif self.section.section_type == "pc_rec":
+            fire_resistance = PostTensionedConcrete.fire_resistance(self.section)
         # elif self.section.section_type == "wd_rec":
         #     fire_resistance = RectangularWood.fire_resistance(self)
         # elif self.section.section_type == "rc_rib":
