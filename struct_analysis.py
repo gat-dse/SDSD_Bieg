@@ -174,7 +174,7 @@ class PrestressingSteel:
         result = cursor.fetchall()
         self.prod_id, density, GWP, cost, construction_time = result[0]
         self.GWP = GWP/1e3  # transform unit from [kg-Co2-eq/t] to [kg-Co2-eq/kg]
-        self.density = float(density)
+        self.density = 7850.0 if density is None else float(density)
         self.cost = cost    #CHF/m3
         self.construction_time = construction_time #h/m3
         self.fp01k, self.fpd = self.get_design_values()
@@ -345,11 +345,12 @@ class RectangularConcrete(SupStrucRectangular):
         #TODO: x und y Richtung Berücksichtigen
         [self.mu_max, self.x_p, self.as_p, self.qs_class_p] = self.calc_mu('pos')
         [self.mu_min, self.x_n, self.as_n, self.qs_class_n] = self.calc_mu('neg')
+        self.as_yu = np.pi * self.bw[2][0] ** 2 / (4 * self.bw[2][1]) * self.b
+        self.as_yo = np.pi * self.bw[3][0] ** 2 / (4 * self.bw[3][1]) * self.b
         self.roh, self.rohs = self.as_p / self.d, self.as_n / self.ds
         [self.vu_p, self.vu_n, self.as_bw] = self.calc_shear_resistance()
         self.g0k = self.calc_weight(concrete_type.weight)
-        a_s_stat = (self.as_p + self.as_n) + self.as_bw  # rebar area without reinforcement joint surcharge
-        #TODO: Add all reinforcement layers also for GWP, Cost and construction time calculation, 1. and 4. layer
+        a_s_stat = self.as_p + self.as_n + self.as_yu + self.as_yo + self.as_bw
         self.joint_surcharge = jnt_srch  # surcharge for reinforcement joints, preset value is an assumption and has to be verified with literature
         a_s_tot = a_s_stat * (1 + self.joint_surcharge)  # rebar area without reinforcement joint surcharge
         co2_rebar = a_s_tot * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
@@ -470,20 +471,47 @@ class RectangularConcrete(SupStrucRectangular):
                                        l_x=None, l_y=None, m_ed=None, m_rd=None,
                                        rotation_factor=1.0, v_prestress=0.0):
         """
-        Punching shear resistance for slabs without punching shear reinforcement.
+        Punching shear resistance according to SIA 262, level of approximation 2.
 
-        LoA 3 is represented through a rotation-based k_psi factor. The member passes the governing
-        design moment m_ed; if no moment is provided, the method falls back to the cracking moment.
+        Base concrete resistance without punching reinforcement:
+            V_Rd,c(psi) = k_r * tau_cd * d_v * u
+            k_r = 1 / (0.45 + 0.18 * psi * d_v[mm] * k_g) <= 2
+            k_g = 48 / (16 + D_max)
+            psi = 1.5 * r_s / d_v * f_sd / E_s * (m_sd / m_Rd) ** 1.5
+            r_s = 0.22 * l
         """
         d_v = self.d
         u_1 = 2 * (column_width + column_length) + 2 * np.pi * d_v
-        m_rd = abs(m_rd) if m_rd is not None else max(abs(self.mu_max), 1e-9)
-        m_ed = abs(m_ed) if m_ed is not None else abs(self.mr_p)
-        r_s = 0.22 * max(l_x if l_x is not None else 0, l_y if l_y is not None else 0, d_v)
-        k_dg = max(32 / (16 + self.concrete_type.dmax), 0.75)
-        psi = rotation_factor * 1.5 * r_s / d_v * self.rebar_type.fsd / self.rebar_type.Es * (m_ed / m_rd) ** 1.5
-        k_psi = min(0.6, 1 / (1.5 + 0.9 * k_dg * d_v * psi))
-        v_rd_c = k_psi * self.concrete_type.tcd * u_1 * d_v
+        l_x = l_x if l_x is not None else d_v
+        l_y = l_y if l_y is not None else l_x
+
+        def as_pair(value, default):
+            if value is None:
+                return default
+            if isinstance(value, (list, tuple, np.ndarray)):
+                if len(value) >= 2:
+                    return abs(value[0]), abs(value[1])
+                if len(value) == 1:
+                    return abs(value[0]), abs(value[0])
+            value = abs(value)
+            return value, value
+
+        m_rd_default = max(abs(self.mu_max), abs(self.mu_min), 1e-9)
+        m_ed_x, m_ed_y = as_pair(m_ed, (abs(self.mr_p), abs(self.mr_p)))
+        m_rd_x, m_rd_y = as_pair(m_rd, (m_rd_default, m_rd_default))
+        m_rd_x = max(m_rd_x, 1e-9)
+        m_rd_y = max(m_rd_y, 1e-9)
+
+        r_s_x = max(0.22 * l_x, d_v)
+        r_s_y = max(0.22 * l_y, d_v)
+        psi_x = 1.5 * r_s_x / d_v * self.rebar_type.fsd / self.rebar_type.Es * (m_ed_x / m_rd_x) ** 1.5
+        psi_y = 1.5 * r_s_y / d_v * self.rebar_type.fsd / self.rebar_type.Es * (m_ed_y / m_rd_y) ** 1.5
+        psi = rotation_factor * max(psi_x, psi_y)
+
+        d_v_mm = d_v * 1e3
+        k_g = 48 / (16 + self.concrete_type.dmax)
+        k_r = min(2.0, 1 / (0.45 + 0.18 * psi * d_v_mm * k_g))
+        v_rd_c = k_r * self.concrete_type.tcd * d_v * u_1
         v_rd_s = self.calc_punching_shear_reinforcement_resistance(d_v)
         v_rd_max = 2.0 * v_rd_c
         v_rd = min(v_rd_c + v_rd_s, v_rd_max)
@@ -536,6 +564,8 @@ class PostTensionedConcrete(RectangularConcrete):
         self.bw, self.d, self.ds = bw
         self.as_p = (np.pi*self.bw[0][0]**2/4/self.bw[0][1]) # as for positive bending (lower layers) [m2/m]
         self.as_n = (np.pi*self.bw[1][0]**2/4/self.bw[1][1]) # as for negative bending (upper layers) [m2/m]
+        self.as_yu = (np.pi*self.bw[2][0]**2/4/self.bw[2][1]) # as for lower y reinforcement [m2/m]
+        self.as_yo = (np.pi*self.bw[3][0]**2/4/self.bw[3][1]) # as for upper y reinforcement [m2/m]
         self.i = self.h**3/12 # moment of inertia of the plate [m4/m]
 
         self.pt_steel_type = pt_steel_type
@@ -574,7 +604,7 @@ class PostTensionedConcrete(RectangularConcrete):
 
         # C02, cost and construction time per m2 of cross-section
         self.joint_surcharge = jnt_srch  # joint surcharge
-        volume_reinforcement = (2*(self.as_p+self.as_n)+self.as_bw/self.b)*(1 + self.joint_surcharge) # volume of reinforcement per m2 of cross-section [m3/m2] with joint surcharge
+        volume_reinforcement = (self.as_p+self.as_n+self.as_yu+self.as_yo+self.as_bw/self.b)*(1 + self.joint_surcharge) # volume of reinforcement per m2 of cross-section [m3/m2] with joint surcharge
         volume_pt_steel = number_of_tendons*self.A_p/(self.l_x*self.l_y) # volume of post-tensioning steel per m2 of cross-section [m3/m2]
         volume_concrete = self.b*self.h - volume_reinforcement - volume_pt_steel # volume of concrete per m2 of cross-section [m3/m2]
         co2_rebar = volume_reinforcement * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
@@ -595,16 +625,26 @@ class PostTensionedConcrete(RectangularConcrete):
         return e_support, e_midspan, dp
         
     def set_minimalReinforcement(self):
-        # d_rebar=0.006m with s=0.15m as start
-        d_rebar = 0.006  # minimal diameter of reinforcement [m]
-        s = 0.15  # minimal spacing of reinforcement [m]
-        self.bw = [[d_rebar, s], [d_rebar, s], [d_rebar, s], [d_rebar, s]]  # Definition Biegebewehrung 4-Lagig. x-Richtung ist dabei die Haupttragrichtung, di = Durchmesser, s = Abstand, u = untere Lagen (positives Biegemoment), o = obere Lagen (negatives Biegemoment)
-        [self.d, self.ds] = self.calc_d()  # Statische Höhe. d für positive Biegung (untere Lagen), ds für negative Biegung (obere Lagen)
-        # For-loop where d_rebar is increased until moment resistance is higher than cracking moment of concrete
-        while self.mr_p > self.mu_unsigned(self.bw[0][0], self.bw[0][1], self.d, self.b, self.rebar_type.fsd, self.concrete_type.fcd, self.mr_p)[0]:
-            d_rebar += 0.002  # increase diameter of reinforcement [m]
-            self.bw = [[d_rebar, s], [d_rebar, s], [d_rebar, s], [d_rebar, s]]
-            [self.d, self.ds] = self.calc_d()
+        # Keep the reinforcement chosen by the optimizer, but enforce a minimal bonded
+        # reinforcement for robustness of unbonded PT slabs.
+        for layer in self.bw:
+            layer[0] = max(layer[0], 0.006)
+
+        self.d, self.ds = self.calc_d()
+
+        layer_pairs = ((0, 2, self.mr_p, "pos"), (1, 3, abs(self.mr_n), "neg"))
+        for idx_x, idx_y, mr, sign in layer_pairs:
+            while True:
+                d_eff = self.d if sign == "pos" else self.ds
+                mu = self.mu_unsigned(
+                    self.bw[idx_x][0], self.bw[idx_x][1], d_eff, self.b,
+                    self.rebar_type.fsd, self.concrete_type.fcd, mr
+                )[0]
+                if mu >= mr:
+                    break
+                self.bw[idx_x][0] += 0.002
+                self.bw[idx_y][0] = self.bw[idx_x][0]
+                self.d, self.ds = self.calc_d()
         return self.bw, self.d, self.ds
 
     def set_loadBalancing(self, degree_of_posttensioning=0.7, longterm_losses=0.15):
@@ -641,15 +681,15 @@ class PostTensionedConcrete(RectangularConcrete):
 
             alpha_max = degree_of_posttensioning
             alpha_min = max(0.0, degree_of_posttensioning - 0.1)
+            p_tendon = (1 - longterm_losses) * self.pt_steel_type.fpk * self.A_p
 
-            # Start mit minimaler Anzahl
-            n = math.ceil(P_req / ((1 - longterm_losses) * alpha_max * self.pt_steel_type.fpk * self.A_p))
+            n_min = max(math.ceil(P_req / (alpha_max * p_tendon)), 1)
+            n_max = max(math.floor(P_req / (alpha_min * p_tendon)), n_min) if alpha_min > 0 else n_min
 
-            while True:
-                alpha = P_req / (n * (1 - longterm_losses) * self.pt_steel_type.fpk * self.A_p)
-                if alpha_min <= alpha <= alpha_max:
-                    return n, alpha
-                n += 1
+            candidates = range(n_min, n_max + 1)
+            n = min(candidates, key=lambda n_i: abs(P_req / (n_i * p_tendon) - degree_of_posttensioning))
+            alpha = P_req / (n * p_tendon)
+            return n, alpha
 
         # Find number of tendons and degree of post-tensioning for each tendon group
         n_psx, alpha_psx = find_n_and_degree(Psx)
@@ -1851,6 +1891,19 @@ class Slab:
                     FROM slab_properties
                     WHERE RAENDER = ? AND LX = ? AND LY = ? """, (self.raender, self.lx, self.ly)).fetchall()
 
+        if not result:
+            available = cursor.execute(
+                """
+                SELECT DISTINCT RAENDER, LX, LY
+                FROM slab_properties
+                ORDER BY RAENDER, LX, LY
+                """
+            ).fetchall()
+            conn.close()
+            raise ValueError(
+                f"No slab_properties entry for support={self.raender!r}, LX={self.lx}, LY={self.ly}. "
+                f"Use one of the available entries: {available}"
+            )
         self.result = result[0]
         #Faktor alpha_m_x: Bewehrungfür l_max
         #x-Richtung = Richtung mit maximaler Spannweite
@@ -2174,7 +2227,7 @@ class Member1D:
 
 class Member2D:
     def __init__(self, section, system, floorstruc, requirements, g2k=0.0, qk=2e3, psi0=0.7, psi1=0.5, psi2=0.3,
-                     fire_b=True, fire_l=False, fire_t=False, fire_r=False):
+                     fire_b=True, fire_l=False, fire_t=False, fire_r=False, evaluate_service=True):
         """
         Definiert ein 2-Dimensionales Bauteil (Platte) mit Eigenschaften
         :section:
@@ -2225,6 +2278,22 @@ class Member2D:
         if fire_r is True:
             self.fire[3] = 1
         self.fire_resistance = []
+        self.co2 = system.l_tot * (self.floorstruc.co2 + self.section.co2)
+
+        if not evaluate_service:
+            self.w_install = 0.0
+            self.w_use = 0.0
+            self.w_app = 0.0
+            self.w_install_ger = 0.0
+            self.w_use_ger = 0.0
+            self.w_app_ger = 0.0
+            self.f1 = 0.0
+            self.a_ed = 0.0
+            self.wf_ed = 0.0
+            self.ve_cd = 0.0
+            self.ve_ed = 0.0
+            self.r1 = 1.15
+            return
 
         # calculation of deflections uncracked (plus cracked for concrete sections self.section.section_type[0:2] = rc))
         section_material = self.section.section_type[0:2]
@@ -2286,8 +2355,6 @@ class Member2D:
             _, ei_eff, _ = self.section.calc_EIeff(self.section.Px_total, self.system.l_tot, MEd_SLS, M_sec, self.section.m_r)
             unit_def_pc = self.system.alpha_w * self.system.l_tot ** 4 / ei_eff
             self.w_app = unit_def_pc * ((self.q_per-self.g0k) * (1 + self.section.phi))
-        self.co2 = system.l_tot * (self.floorstruc.co2 + self.section.co2)
-
         # calculation first frequency and vibration criteria
         self.f1 = self.calc_f1()
         self.a_ed = 0
@@ -2388,7 +2455,7 @@ class Member2D:
     def calc_punching_qu(self):
         if not hasattr(self.section, "calc_punching_shear_resistance"):
             return float("inf")
-        m_rd = max(abs(self.section.mu_max), abs(self.section.mu_min), abs(getattr(self.section, "m_r", 0)), 1e-9)
+        m_rd = self.calc_punching_m_rd()
         area = self.system.column_tributary_area
 
         def residual(q_area):
@@ -2418,19 +2485,26 @@ class Member2D:
         return q_low
 
     def calc_punching_m_ed(self, q_area):
-        moments = [
+        moments_x = [
             q_area * self.system.alpha_m_x[0] * self.system.l_tot ** 2,
             q_area * self.system.alpha_m_x[1] * self.system.l_tot ** 2,
+        ]
+        moments_y = [
             q_area * self.system.alpha_m_y[0] * self.li_min ** 2,
             q_area * self.system.alpha_m_y[1] * self.li_min ** 2,
         ]
         if hasattr(self.section, "get_secondaryInternalForces"):
             m_sec_x, m_sec_y, _ = self.section.get_secondaryInternalForces(self.system)
-            moments[0] += m_sec_x[0]
-            moments[1] += m_sec_x[1]
-            moments[2] += m_sec_y[0]
-            moments[3] += m_sec_y[1]
-        return max(abs(m) for m in moments)
+            moments_x[0] += m_sec_x[0]
+            moments_x[1] += m_sec_x[1]
+            moments_y[0] += m_sec_y[0]
+            moments_y[1] += m_sec_y[1]
+        return max(abs(m) for m in moments_x), max(abs(m) for m in moments_y)
+
+    def calc_punching_m_rd(self):
+        m_rd_x = max(abs(self.section.mu_max), abs(self.section.mu_min), abs(getattr(self.section, "m_r", 0)), 1e-9)
+        m_rd_y = m_rd_x
+        return m_rd_x, m_rd_y
 
     def calc_punching_secondary_force(self):
         if not hasattr(self.section, "get_secondaryInternalForces"):
@@ -2447,7 +2521,7 @@ class Member2D:
         if not hasattr(self.section, "calc_punching_shear_resistance"):
             return float("inf")
         m_ed = self.calc_punching_m_ed(self.qu)
-        m_rd = max(abs(self.section.mu_max), abs(self.section.mu_min), abs(getattr(self.section, "m_r", 0)), 1e-9)
+        m_rd = self.calc_punching_m_rd()
         v_rd = self.section.calc_punching_shear_resistance(
             column_width=self.system.column_width,
             column_length=self.system.column_length,

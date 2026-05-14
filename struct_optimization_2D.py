@@ -31,33 +31,36 @@ def opt_rc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.16):
     # definition of initial values for variables, which are going to be optimized
     h0 = m.section.h  # start value for height corresponds to 1/20 of system length
     di_xu0 = m.section.bw[0][0]  # start value for rebar diameter 40 mm
-    di_xo0 = m.section.bw[0][0]  # start value for rebar diameter 40 mm
-    var0 = [h0, di_xu0,di_xo0]
-
-    #ToDo: Add optimization for upper reinforcement
+    di_xo0 = m.section.bw[1][0]  # start value for upper rebar diameter
+    di_bw0 = m.section.bw_bg[0]
+    var0 = [h0, di_xu0, di_xo0, di_bw0]
 
     # define bounds of variables
     bh = (h_min, 1.2)  # height between h_min and 1.2 m
     bdi_xu = (0.006, 0.04)  # diameter of rebars between 6 mm and 40 mm
     bdi_xo = (0.006, 0.04)  # diameter of rebars between 6 mm and 40 mm
-    bounds = [bh, bdi_xu, bdi_xo]
+    bdi_bw = (0.0, 0.02)  # stirrup diameter for shear/punching checks
+    bounds = [bh, bdi_xu, bdi_xo, bdi_bw]
 
     # definition of fixed values of cross-section
     b = m.section.b
     s_xu, s_xo = m.section.bw[0][1], m.section.bw[1][1]
-    di_yu, s_yu, di_yo, s_yo = m.section.bw[2][0], m.section.bw[2][1], m.section.bw[3][0], m.section.bw[3][1]
+    s_yu, s_yo = m.section.bw[2][1], m.section.bw[3][1]
     di_bw, s_bw, n_bw = m.section.bw_bg[0], m.section.bw_bg[1], m.section.bw_bg[2]
     phi, c_nom, xi, jnt_srch = m.section.phi, m.section.c_nom, m.section.xi, m.section.joint_surcharge
 
     co, st = m.section.concrete_type, m.section.rebar_type
-    add_arg = [m.system, co, st, b, s_xu, s_xo, m.floorstruc, m.requirements, to_opt, criterion, m.g2k, m.qk]
+    if m.system.has_columns and n_bw == 0:
+        n_bw = 2
+    add_arg = [m.system, co, st, b, s_xu, s_xo, s_yu, s_yo, s_bw, n_bw,
+               m.floorstruc, m.requirements, to_opt, criterion, m.g2k, m.qk, phi, c_nom, xi, jnt_srch]
 
     # optimize with basinhopping algorithm with bounds also implemented on both levels (inner and outer):
     bounded_step = RandomDisplacementBounds(np.array([b[0] for b in bounds]), np.array([b[1] for b in bounds]))
     opt = basinhopping(rc_rqs, var0, niter=max_iter, T=1, minimizer_kwargs={"args": (add_arg,), "bounds": bounds,
                                                                             "method": "Powell"}, take_step=bounded_step)
-    h, di_xu, di_xo = opt.x
-    optimized_section = struct_analysis.RectangularConcrete(co, st, b, h, di_xu, s_xu, di_xo, s_xo, di_yu, s_yu, di_yo, s_yo, di_bw, s_bw, n_bw,
+    h, di_xu, di_xo, di_bw = opt.x
+    optimized_section = struct_analysis.RectangularConcrete(co, st, b, h, di_xu, s_xu, di_xo, s_xo, di_xu, s_yu, di_xo, s_yo, di_bw, s_bw, n_bw,
                                                             phi, c_nom, xi, jnt_srch)
     return optimized_section
 
@@ -66,21 +69,25 @@ def rc_rqs(var, add_arg):
     # input: variables, which have to be optimized, additional info about cross-section and system, optimizing option
     # output: if criterion == GWP -> co2 of cross-section, punished by delta 10*(qk_zul-qk)
     # output: if criterion == h -> height of cross-section, punished by delta 1*(qk_zul-qk)
-    h, di_xu, di_xo = var
+    h, di_xu, di_xo, di_bw = var
     system = add_arg[0]
     concrete = add_arg[1]
     reinfsteel = add_arg[2]
     b = add_arg[3]
     s_xu, s_xo = add_arg[4:6]
-    floorstruc = add_arg[6]
-    criteria = add_arg[7]
-    to_opt = add_arg[8]
-    criterion = add_arg[9]
-    g2k = add_arg[10]
-    qk = add_arg[11]
+    s_yu, s_yo, s_bw, n_bw = add_arg[6:10]
+    floorstruc = add_arg[10]
+    criteria = add_arg[11]
+    to_opt = add_arg[12]
+    criterion = add_arg[13]
+    g2k = add_arg[14]
+    qk = add_arg[15]
+    phi, c_nom, xi, jnt_srch = add_arg[16:20]
 
     # create section
-    section = struct_analysis.RectangularConcrete(concrete, reinfsteel, b, h, di_xu, s_xu, di_xo, s_xo)
+    section = struct_analysis.RectangularConcrete(concrete, reinfsteel, b, h, di_xu, s_xu, di_xo, s_xo,
+                                                  di_xu, s_yu, di_xo, s_yo, di_bw, s_bw, n_bw,
+                                                  phi, c_nom, xi, jnt_srch)
 
     # create member
     member = struct_analysis.Member2D(section, system, floorstruc, criteria, g2k, qk)
@@ -151,6 +158,109 @@ def rc_rqs(var, add_arg):
         print("criterion " + criterion + " is not defined")
         print("criterion has to be 'ULS', 'SLS1', 'SLS2', 'FIRE' or 'ENV'")
     return to_minimize
+
+
+# OPTIMIZATION OF RECTANGULAR POST-TENSIONED CONCRETE CROSS-SECTIONS
+# .......................................................................................................................
+def opt_pc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.18): #h_min is set to 18 cm, because of minimum height for post-tensioned systems
+    h0 = m.section.h
+    di_xu0 = m.section.bw[0][0]
+    di_xo0 = m.section.bw[1][0]
+    di_bw0 = m.section.bw_bg[0]
+    var0 = [h0, di_xu0, di_xo0, di_bw0]
+
+    bounds = [(h_min, 1.2), (0.006, 0.04), (0.006, 0.04), (0.0, 0.02)]
+
+    b = m.section.b
+    s_xu, s_xo = m.section.bw[0][1], m.section.bw[1][1]
+    s_yu, s_yo = m.section.bw[2][1], m.section.bw[3][1]
+    di_bw, s_bw, n_bw = m.section.bw_bg[0], m.section.bw_bg[1], m.section.bw_bg[2]
+    if m.system.has_columns and n_bw == 0:
+        n_bw = 2
+    phi, c_nom, xi, jnt_srch = m.section.phi, m.section.c_nom, m.section.xi, m.section.joint_surcharge
+    co, st, pt = m.section.concrete_type, m.section.rebar_type, m.section.pt_steel_type
+
+    add_arg = [
+        m.system, co, st, pt, b, s_xu, s_xo, s_yu, s_yo, s_bw, n_bw,
+        m.floorstruc, m.requirements, to_opt, criterion, m.g2k, m.qk,
+        phi, c_nom, xi, jnt_srch, m.section.layout, m.section.c_nom_pt, m.section.A_p
+    ]
+
+    bounded_step = RandomDisplacementBounds(np.array([bnd[0] for bnd in bounds]), np.array([bnd[1] for bnd in bounds]))
+    opt = basinhopping(pc_rqs, var0, niter=max_iter, T=1, minimizer_kwargs={"args": (add_arg,), "bounds": bounds,
+                                                                            "method": "Powell"}, take_step=bounded_step)
+    h, di_xu, di_xo, di_bw = opt.x
+    return struct_analysis.PostTensionedConcrete(
+        co, st, pt, m.system.lx, m.system.ly, b, h, di_xu, s_xu, di_xo, s_xo,
+        di_xu, s_yu, di_xo, s_yo, di_bw, s_bw, n_bw, phi, c_nom, xi, jnt_srch,
+        m.section.layout, m.section.c_nom_pt, m.section.A_p
+    )
+
+
+def pc_rqs(var, add_arg):
+    h, di_xu, di_xo, di_bw = var
+    system, concrete, reinfsteel, pt_steel, b = add_arg[0:5]
+    s_xu, s_xo, s_yu, s_yo, s_bw, n_bw = add_arg[5:11]
+    floorstruc, criteria, to_opt, criterion, g2k, qk = add_arg[11:17]
+    phi, c_nom, xi, jnt_srch, layout, c_nom_pt, A_p = add_arg[17:24]
+
+    section = struct_analysis.PostTensionedConcrete(
+        concrete, reinfsteel, pt_steel, system.lx, system.ly, b, h, di_xu, s_xu, di_xo, s_xo,
+        di_xu, s_yu, di_xo, s_yo, di_bw, s_bw, n_bw, phi, c_nom, xi, jnt_srch,
+        layout, c_nom_pt, A_p
+    )
+    evaluate_service = criterion in ("SLS1", "SLS2", "ENV")
+    member = struct_analysis.Member2D(
+        section, system, floorstruc, criteria, g2k, qk, evaluate_service=evaluate_service
+    )
+    member.calc_qk_zul_gzt()
+
+    penalty1 = max(member.qk - member.qk_zul_gzt, 0)
+
+    if criterion == "ULS":
+        penalty = penalty1
+    elif criterion == "SLS1":
+        d1, d2, d3 = [member.w_install - member.w_install_adm, member.w_use - member.w_use_adm,
+                      member.w_app - member.w_app_adm]
+        penalty2 = 1e5 * max(d1, d2, d3, 0)
+        penalty = penalty2
+    elif criterion == "SLS2":
+        pen_a = member.a_ed - member.requirements.a_cd
+        pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1
+        pen_v = member.ve_ed - member.ve_cd
+        if member.f1 < member.requirements.f1:
+            penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
+        else:
+            penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
+        penalty = penalty3
+    elif criterion == "FIRE":
+        member.get_fire_resistance()
+        penalty4 = max(member.requirements.t_fire - member.fire_resistance, 0)
+        penalty = penalty4
+    elif criterion == "ENV":
+        d1, d2, d3 = [member.w_install - member.w_install_adm, member.w_use - member.w_use_adm,
+                      member.w_app - member.w_app_adm]
+        penalty2 = 1e5 * max(d1, d2, d3, 0)
+        pen_a = member.a_ed - member.requirements.a_cd
+        pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1
+        pen_v = member.ve_ed - member.ve_cd
+        if member.f1 < member.requirements.f1:
+            penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
+        else:
+            penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
+        member.get_fire_resistance()
+        penalty4 = max(member.requirements.t_fire - member.fire_resistance, 0)
+        penalty = penalty1 + penalty2 + penalty3 + penalty4
+    else:
+        print("criterion " + criterion + " is not defined")
+        print("criterion has to be 'ULS', 'SLS1', 'SLS2', 'FIRE' or 'ENV'")
+        penalty = 99
+
+    if to_opt == "GWP":
+        return member.section.co2 * (1 + penalty)
+    elif to_opt == "h":
+        return member.section.h * (1 + penalty)
+    return 99
 
 
 #OPTIMIZATION OF RIB CONCRETE CROSS-SECTIONS
@@ -479,6 +589,10 @@ def get_optimized_section(member, criterion, to_opt, max_iter, h_min=0.16):
         # available to_opt arguments: "GWP", "h"
         # available criterion arguments: "ULS", "SLS1", "SLS2"
         return opt_rc_rec(member, to_opt, criterion, max_iter, h_min)
+    elif member.section.section_type == "pc_rec":
+        # available to_opt arguments: "GWP", "h"
+        # available criterion arguments: "ULS", "SLS1", "SLS2"
+        return opt_pc_rec(member, to_opt, criterion, max_iter, h_min)
     elif member.section.section_type == "wd_rec":
         # available criterion arguments: "ULS", "SLS1", "SLS2"
         return opt_gzt_wd_rqs(member, criterion=criterion)
@@ -627,4 +741,3 @@ def rc_rib_crsc(var, add_arg):
     return to_minimize
 
 ## XXXXXXXXXXX neue funktion (returnwert wird minimiert)
-

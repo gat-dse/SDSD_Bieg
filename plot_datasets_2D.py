@@ -108,6 +108,46 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                 line_i1 = [section_01, floorstruc]
                 to_plot.extend([line_i0, line_i1])
 
+            elif crsec_type == "pc_rec":
+                concrete = struct_analysis.ReadyMixedConcrete(mech_prop, database_name, prod_id=prod_id_str)
+                concrete.get_design_values()
+                inquiry = ("""
+                            SELECT PRO_ID FROM products
+                            WHERE Total_GWP = (SELECT MIN(Total_GWP) FROM products
+                                                WHERE "MATERIAL" LIKE '%Steel_reinforcing_bar%'
+                                                AND DENSITY IS NOT NULL
+                                                AND MECH_PROP IS NOT NULL
+                                                AND Statistik = 1
+                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
+                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
+                                                AND "SOURCE" NOT LIKE '%KBOB%')
+                            OR Total_GWP = (SELECT MAX(Total_GWP) FROM products
+                                                WHERE "MATERIAL" LIKE '%Steel_reinforcing_bar%'
+                                                AND DENSITY IS NOT NULL
+                                                AND MECH_PROP IS NOT NULL
+                                                AND Statistik = 1
+                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
+                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
+                                                AND "SOURCE" NOT LIKE '%KBOB%')
+                            """
+                           )
+                cursor.execute(inquiry)
+                result = cursor.fetchall()
+                prod_id_low_str = "'" + str(result[0][0]) + "'"
+                prod_id_high_str = "'" + str(result[1][0]) + "'"
+                rebar_low_em = struct_analysis.SteelReinforcingBar("'B500B'", database_name, prod_id=prod_id_low_str)
+                rebar_high_em = struct_analysis.SteelReinforcingBar("'B500B'", database_name, prod_id=prod_id_high_str)
+                pt_steel = struct_analysis.PrestressingSteel("'Y1860'", database_name)
+                section_00 = struct_analysis.PostTensionedConcrete(concrete, rebar_low_em, pt_steel, 6, 6, 1.0, 0.20,
+                                                                    0.010, 0.15, 0.010, 0.15,
+                                                                    0.006, 0.15, 0.006, 0.15,
+                                                                    0.0, 0.15, 0)
+                section_01 = struct_analysis.PostTensionedConcrete(concrete, rebar_high_em, pt_steel, 6, 6, 1.0, 0.20,
+                                                                    0.010, 0.15, 0.010, 0.15,
+                                                                    0.006, 0.15, 0.006, 0.15,
+                                                                    0.0, 0.15, 0)
+                to_plot.extend([[section_00, floorstruc], [section_01, floorstruc]])
+
             elif crsec_type == "rc_rib":
                 # create a Concrete material object
                 concrete = struct_analysis.ReadyMixedConcrete(mech_prop, database_name, prod_id=prod_id_str)
@@ -217,14 +257,27 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             for optimum in optima:
                 members = []
                 for length in lengths:
-                    sys = struct_analysis.Slab(length,length,"LL-frei")
-                    member0 = struct_analysis.Member2D(i[0], sys, i[1], requirements, g2k, qk)
+                    sys = struct_analysis.Slab(length,length,"PL-eingespannt")
+                    if i[0].section_type == "pc_rec":
+                        section0 = struct_analysis.PostTensionedConcrete(
+                            i[0].concrete_type, i[0].rebar_type, i[0].pt_steel_type,
+                            length, length, i[0].b, i[0].h, i[0].bw[0][0], i[0].bw[0][1],
+                            i[0].bw[1][0], i[0].bw[1][1], i[0].bw[2][0], i[0].bw[2][1],
+                            i[0].bw[3][0], i[0].bw[3][1], i[0].bw_bg[0], i[0].bw_bg[1],
+                            i[0].bw_bg[2], i[0].phi, i[0].c_nom, i[0].xi, i[0].joint_surcharge,
+                            i[0].layout, i[0].c_nom_pt, i[0].A_p
+                        )
+                    else:
+                        section0 = i[0]
+                    member0 = struct_analysis.Member2D(section0, sys, i[1], requirements, g2k, qk)
                     opt_section = struct_optimization_2D.get_optimized_section(member0, criterion, optimum, max_iter)
                     opt_member = struct_analysis.Member2D(opt_section, sys, i[1], requirements, g2k, qk)
                     members.append(opt_member)
                 member_list.append(members)
                 if i[0].section_type[0:2] == "rc":
                     material_lg = i[0].concrete_type.mech_prop + " + " + i[0].rebar_type.mech_prop
+                elif i[0].section_type[0:2] == "pc":
+                    material_lg = i[0].concrete_type.mech_prop + " + " + i[0].rebar_type.mech_prop + " + PT"
                 elif i[0].section_type == "wd":
                     material_lg = i[0].wood_type.mech_prop
                 elif i[0].section_type == "wd_rib":
@@ -275,6 +328,8 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
         # set line color
         if sec_typ == "rc_rec":
             color = 'green'  # color for reinforced concrete
+        elif sec_typ == "pc_rec":
+            color = 'teal'  # color for post-tensioned concrete
         elif sec_typ == "wd_rec":
             color = 'saddlebrown'  # color for wood
         elif sec_typ == "rc_rib":
@@ -331,12 +386,14 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
 # ----------------------------------------------------------------------------------------------------------------------
 def plot_section(section):
     # Create a figure and axis
-    if section.section_type == "rc_rec":  # Rectangular Reinforced Concrete Cross-Section
+    if section.section_type in ("rc_rec", "pc_rec"):  # Rectangular Reinforced/Post-Tensioned Concrete Cross-Section
         fig, ax, offset = plot_rectangle_with_dimensions(section.b, section.h, 'green', 'x')
         plot_rebars_long(ax, section, offset)
         # add stirrups to plot (if stirrups are defined)
         if section.bw_bg[0] > 0 and section.bw_bg[2] > 0:
             plot_stirrups(ax, section, offset)
+        if section.section_type == "pc_rec":
+            plot_pt_tendons(ax, section, offset)
         legend = (f'{section.concrete_type.mech_prop}, prod_ID:{section.concrete_type.prod_id} \n'
                   f'{section.rebar_type.mech_prop}, prod_ID:{section.rebar_type.prod_id} \n'
                   f'di_xo / s_xo = {section.bw[1][0]:.3f} / {section.bw[1][1]} \n'
@@ -345,6 +402,9 @@ def plot_section(section):
                   f'c_nom = {100*section.c_nom:.1f} cm \n'
                   f'x/d = {section.x_p/section.d:.2f} \n'
                   f'GWP = {section.co2:.0f} kg/m^2')
+        if section.section_type == "pc_rec":
+            legend += (f'\nPT: {section.pt_steel_type.mech_prop}, A_p={section.A_p:.1e} m2 \n'
+                       f'Psx/Psy = {section.Psx/1e3:.1f}/{section.Psy/1e3:.1f} kN')
     elif section.section_type == "wd_rec":  # Rectangular Wooden Cross-Section
         fig, ax, offset = plot_rectangle_with_dimensions(section.b, section.h, 'brown', '/')
         legend = (f'{section.wood_type.mech_prop}, prod_ID:{section.wood_type.prod_id} \n'
@@ -508,6 +568,13 @@ def plot_stirrups(ax, section, offset, color='blue'):
     for (x1, y1, x2, y2) in stirrup_positions:
         stirrup = plt.Line2D([x1+offset, x2+offset], [y1+offset, y2+offset], color=color, linewidth=2)
         ax.add_line(stirrup)
+
+def plot_pt_tendons(ax, section, offset, color='red'):
+    x = np.linspace(0, section.b, 50)
+    y_support = section.h / 2 + section.e_support
+    y_midspan = section.h / 2 + section.e_midspan
+    y = y_support + 4 * (y_midspan - y_support) * (x / section.b) * (1 - x / section.b)
+    ax.plot(x + offset, y + offset, color=color, linewidth=1.5, linestyle='--')
 
 def get_rebar_positions(section):
     # create x and y coordinates of lower longitudinal reinforcement

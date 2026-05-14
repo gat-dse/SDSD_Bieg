@@ -1,0 +1,515 @@
+@startuml
+title UML Diagramm
+
+header
+Author: Jonathan Bieg
+Date: 02.03.2026
+Project: SDSD
+endheader
+
+footer
+ETHZ - IbK
+endfooter
+
+' ================== GLOBAL STYLE ==================
+left to right direction
+skinparam linetype ortho
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam defaultFontName TimesNewRoman
+skinparam defaultFontSize 13
+
+skinparam package {
+  BorderColor #666
+  FontStyle bold
+}
+
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #333
+}
+
+skinparam database {
+  BackgroundColor #F4F4F4
+  BorderColor #666
+}
+
+' ================== DATABASES ==================
+database "260126_Datenbankdefinition" {
+  entity "products" {
+    ID : int
+    PRO_ID : int
+    --
+    EPD_ID : int
+    SOURCE : string
+    KBOB_ID_NR : string
+    EPD_DATE : string
+    VALID_TO : string
+    COUNTRY : string
+    PRODUCT_NAME : string
+    MATERIAL_GROUP : string
+    MATERIAL : string
+    CEMENT : string
+    MECH_PROP : string
+    DENSITY : double
+    EXPOSITIONSKLASSE : string
+    GROESSTKORN : string
+    CHLORIDGEHALT : string
+    KONSISTENZKLASSE : string
+    Total_GWP : double
+    A1toA3_GWP : double
+    C1toC4_GWP : double
+    COST : double
+  }
+
+  entity "material_prop" {
+    mat_ID : int
+    --
+    name : string
+    strength_comp : double
+    strength_tens : double
+    strength_bend : double
+    strength_shea : double
+    E_modulus : double
+    density_load : double
+    burn_rate : double
+    phi : double
+  }
+
+  entity "floor_struc_prop" {
+    mat_ID : int
+    --
+    name : string
+    h_fix : double
+    E : double
+    density : double
+    weight : double
+    GWP : double
+    Cost : double
+    T_construction : double
+  }
+
+  entity "connector_TCC" {
+    mat_ID : int
+    --
+    name : string
+    d : double
+    K_ser : double
+  }
+}
+
+database "slab_properties" {
+  entity "slab_properties" {
+    NAME : string
+    RAENDER : string
+    LX : double
+    LY : double
+    --
+    MX_POS : double
+    MY_POS : double
+    MX_NEG : double
+    MY_NEG : double
+    V_POS : double
+    V_NEG : double
+    W : double
+    F : double
+  }
+}
+
+' ================== MATERIAL DEFINITIONS ==================
+package "Material Definitions" {
+  class Wood {
+    - mech_prop, prod_id : string
+    - fmk, fvd, Emmean, weight, burn_rate, phi : double
+    - density, GWP, cost, construction_time, fmd : double
+    + __init__(mech_prop : string, database : string, prod_id : string = "undef")
+    + get_design_values(gamma_m : double = 1.7, eta_m : double = 1, eta_t : double = 1, eta_w : double = 1) : double
+  }
+
+  class ReadyMixedConcrete {
+    - mech_prop, prod_id : string
+    - dmax : int
+    - fck, fctm, Ecm, weight, phi : double
+    - density, GWP, cost, cost2, construction_time : double
+    - fcd, tcd, ec2d : double
+    + __init__(mech_prop : string, database : string, dmax : int = 32, prod_id : string = "undef")
+    + get_design_values(gamma_c : double = 1.5, eta_t : double = 1) : tuple
+  }
+
+  class SteelReinforcingBar {
+    - mech_prop, prod_id : string
+    - fsk, Es, density, GWP, cost, construction_time, fsd : double
+    + __init__(mech_prop : string, database : string, prod_id : string = "undef")
+    + get_design_values(gamma_s : double = 1.15) : double
+  }
+
+  class PrestressingSteel #PaleGreen {
+    - mech_prop, prod_id : string
+    - fpk, fp01k, Ep, eud, density, GWP, cost, construction_time, fpd : double
+    + __init__(mech_prop : string, database : string, prod_id : string = "undef")
+    + get_design_values(gamma_p : double = 1.15) : double
+  }
+
+  class ConnectorTCC #PaleGreen {
+    - K_ser : double
+    + __init__(mech_prop : string, database : string, prod_id : string = "undef")
+    + get_design_values()
+  }
+}
+
+' ================== STRUCTURAL SECTIONS ==================
+package "Structural Sections" {
+  abstract class Section {
+    - section_type : string
+    + __init__(section_type : string)
+  }
+
+  abstract class SupStrucRectangular {
+    - section_type : string
+    - b, h, a_brutt, iy, phi : double
+    + __init__(section_type : string, b : double, h : double, phi : double = 0)
+    + calc_area() : double
+    + calc_moment_of_inertia() : double
+    + calc_strength_elast(fy : double, ty : double) : tuple
+    + calc_strength_plast(fy : double, ty : double) : tuple
+    + calc_weight(spec_weight : double) : double
+  }
+
+  class RectangularWood {
+    - wood_type : Wood
+    - qs_class_n, qs_class_p : int
+    - mu_max, mu_min, vu_p, vu_n, g0k, ei1, co2, cost, ei_b, xi : double
+    + __init__(wood_type : Wood, b : double, h : double, phi : double = 0.6, xi : double = 0.01, ei_b : double = 0.0)
+    + {static} fire_resistance(member : Member1D) : double
+    + {static} remaining_section(section : Section, fire : list, t : double = 60, dred : double = 0.007) : RectangularWood
+  }
+
+  class RectangularConcrete {
+    - concrete_type : ReadyMixedConcrete
+    - rebar_type : SteelReinforcingBar
+    - bw, bw_bg : list
+    - qs_class_n, qs_class_p : int
+    - c_nom, mr_p, mr_n, d, ds, mu_max, mu_min : double
+    - x_p, x_n, as_p, as_n, roh, rohs, vu_p, vu_n, as_bw : double
+    - g0k, joint_surcharge, co2, cost, ei1, ei_b, xi, ei2 : double
+    + __init__(concrete_type : ReadyMixedConcrete, rebar_type : SteelReinforcingBar, b : double, h : double, di_xu : double, s_xu : double, di_xo : double, s_xo : double, di_yu : double = 0.01, s_yu : double = 0.15, di_yo : double = 0.01, s_yo : double = 0.15, di_bw : double = 0.0, s_bw : double = 0.15, n_bw : int = 0, phi : double = 2.0, c_nom : double = 0.02, xi : double = 0.02, jnt_srch : double = 0.15)
+    - calc_d() : tuple
+    - calc_mu(sign : string) : tuple
+    + calc_shear_resistance(d_installation : double = 0.0) : tuple
+    + calc_punching_shear_resistance(column_width : double = 0.25, column_length : double = 0.25, ke : double = 0.9, l_x : double = None, l_y : double = None, m_ed = None, m_rd = None, rotation_factor : double = 1.0, v_prestress : double = 0.0) : double
+    + calc_punching_shear_reinforcement_resistance(d_v : double) : double
+    + {static} mu_unsigned(...) : tuple
+    + {static} vu_unsigned(...) : double
+    + {static} f_w_ger(...) : double
+    + {static} fire_resistance(section : Section) : double
+  }
+
+  class PostTensionedConcrete #PaleGreen {
+    - pt_steel_type : PrestressingSteel
+    - l_x, l_y, b, h, A_p, c_nom_pt : double
+    - layout : list
+    - e_support, e_midspan, dp, f, f_x, f_y : double
+    - Psx, Psy, pdx, pdy, Px_total, Py_total : double
+    - m_r, ei1, ei2, mu_max, mu_min : double
+    + __init__(concrete_type : ReadyMixedConcrete, rebar_type : SteelReinforcingBar, pt_steel_type : PrestressingSteel, l_x : double, l_y : double, b : double, h : double, di_xu : double, s_xu : double, di_xo : double, s_xo : double, di_yu : double = 0.006, s_yu : double = 0.15, di_yo : double = 0.006, s_yo : double = 0.15, di_bw : double = 0.0, s_bw : double = 0.15, n_bw : int = 0, phi : double = 2.0, c_nom : double = 0.02, xi : double = 0.02, jnt_srch : double = 0.1, layout : list = [1,0,1,0], c_nom_pt : double = 0.03, A_p : double = 150e-6)
+    + calc_eccentricity() : tuple
+    + set_minimalReinforcement() : tuple
+    + set_loadBalancing(degree_of_posttensioning : double = 0.7, longterm_losses : double = 0.15) : dict
+    + calc_mr_pt(P_total : double, l : double) : double
+    + calc_EIeff(P_total : double, l : double, MEd_SLS : double, M_sec : double, m_r : double) : tuple
+    + calc_mu_pt(P_total : double, l : double, sign : string = "pos") : tuple
+    + calc_punching_shear_resistance(...) : double
+    + calc_punching_prestress_deviation_force(column_width : double, column_length : double) : double
+    + calc_prestress_deviation_loads() : tuple
+    + calc_prestress_shear_deviation_force(direction : string = "x") : double
+    + calc_prestress_sin_beta() : tuple
+    + get_secondaryInternalForces(system : Slab) : tuple
+    + {static} fire_resistance(section : Section) : double
+  }
+
+  abstract class SupStrucRibbedConcrete {
+    - b, b_w, h, h_f, h_w, l0, b_eff, a_brutt, z_s, iy, w, phi : double
+    + __init__(section_type : string, b : double, b_w : double, h : double, h_f : double, l0 : double, phi : double = 0)
+    + calc_area() : double
+    + calc_beff() : double
+    + calc_center_of_gravity() : double
+    + calc_moment_of_inertia() : double
+    + calc_weight(spec_weight : double = 25) : double
+  }
+
+  class RibbedConcrete {
+    - concrete_type : ReadyMixedConcrete
+    - rebar_type : SteelReinforcingBar
+    - bw, bw_bg : list
+    - mu_max, mu_min, vu_p, vu_n, ei1, ei2, co2, cost : double
+    + __init__(...)
+    - calc_d() : tuple
+    - calc_mu(sign : string) : tuple
+    - calc_mu_pb(sign : string) : tuple
+    + calc_shear_resistance(bauteil : string = "Platte", d_installation : double = 0.0) : tuple
+    + {static} fire_resistance(section : Section) : double
+  }
+
+  abstract class SupStrucRibWood {
+    - b, h, a, t2, t3, bc_ef, bt_ef, a_brutt, z_s, iy, iy_inf, w, l0 : double
+    - n, n_inf : list
+    + __init__(section_type : string, b : double, h : double, a : double, t2 : double, t3 : double, n : list, n_inf : list)
+    + calc_area() : double
+    + calc_bef(sign : string = "comp") : double
+    + calc_center_of_gravity() : double
+    + calc_moment_of_inertia() : tuple
+  }
+
+  class RibWood {
+    - wood_type_1, wood_type_2, wood_type_3 : Wood
+    - mu_max, mu_min, vu_p, vu_n, g0k, ei1, co2, cost, ei_b, xi : double
+    + __init__(...)
+    + calc_n() : tuple
+    + calc_mu() : tuple
+    + calc_vu() : double
+    + {static} fire_resistance(section : Section) : double
+  }
+
+  abstract class SupStrucTCC #PaleGreen {
+    - h_c, h_w, b_w, d, a_ribs, l0, b_ceff, A_w, A_c, I_yw, I_yc, z_s, w : double
+    + __init__(section_type : string, a_ribs : double, h_c : double, h_w : double, b_w : double, d : double, l0 : double)
+    - calc_area() : tuple
+    - calc_beff() : double
+    - calc_moment_of_inertia() : tuple
+    - calc_weight() : double
+  }
+
+  class TCC #PaleGreen {
+    - concrete_type : ReadyMixedConcrete
+    - rebar_type : SteelReinforcingBar
+    - wood_type : Wood
+    - connector_type : ConnectorTCC
+    - gamma_ULS, gamma_SLS, EI_ULS, EI_SLS, Mu, Vu : list
+    - co2, cost, g0k, ei1, xi, ei_b, mu_max, vu_p : double
+    + __init__(...)
+    - calc_gamma() : tuple
+    - calc_EIeff() : tuple
+    - calc_mu() : list
+    - calc_vu() : list
+    + {static} fire_resistance(member : Member1D) : double
+  }
+}
+
+' ================== FLOOR STRUCTURE ==================
+package "Floor structure" {
+  class MatLayer {
+    - name : string
+    - h, GWP, density, weight, ei, gk, co2 : double
+    + __init__(mat_name : string, h_input : double, roh_input : double, database : string)
+  }
+
+  class FloorStruc {
+    - co2, gk_area, h, ei : double
+    - layers : list<MatLayer>
+    + __init__(mat_layers : list, database_name : string)
+  }
+}
+
+' ================== STRUCTURAL SYSTEMS ==================
+package "Structural system" {
+  class BeamSimpleSup {
+    - l_tot, li_max, alpha_w, kf2, alpha_w_f_cd : double
+    - alpha_m, alpha_v, qs_cl_erf : list
+    + __init__(length : double)
+  }
+
+  class BeamTwoSpan {
+    - l_tot, li_max, alpha_w, kf2, alpha_w_f_cd : double
+    - alpha_m, alpha_v, qs_cl_erf : list
+    + __init__(length : double)
+  }
+
+  class BeamContinuousSupEl {
+    - l_tot, li_max, alpha_w, kf2, alpha_w_f_cd : double
+    - alpha_m, alpha_v, qs_cl_erf : list
+    + __init__(length : double)
+  }
+
+  class BeamContinuousSupPl {
+    - l_tot, li_max, alpha_w, kf2, alpha_w_f_cd : double
+    - alpha_m, alpha_v, qs_cl_erf : list
+    + __init__(length : double)
+  }
+
+  class Slab {
+    - raender : string
+    - lx, ly, li_max, l_tot, alpha_w, kf2, alpha_w_f_cd : double
+    - column_width, column_length, column_ke, column_tributary_area : double
+    - has_columns : bool
+    - result, alpha_m_x, alpha_m_y, alpha_v, qs_cl_erf : list
+    + __init__(length_x : double, length_y : double, support : string, column_width : double = 0.25, column_length : double = 0.25, column_ke : double = 0.9, column_tributary_area : double = None)
+  }
+}
+
+' ================== LOADS AND REQUIREMENTS ==================
+package "Loads" {
+  class LoadCombinations #PaleGreen {
+    - g0k, g1k, g2k, qk : double
+    - psi : list
+    - gamma_g, gamma_q : double
+    + __init__(g0k : double, g1k : double, g2k : double, qk : double = 2e3, psi : list = [0.7,0.5,0.3], gamma_g : double = 1.35, gamma_q : double = 1.5)
+    + uls() : double
+    + uls_short() : double
+    + uls_per() : double
+    + sls_rare() : double
+    + sls_freq() : double
+    + sls_per() : double
+  }
+}
+
+package "Requirements" {
+  class Requirements {
+    - install, fire : string
+    - lw_install, lw_use, lw_app, f1, a_cd, w_f_cdr1, alpha_ve_cd, t_fire : double
+    + __init__(install : string = "ductile", lw_install : double = 350, lw_use : double = 350, lw_app : double = 300, f1 : double = 8, a_cd : double = 0.1, w_f_cdr1 : double = 1.0e-3, alpha_ve_cd : double = 0.333, fire : string = "R60")
+  }
+}
+
+' ================== MEMBERS ==================
+package "Member" {
+  class Member1D #LightYellow {
+    + section : Section
+    + system : Beam
+    + floorstruc : FloorStruc
+    + requirements : Requirements
+    + load_combinations : LoadCombinations
+    - li_max, m, mkd_n, mkd_p, qu, qk_zul_gzt : double
+    - w_install, w_use, w_app, f1, a_ed, wf_ed, ve_ed, ve_cd : double
+    - fire : list
+    + __init__(section, system, floorstruc, requirements, g2k : double = 0.0, qk : double = 2e3, psi0 : double = 0.7, psi1 : double = 0.5, psi2 : double = 0.3, fire_b : bool = True, fire_l : bool = False, fire_t : bool = False, fire_r : bool = False)
+    + calc_qu() : double
+    + calc_qk_zul_gzt()
+    + calc_f1() : double
+    + calc_vib1(f0 : double = 700) : double
+    + calc_vib2(f : double = 1000) : tuple
+    + get_fire_resistance()
+  }
+
+  class Member2D #LightYellow {
+    + section : Section
+    + system : Slab
+    + floorstruc : FloorStruc
+    + requirements : Requirements
+    + load_combinations : LoadCombinations
+    - li_min, li_max, m : double
+    - mkd_n, mkd_p, mkd_n_y, mkd_p_y, qu, qk_zul_gzt : double
+    - w_install, w_use, w_app, f1, a_ed, wf_ed, ve_ed, ve_cd : double
+    - fire : list
+    + __init__(section, system, floorstruc, requirements, g2k : double = 0.0, qk : double = 2e3, psi0 : double = 0.7, psi1 : double = 0.5, psi2 : double = 0.3, fire_b : bool = True, fire_l : bool = False, fire_t : bool = False, fire_r : bool = False, evaluate_service : bool = True)
+    + calc_qu() : double
+    + calc_shear_qu() : double
+    + calc_shear_prestress_deviation_force() : double
+    + calc_shear_secondary_force(index : int = 0) : double
+    + calc_punching_qu() : double
+    + calc_punching_m_ed(q_area : double) : tuple
+    + calc_punching_m_rd() : tuple
+    + calc_punching_secondary_force() : double
+    + calc_punching_resistance_for_current_loads() : double
+    + calc_qk_zul_gzt()
+    + calc_f1() : double
+    + calc_vib1(f0 : double = 700) : double
+    + calc_vib2(f : double = 1000) : tuple
+    + get_fire_resistance()
+  }
+}
+
+' ================== OPTIMIZATION AND PLOTTING ==================
+package "Optimization 2D" {
+  class RandomDisplacementBounds #LightBlue {
+    - xmin, xmax, stepsize
+    + __call__(x)
+  }
+
+  class struct_optimization_2D <<module>> {
+    + opt_rc_rec(m : Member2D, to_opt : string = "GWP", criterion : string = "ULS", max_iter : int = 100, h_min : double = 0.16) : RectangularConcrete
+    + opt_pc_rec(m : Member2D, to_opt : string = "GWP", criterion : string = "ULS", max_iter : int = 100, h_min : double = 0.18) : PostTensionedConcrete
+    + opt_rc_rib(m : Member2D, to_opt : string = "GWP", criterion : string = "ULS", max_iter : int = 100) : RibbedConcrete
+    + opt_wd_rib(m : Member2D, to_opt : string = "GWP", criterion : string = "ULS", max_iter : int = 100) : RibWood
+    + get_optimized_section(member : Member2D, criterion : string, to_opt : string, max_iter : int, h_min : double = 0.16) : Section
+  }
+}
+
+package "Plotting" {
+  class plot_datasets_2D <<module>> {
+    + plot_dataset(lengths : list, database_name : string, criteria : list, optima : list, floorstruc : FloorStruc, requirements : Requirements, crsec_type : string, mat_names : list, g2k : double = 0.75, qk : double = 2.0, max_iter : int = 100, idx_vrfctn : int = -1) : tuple
+    + plot_section(section : Section)
+    + plot_section_dataset(database_name : string, crsec_type : string, mat_names : list, ax, gwp_budget : double = 50)
+  }
+}
+
+' ================== RELATIONSHIPS ==================
+' Database access
+Wood ..> material_prop
+ReadyMixedConcrete ..> material_prop
+SteelReinforcingBar ..> material_prop
+PrestressingSteel ..> material_prop
+ConnectorTCC ..> connector_TCC
+Wood ..> products
+ReadyMixedConcrete ..> products
+SteelReinforcingBar ..> products
+PrestressingSteel ..> products
+MatLayer ..> floor_struc_prop
+Slab ..> slab_properties
+
+' Inheritance
+Section <|-- SupStrucRectangular
+SupStrucRectangular <|-- RectangularWood
+SupStrucRectangular <|-- RectangularConcrete
+RectangularConcrete <|-- PostTensionedConcrete
+Section <|-- SupStrucRibbedConcrete
+SupStrucRibbedConcrete <|-- RibbedConcrete
+Section <|-- SupStrucRibWood
+SupStrucRibWood <|-- RibWood
+Section <|-- SupStrucTCC
+SupStrucTCC <|-- TCC
+
+' Material aggregations
+RectangularWood o-- Wood
+RectangularConcrete o-- ReadyMixedConcrete
+RectangularConcrete o-- SteelReinforcingBar
+PostTensionedConcrete o-- PrestressingSteel
+RibbedConcrete o-- ReadyMixedConcrete
+RibbedConcrete o-- SteelReinforcingBar
+RibWood o-- Wood
+TCC o-- ReadyMixedConcrete
+TCC o-- SteelReinforcingBar
+TCC o-- Wood
+TCC o-- ConnectorTCC
+
+' Floor structure
+FloorStruc *-- MatLayer
+
+' Members
+Member1D o-- Section
+Member1D o-- BeamSimpleSup
+Member1D o-- BeamTwoSpan
+Member1D o-- BeamContinuousSupEl
+Member1D o-- BeamContinuousSupPl
+Member1D o-- FloorStruc
+Member1D o-- Requirements
+Member1D *-- LoadCombinations
+
+Member2D o-- Section
+Member2D o-- Slab
+Member2D o-- FloorStruc
+Member2D o-- Requirements
+Member2D *-- LoadCombinations
+
+' Workflow dependencies
+struct_optimization_2D ..> Member2D
+struct_optimization_2D ..> RectangularConcrete
+struct_optimization_2D ..> PostTensionedConcrete
+struct_optimization_2D ..> RibbedConcrete
+struct_optimization_2D ..> RibWood
+plot_datasets_2D ..> struct_optimization_2D
+plot_datasets_2D ..> Member2D
+plot_datasets_2D ..> Slab
+plot_datasets_2D ..> Section
+
+@enduml
