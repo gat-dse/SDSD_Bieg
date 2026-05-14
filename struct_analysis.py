@@ -467,7 +467,8 @@ class RectangularConcrete(SupStrucRectangular):
             return min(vrds, vrdc) #Querkraftwiderstand MIT Querkraftbewehrung SIA 262
 
     def calc_punching_shear_resistance(self, column_width=0.25, column_length=0.25, ke=0.9,
-                                       l_x=None, l_y=None, m_ed=None, m_rd=None):
+                                       l_x=None, l_y=None, m_ed=None, m_rd=None,
+                                       rotation_factor=1.0, v_prestress=0.0):
         """
         Punching shear resistance for slabs without punching shear reinforcement.
 
@@ -480,10 +481,22 @@ class RectangularConcrete(SupStrucRectangular):
         m_ed = abs(m_ed) if m_ed is not None else abs(self.mr_p)
         r_s = 0.22 * max(l_x if l_x is not None else 0, l_y if l_y is not None else 0, d_v)
         k_dg = max(32 / (16 + self.concrete_type.dmax), 0.75)
-        psi = 1.5 * r_s / d_v * self.rebar_type.fsd / self.rebar_type.Es * (m_ed / m_rd) ** 1.5
+        psi = rotation_factor * 1.5 * r_s / d_v * self.rebar_type.fsd / self.rebar_type.Es * (m_ed / m_rd) ** 1.5
         k_psi = min(0.6, 1 / (1.5 + 0.9 * k_dg * d_v * psi))
-        v_rd = k_psi * self.concrete_type.tcd * u_1 * d_v
-        return max(v_rd * ke, 0)
+        v_rd_c = k_psi * self.concrete_type.tcd * u_1 * d_v
+        v_rd_s = self.calc_punching_shear_reinforcement_resistance(d_v)
+        v_rd_max = 2.0 * v_rd_c
+        v_rd = min(v_rd_c + v_rd_s, v_rd_max)
+        return max(v_rd * ke + v_prestress, 0)
+
+    def calc_punching_shear_reinforcement_resistance(self, d_v):
+        di, s, n = self.bw_bg
+        if di <= 0 or s <= 0 or n <= 0:
+            return 0.0
+        reinforced_radius = 1.5 * d_v
+        n_perimeters = max(math.floor(reinforced_radius / s), 1)
+        a_sw = np.pi * di ** 2 / 4 * n * n_perimeters
+        return a_sw * self.rebar_type.fsd
 
     @staticmethod
     def f_w_ger(roh, rohs, phi, h, d):
@@ -739,6 +752,50 @@ class PostTensionedConcrete(RectangularConcrete):
             [mu, x, a_s, qs_klasse] = [0, 0, 0, 0]
             print("sign of moment resistance has to be 'neg' or 'pos'")
         return mu, x, a_s, qs_klasse
+
+    def calc_punching_shear_resistance(self, column_width=0.25, column_length=0.25, ke=0.9,
+                                       l_x=None, l_y=None, m_ed=None, m_rd=None,
+                                       rotation_factor=1.0, v_prestress=0.0):
+        v_prestress += self.calc_punching_prestress_deviation_force(column_width, column_length)
+        return super().calc_punching_shear_resistance(
+            column_width=column_width,
+            column_length=column_length,
+            ke=ke,
+            l_x=l_x,
+            l_y=l_y,
+            m_ed=m_ed,
+            m_rd=m_rd,
+            rotation_factor=rotation_factor,
+            v_prestress=v_prestress,
+        )
+
+    def calc_punching_prestress_deviation_force(self, column_width, column_length):
+        d_v = self.d
+        control_width_x = column_width + 2 * d_v
+        control_width_y = column_length + 2 * d_v
+        sin_beta_x, sin_beta_y = self.calc_prestress_sin_beta()
+        p_x_distributed = self.pdx * control_width_y
+        p_y_distributed = self.pdy * control_width_x
+        return max((self.Psx + p_x_distributed) * sin_beta_x + (self.Psy + p_y_distributed) * sin_beta_y, 0.0)
+
+    def calc_prestress_deviation_loads(self):
+        # Equivalent upward load for parabolic tendons: u = 8 * P * f / L^2.
+        p_x = self.Psx / max(self.l_y, 1e-9) + self.pdx
+        p_y = self.Psy / max(self.l_x, 1e-9) + self.pdy
+        u_x = 8 * p_x * self.f / max(self.l_x ** 2, 1e-9)
+        u_y = 8 * p_y * self.f / max(self.l_y ** 2, 1e-9)
+        return max(u_x, 0.0), max(u_y, 0.0)
+
+    def calc_prestress_shear_deviation_force(self, direction="x"):
+        sin_beta_x, sin_beta_y = self.calc_prestress_sin_beta()
+        if direction == "y":
+            return (self.Psy / max(self.l_x, 1e-9) + self.pdy) * sin_beta_y
+        return (self.Psx / max(self.l_y, 1e-9) + self.pdx) * sin_beta_x
+
+    def calc_prestress_sin_beta(self):
+        sin_beta_x = 4 * self.f / max(self.l_x, 1e-9)
+        sin_beta_y = 4 * self.f / max(self.l_y, 1e-9)
+        return sin_beta_x, sin_beta_y
     
     def get_secondaryInternalForces(self, system):
         # in: self, system (structural system of the member)
@@ -2290,7 +2347,7 @@ class Member2D:
             if self.system.has_columns:
                 qu_shear = self.calc_punching_qu()
             else:
-                qu_shear = self.section.vu_p / (max(alpha_v) * self.system.l_tot)
+                qu_shear = self.calc_shear_qu()
         else:
             if qs_class_vorh[0] <= qs_class_erf[0] and qs_class_vorh[1] <= qs_class_erf[1]:
                 qu_bend = min(self.section.mu_max / (max(alpha_m) * self.system.l_tot ** 2), self.section.mu_min /
@@ -2300,14 +2357,96 @@ class Member2D:
             if self.system.has_columns:
                 qu_shear = self.calc_punching_qu()
             else:
-                qu_shear = min(self.section.vu_p / (max(alpha_v) * self.system.l_tot),
-                               self.section.vu_n / (min(alpha_v) * self.system.l_tot))
+                qu_shear = self.calc_shear_qu()
         return min(qu_bend, qu_shear)
+
+    def calc_shear_qu(self):
+        candidates = []
+        for i, alpha_v in enumerate(self.system.alpha_v):
+            if abs(alpha_v) <= 1e-12:
+                continue
+            v_rd = self.section.vu_p if alpha_v > 0 else abs(self.section.vu_n)
+            p_sin = self.calc_shear_prestress_deviation_force()
+            v_sec = self.calc_shear_secondary_force(i)
+            candidates.append((v_rd + p_sin - v_sec) / (abs(alpha_v) * self.system.l_tot))
+        return max(min(candidates), 0.0) if candidates else float("inf")
+
+    def calc_shear_prestress_deviation_force(self):
+        if not hasattr(self.section, "calc_prestress_shear_deviation_force"):
+            return 0.0
+        direction = "x" if self.li_max == self.system.lx else "y"
+        return self.section.calc_prestress_shear_deviation_force(direction)
+
+    def calc_shear_secondary_force(self, index=0):
+        if not hasattr(self.section, "get_secondaryInternalForces"):
+            return 0.0
+        _, _, v_sec = self.section.get_secondaryInternalForces(self.system)
+        if not v_sec:
+            return 0.0
+        return v_sec[min(index, len(v_sec) - 1)]
 
     def calc_punching_qu(self):
         if not hasattr(self.section, "calc_punching_shear_resistance"):
             return float("inf")
-        m_ed = max(abs(self.mkd_n), abs(self.mkd_p), abs(self.mkd_n_y), abs(self.mkd_p_y))
+        m_rd = max(abs(self.section.mu_max), abs(self.section.mu_min), abs(getattr(self.section, "m_r", 0)), 1e-9)
+        area = self.system.column_tributary_area
+
+        def residual(q_area):
+            m_ed = self.calc_punching_m_ed(q_area)
+            v_rd = self.section.calc_punching_shear_resistance(
+                column_width=self.system.column_width,
+                column_length=self.system.column_length,
+                ke=self.system.column_ke,
+                l_x=self.system.lx,
+                l_y=self.system.ly,
+                m_ed=m_ed,
+                m_rd=m_rd,
+            )
+            v_sec = self.calc_punching_secondary_force()
+            return v_rd / area - (q_area + v_sec / area)
+
+        q_low = 0.0
+        q_high = max(self.qu, 1.0)
+        while residual(q_high) > 0 and q_high < 1e7:
+            q_high *= 2
+        for _ in range(40):
+            q_mid = 0.5 * (q_low + q_high)
+            if residual(q_mid) >= 0:
+                q_low = q_mid
+            else:
+                q_high = q_mid
+        return q_low
+
+    def calc_punching_m_ed(self, q_area):
+        moments = [
+            q_area * self.system.alpha_m_x[0] * self.system.l_tot ** 2,
+            q_area * self.system.alpha_m_x[1] * self.system.l_tot ** 2,
+            q_area * self.system.alpha_m_y[0] * self.li_min ** 2,
+            q_area * self.system.alpha_m_y[1] * self.li_min ** 2,
+        ]
+        if hasattr(self.section, "get_secondaryInternalForces"):
+            m_sec_x, m_sec_y, _ = self.section.get_secondaryInternalForces(self.system)
+            moments[0] += m_sec_x[0]
+            moments[1] += m_sec_x[1]
+            moments[2] += m_sec_y[0]
+            moments[3] += m_sec_y[1]
+        return max(abs(m) for m in moments)
+
+    def calc_punching_secondary_force(self):
+        if not hasattr(self.section, "get_secondaryInternalForces"):
+            return 0.0
+        _, _, v_sec = self.section.get_secondaryInternalForces(self.system)
+        if not v_sec:
+            return 0.0
+        d_v = getattr(self.section, "d", 0.0)
+        control_width_x = self.system.column_width + 2 * d_v
+        control_width_y = self.system.column_length + 2 * d_v
+        return v_sec[0] * control_width_y + v_sec[min(1, len(v_sec) - 1)] * control_width_x
+
+    def calc_punching_resistance_for_current_loads(self):
+        if not hasattr(self.section, "calc_punching_shear_resistance"):
+            return float("inf")
+        m_ed = self.calc_punching_m_ed(self.qu)
         m_rd = max(abs(self.section.mu_max), abs(self.section.mu_min), abs(getattr(self.section, "m_r", 0)), 1e-9)
         v_rd = self.section.calc_punching_shear_resistance(
             column_width=self.system.column_width,
