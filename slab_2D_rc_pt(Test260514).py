@@ -137,5 +137,9 @@ for mem_group in vrfctn_members:
             print("Psx/Psy =", round(mem.section.Psx / 1e3, 2), round(mem.section.Psy / 1e3, 2), "[kN]")
             print("sin(beta_x/y) =", tuple(round(v, 4) for v in mem.section.calc_prestress_sin_beta()))
 
+# SAVE FIGURE TO FILE
+output_path = "/Users/jonathanbieg/Documents/Master Thesis/1_Code/Python Repository/SDSD_Bieg/plots/rc_vs_pc_comparison.png"
+plt.savefig("rc_vs_pc_comparison.png", dpi=600, bbox_inches='tight')  # Increased DPI for better quality
+
 # SHOW FIGURE
-plt.show()
+#plt.show()

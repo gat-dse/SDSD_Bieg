@@ -1330,6 +1330,7 @@ class RibWood(SupStrucRibWood):
         self.ei_b = ei_b  # stiffness perpendicular to direction of span
         self.xi = xi  # damping factor, preset value see: HBT, Page 47 (higher value for some buildups possible)
         self.h_installation = self.h # height available for installation of services. In case of box beam floor, this is the web height. 
+        self.hollow_core_insulation_thickness = self.h #height for insulation for hollow - core system
     
 
     def calc_n(self):
@@ -1772,6 +1773,8 @@ class MatLayer:  # create a material layer
         result = cursor.fetchall()
         h_fix, e, density, weight, self.GWP, cost, self.construction_time = result[0]
         if h_input is False:
+            if h_fix is None:
+                raise ValueError(f"Layer {mat_name} requires a fixed height in floor_struc_prop when h_input is False.")
             self.h = h_fix
         else:
             self.h = h_input
@@ -1793,6 +1796,8 @@ class MatLayer:  # create a material layer
 
 class FloorStruc:  # create a floor structure
     def __init__(self, mat_layers, database_name):
+        self.layer_specs = list(mat_layers)
+        self.database_name = database_name
         self.layers = []
         self.co2 = 0
         self.cost = 0 #CHF/m^2
@@ -1809,6 +1814,116 @@ class FloorStruc:  # create a floor structure
             self.gk_area += current_layer.gk
             self.h += current_layer.h
             self.ei = max(self.ei, current_layer.ei)
+
+
+class AcousticRequirements:
+    def __init__(self, rw_min=58.0, lnw_max=46.0):
+        self.rw_min = rw_min
+        self.lnw_max = lnw_max
+
+
+class AcousticResult:
+    def __init__(self, floorstruc, rw, lnw, gravel_thickness, screed_thickness,
+                 delta_gravel, delta_hollow_core, delta_rw_floating, delta_lnw_floating):
+        self.floorstruc = floorstruc
+        self.rw = rw
+        self.lnw = lnw
+        self.gravel_thickness = gravel_thickness
+        self.screed_thickness = screed_thickness
+        self.delta_gravel = delta_gravel
+        self.delta_hollow_core = delta_hollow_core
+        self.delta_rw_floating = delta_rw_floating
+        self.delta_lnw_floating = delta_lnw_floating
+
+
+class AcousticFloorGenerator:
+    parquet = "'Parkett 2-Schicht werkversiegelt, 11 mm'"
+    glass_wool = "'Glaswolle'"
+    cement_screed = "'Unterlagsboden Zement, 85 mm'"
+    gravel = "'Kies gebrochen'"
+
+    @staticmethod
+    def section_mass(section):
+        return section.w / 10 # convert from N/m^2 to kg/m^2
+
+    @staticmethod
+    def hollow_core_damping(section):
+        h_ins = section.hollow_core_insulation_thickness if isinstance(section, RibWood) else 0.0
+        return min(6 * h_ins / 0.20, 7.0)
+
+    @staticmethod
+    def gravel_damping(m_gravel, m_section):
+        if m_gravel <= 0:
+            return 0.0
+        return min(min(max(m_gravel / m_section, 1), 2) * m_gravel / 40, 6)
+
+    @staticmethod
+    def evaluate(section, database_name, layer_specs, screed_thickness=0.0,
+                 gravel_thickness=0.0, spring_stiffness=6.0):
+        floorstruc = FloorStruc(layer_specs, database_name)
+        return AcousticFloorGenerator.evaluate_floorstruc(section, floorstruc, spring_stiffness)
+
+    @staticmethod
+    def evaluate_floorstruc(section, floorstruc, spring_stiffness=6.0):
+        m_section = AcousticFloorGenerator.section_mass(section)
+        gravel_layers = [layer for layer in floorstruc.layers if layer.name == AcousticFloorGenerator.gravel]
+        m_gravel = sum(layer.density * layer.h for layer in gravel_layers)
+        m_base = m_section + m_gravel
+
+        rw_mass = 37.5 * np.log10(m_base) - 42
+        lnw_mass = 164 - 35 * np.log10(m_base)
+
+        delta_rw_floating = 0.0
+        delta_lnw_floating = 0.0
+        screed_layers = [layer for layer in floorstruc.layers if layer.name == AcousticFloorGenerator.cement_screed]
+        screed_thickness = sum(layer.h for layer in screed_layers)
+        if screed_thickness > 0:
+            m_screed = sum(layer.density * layer.h for layer in screed_layers)
+            f0_airborne = 1 / (2 * np.pi) * np.sqrt(spring_stiffness * 1e6 * (1 / m_base + 1 / m_screed))
+            delta_rw_floating = 74.4 - 20 * np.log10(f0_airborne) - rw_mass / 2
+            f0_impact = 160 * np.sqrt(spring_stiffness / m_screed)
+            band_frequencies = np.array([50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000,
+                                         1250, 1600, 2000, 2500, 3150, 4000, 5000])
+            delta_lnw_floating = np.average(30 * np.log10(band_frequencies / f0_impact))
+
+        delta_gravel = AcousticFloorGenerator.gravel_damping(m_gravel, m_section)
+        delta_hollow_core = AcousticFloorGenerator.hollow_core_damping(section)
+        rw = rw_mass + delta_rw_floating + delta_gravel + delta_hollow_core
+        lnw = lnw_mass - delta_lnw_floating - delta_gravel - delta_hollow_core
+        gravel_thickness = sum(layer.h for layer in gravel_layers)
+        return AcousticResult(floorstruc, rw, lnw, gravel_thickness, screed_thickness,
+                              delta_gravel, delta_hollow_core, delta_rw_floating, delta_lnw_floating)
+
+    @staticmethod
+    def generate(section, database_name, requirements=None, gravel_step=0.01, gravel_max=0.30):
+        requirements = requirements or AcousticRequirements()
+        base_layers = [[AcousticFloorGenerator.parquet, False, False]]
+        candidates = [
+            (0.0, base_layers),
+            (0.06, base_layers + [[AcousticFloorGenerator.glass_wool, False, False],
+                                  [AcousticFloorGenerator.cement_screed, 0.06, False]]),
+            (0.085, base_layers + [[AcousticFloorGenerator.glass_wool, False, False],
+                                   [AcousticFloorGenerator.cement_screed, 0.085, False]]),
+        ]
+
+        for screed_thickness, layers in candidates:
+            result = AcousticFloorGenerator.evaluate(section, database_name, layers, screed_thickness=screed_thickness)
+            if result.rw >= requirements.rw_min and result.lnw <= requirements.lnw_max:
+                return result
+
+        gravel_thickness = gravel_step
+        while gravel_thickness <= gravel_max + 1e-12:
+            layers = base_layers + [[AcousticFloorGenerator.gravel, gravel_thickness, False],
+                                    [AcousticFloorGenerator.glass_wool, False, False],
+                                    [AcousticFloorGenerator.cement_screed, 0.085, False]]
+            result = AcousticFloorGenerator.evaluate(
+                section, database_name, layers, screed_thickness=0.085, gravel_thickness=gravel_thickness
+            )
+            if result.rw >= requirements.rw_min and result.lnw <= requirements.lnw_max:
+                return result
+            gravel_thickness += gravel_step
+
+        return result
 
 #-----------------------------------------------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------
@@ -1955,6 +2070,11 @@ class Member1D:
         self.system = system
         self.floorstruc = floorstruc
         self.requirements = requirements
+        self.acoustic = AcousticFloorGenerator.evaluate_floorstruc(section, floorstruc)
+        self.acoustic_verified = (
+            self.acoustic.rw >= self.requirements.acoustic.rw_min
+            and self.acoustic.lnw <= self.requirements.acoustic.lnw_max
+        )
         self.li_max = self.system.li_max
 
         # Initialize LoadCombinations
@@ -2235,6 +2355,11 @@ class Member2D:
         self.system = system
         self.floorstruc = floorstruc
         self.requirements = requirements
+        self.acoustic = AcousticFloorGenerator.evaluate_floorstruc(section, floorstruc)
+        self.acoustic_verified = (
+            self.acoustic.rw >= self.requirements.acoustic.rw_min
+            and self.acoustic.lnw <= self.requirements.acoustic.lnw_max
+        )
         self.li_min = min(self.system.lx, self.system.ly)
         self.li_max = self.system.li_max
         # Initialize LoadCombinations
@@ -2601,7 +2726,7 @@ class Member2D:
 
 class Requirements:
     def __init__(self, install="ductile", lw_install=350, lw_use=350, lw_app=300, f1=8, a_cd=0.1, w_f_cdr1=1.0e-3,
-                 alpha_ve_cd=1 / 3, fire='R60'):
+                 alpha_ve_cd=1 / 3, fire='R60', rw_min=58.0, lnw_max=46.0):
         self.install = install
         self.lw_install = lw_install  # preset value: SIA 260
         self.lw_use = lw_use  # preset value: SIA 260
@@ -2611,3 +2736,4 @@ class Requirements:
         self.w_f_cdr1 = w_f_cdr1  # preset value: HBT, Seite 48
         self.alpha_ve_cd = alpha_ve_cd  # preset value: HBT, Seite 49
         self.t_fire = int(fire[1:])  # unit: [min]
+        self.acoustic = AcousticRequirements(rw_min, lnw_max)
