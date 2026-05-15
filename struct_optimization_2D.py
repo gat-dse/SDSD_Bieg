@@ -21,6 +21,12 @@ class RandomDisplacementBounds(object):
 
         return xnew
 
+
+def invalid_rectangular_geometry(h, c_nom, di_xu, di_xo, di_bw):
+    d = h - c_nom - di_bw - di_xu / 2
+    ds = h - c_nom - di_bw - di_xo / 2
+    return d <= 0 or ds <= 0
+
 # OPTIMIZATION OF CROSS-SECTIONS FOR DEFINED MEMBERS
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -83,6 +89,9 @@ def rc_rqs(var, add_arg):
     g2k = add_arg[14]
     qk = add_arg[15]
     phi, c_nom, xi, jnt_srch = add_arg[16:20]
+
+    if invalid_rectangular_geometry(h, c_nom, di_xu, di_xo, di_bw):
+        return 1e12
 
     # create section
     section = struct_analysis.RectangularConcrete(concrete, reinfsteel, b, h, di_xu, s_xu, di_xo, s_xo,
@@ -203,6 +212,9 @@ def pc_rqs(var, add_arg):
     s_xu, s_xo, s_yu, s_yo, s_bw, n_bw = add_arg[5:11]
     floorstruc, criteria, to_opt, criterion, g2k, qk = add_arg[11:17]
     phi, c_nom, xi, jnt_srch, layout, c_nom_pt, A_p = add_arg[17:24]
+
+    if invalid_rectangular_geometry(h, c_nom, di_xu, di_xo, di_bw):
+        return 1e12
 
     section = struct_analysis.PostTensionedConcrete(
         concrete, reinfsteel, pt_steel, system.lx, system.ly, b, h, di_xu, s_xu, di_xo, s_xo,

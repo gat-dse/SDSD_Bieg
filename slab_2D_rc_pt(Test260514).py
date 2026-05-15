@@ -5,6 +5,10 @@ import struct_analysis  # file with code for structural analysis
 import plot_datasets_2D  # file with code for plotting results in a standardized way
 import matplotlib.pyplot as plt
 
+import time
+print("START slab_2D_rc_pt(Test260514).py", flush=True)
+t0 = time.time()
+
 
 # define system lengths for plot (datapoints on x-axis of plot)
 lengths = [6, 8, 12]
@@ -14,7 +18,7 @@ idx_vrc = 1
 
 # max. number of iterations per optimization. Higher value leads to better results,
 # but post-tensioned slabs are much slower because each trial updates the PT design.
-max_iter = 25
+max_iter = 100
 
 # define content of plot
 criteria = ["ULS"]
@@ -69,6 +73,9 @@ data_max_new, vrfctn_members_new = plot_datasets_2D.plot_dataset(
 data_max = max_of_arrays(data_max, data_max_new)
 vrfctn_members.append(vrfctn_members_new)
 
+print(f"Done rc_rec after {time.time()-t0:.1f}s", flush=True)
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 # CREATE AND PLOT DATASET FOR POST-TENSIONED CONCRETE SLAB
 mat_names_pt = ["'ready_mixed_concrete'"]
@@ -88,6 +95,9 @@ data_max_new, vrfctn_members_new = plot_datasets_2D.plot_dataset(
 )
 data_max = max_of_arrays(data_max, data_max_new)
 vrfctn_members.append(vrfctn_members_new)
+
+print(f"Done rc_rec after {time.time()-t0:.1f}s", flush=True)
+
 
 
 # DEFINE LABELS OF PLOTS

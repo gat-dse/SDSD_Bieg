@@ -368,8 +368,6 @@ class RectangularConcrete(SupStrucRectangular):
     def calc_d(self):
         d = self.h - self.c_nom - self.bw_bg[0] - self.bw[0][0] / 2 #Statische Höhe für Positives Biegemoment
         ds = self.h - self.c_nom - self.bw_bg[0] - self.bw[1][0] / 2 #Statische Höhe für Negatives Biegemoment
-        if d <= 0 or ds <= 0:
-            print("d of ds<=0. Cross-section is not valid")
         return d, ds
 
     def calc_mu(self, sign='pos'):
