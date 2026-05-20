@@ -4,6 +4,16 @@ from scipy.optimize import basinhopping, Bounds  # import Minimierungsfunktion a
 from scipy.optimize import minimize  # import Minimierungsfunktion aus dem SyiPy-Paket
 import numpy as np
 
+ULS_INFEASIBLE_BASE_PENALTY = 1e9
+ULS_INFEASIBLE_DEFICIT_FACTOR = 1e6
+
+
+def uls_infeasible_penalty(member, deficit=None):
+    if deficit is None:
+        deficit = max(member.qk - member.qk_zul_gzt, 0)
+    return ULS_INFEASIBLE_BASE_PENALTY + ULS_INFEASIBLE_DEFICIT_FACTOR * deficit
+
+
 class RandomDisplacementBounds(object):
     # random displacement with bounds for basinhopping optimization
     def __init__(self, xmin, xmax, stepsize=0.1):
@@ -178,6 +188,8 @@ def rc_rqs(var, add_arg):
 
     # define penalty1, if ULS is not fulfilled
     penalty1 = max(member.qk - member.qk_zul_gzt, 0)
+    if penalty1 > 1e-6:
+        return uls_infeasible_penalty(member, penalty1)
 
     # define penalty2, if SLS1 (deflections) are not fulfilled
     if optimise == "oben" and member.mkd_n < member.section.mr_n:
@@ -315,6 +327,8 @@ def rc_rib_rqs(var, add_arg):
     member.calc_qk_zul_gzt()  # calculate admissible live load
     # define penalty1, if ULS is not fulfilled
     penalty1 = max(member.qk - member.qk_zul_gzt, 0)
+    if penalty1 > 1e-6:
+        return uls_infeasible_penalty(member, penalty1)
 
     # define penalty2, if SLS1 (deflections) are not fulfilled
     if member.mkd_p < member.section.mr_p and member.mkd_n < member.section.mr_n:
@@ -399,6 +413,9 @@ def wd_rqs_h(h, args):
     querschnitt = struct_analysis.RectangularWood(m.section.wood_type, m.section.b, h, m.section.phi)
     member = struct_analysis.Member1D(querschnitt, m.system, m.floorstruc, m.requirements, m.g2k, m.qk)
     member.calc_qk_zul_gzt()
+    penalty1 = max(member.qk - member.qk_zul_gzt, 0)
+    if penalty1 > 1e-6:
+        return uls_infeasible_penalty(member, penalty1)
     if criterion == "ULS":
         to_minimize = abs(member.qk - member.qk_zul_gzt)
     elif criterion == "SLS1":
@@ -429,7 +446,6 @@ def wd_rqs_h(h, args):
         pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1  # HBT S. 48. r2 wird gleich 1 gesetzt
         # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
         pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
-        penalty1 = max(member.qk - member.qk_zul_gzt, 0)
         penalty2 = 1e5 * max(d1, d2, d3, 0)
         
         if member.f1 < member.requirements.f1:
@@ -513,6 +529,8 @@ def wd_rib_rqs(var, add_arg):
     member.calc_qk_zul_gzt()  # calculate admissible live load
     # define penalty1, if ULS is not fulfilled
     penalty1 = max(member.qk - member.qk_zul_gzt, 0)
+    if penalty1 > 1e-6:
+        return uls_infeasible_penalty(member, penalty1)
 
     # define penalty2, if SLS1 (deflections) are not fulfilled
     d1, d2, d3 = [member.w_install - member.w_install_adm, member.w_use - member.w_use_adm,
@@ -622,6 +640,8 @@ def tcc_rqs(var, add_arg):
     member.calc_qk_zul_gzt()
     # ULS penalty 
     penalty1 = max(member.qk - member.qk_zul_gzt, 0) 
+    if penalty1 > 1e-6:
+        return uls_infeasible_penalty(member, penalty1)
 
     # SLS1 penalty (deflection)
     d1, d2, d3 = [member.w_install - member.w_install_adm, member.w_use - member.w_use_adm, member.w_app - member.w_app_adm]

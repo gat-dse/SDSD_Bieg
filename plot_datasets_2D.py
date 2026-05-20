@@ -372,13 +372,9 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
         # plot data
         for idx, data in enumerate(plotdata):
             plt.subplot(2, 2, idx + 1)
-            # prepare area
             coords = list(zip(lengths, values_max[idx])) + list(zip(lengths[::-1], values_min[idx][::-1]))
-            # create a polygon from the coordinates
             polygon = Polygon(coords)
-            # extract the x and y coordinates for plotting
             x, y = polygon.exterior.xy
-            # plot area
             plt.fill(x, y, alpha=0.05, facecolor=color)
             # plot lines
             plt.plot(lengths, data, color=color, linestyle=linestyle, linewidth=linewidth, label=label, alpha=0.2)
