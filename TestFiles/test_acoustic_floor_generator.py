@@ -8,8 +8,7 @@ The cases reproduce the floor build-ups from Accustics.xlsx:
 - cement screed floating layer
 - optional hollow-core damping correction
 
-The comparison values are the Lignum example values pasted into the Excel sheets,
-not the Excel formulas used to develop the simplified Python model.
+The comparison values are the Lignum example values pasted into the Excel sheets
 
 Run from the repository root:
     python TestFiles/test_acoustic_floor_generator.py
@@ -43,6 +42,7 @@ class AcousticExcelCase:
     lignum_rw: float
     lignum_lnw: float
     hollow_core_delta: float = 0.0
+    concrete_topping_mass: float = 0.0
 
 
 class MassOnlySection:
@@ -51,6 +51,14 @@ class MassOnlySection:
     def __init__(self, section_type: str, section_mass: float):
         self.section_type = section_type
         self.w = section_mass * 10.0
+
+
+class TccMassOnlySection(MassOnlySection):
+    """TCC stand-in with an explicit acoustic concrete topping mass."""
+
+    def __init__(self, section_mass: float, concrete_topping_mass: float):
+        super().__init__("tcc", section_mass)
+        self.acoustic_concrete_topping_mass = concrete_topping_mass
 
 
 def make_hollow_core_section(section_mass: float, hollow_core_delta: float):
@@ -118,6 +126,8 @@ def classify_bias(rw_bias: float, lnw_bias: float) -> str:
 def run_case(case: AcousticExcelCase, database_name: str):
     if case.hollow_core_delta > 0.0:
         section = make_hollow_core_section(case.section_mass, case.hollow_core_delta)
+    elif case.section_type == "tcc":
+        section = TccMassOnlySection(case.section_mass, case.concrete_topping_mass)
     else:
         section = MassOnlySection(case.section_type, case.section_mass)
 
@@ -137,14 +147,20 @@ def run_case(case: AcousticExcelCase, database_name: str):
     print("-" * len(case.name))
     print(f"layers: {format_layers(floorstruc)}")
     print(f"section mass / gravel mass: {case.section_mass:.1f} / {case.gravel_mass:.1f} kg/m2")
+    if case.concrete_topping_mass > 0.0:
+        print(f"concrete topping mass: {case.concrete_topping_mass:.1f} kg/m2")
     print(f"screed / spring: {case.screed_thickness * 1000:.0f} mm / {case.spring_stiffness:.2f} MN/m3")
+    if result.f0_airborne is not None:
+        print(f"f0 airborne / impact: {result.f0_airborne:.1f} / {result.f0_impact:.1f} Hz")
     print(f"R_w  python / Lignum / bias: {result.rw:6.2f} / {case.lignum_rw:6.2f} / {rw_bias:+.3f} dB")
     print(f"L_nw python / Lignum / bias: {result.lnw:6.2f} / {case.lignum_lnw:6.2f} / {lnw_bias:+.3f} dB")
     print(
-        "delta_1 gravel / delta_2 hollow / delta_R / delta_L:",
-        f"{result.delta_gravel:.2f} / {result.delta_hollow_core:.2f} /",
+        "delta_1 gravel / delta_tcc / delta_2 hollow / delta_R / delta_L:",
+        f"{result.delta_gravel:.2f} / {result.delta_tcc_topping:.2f} / {result.delta_hollow_core:.2f} /",
         f"{result.delta_rw_floating:.2f} / {result.delta_lnw_floating:.2f} dB",
     )
+    for warning in result.validity_warnings:
+        print("warning:", warning)
     print("status:", status)
     return {
         "name": case.name,
@@ -160,8 +176,10 @@ def main():
         AcousticExcelCase("Rippendecke", "wd_rib", 42.5, 84.0, 0.095, 6.0, 67.0, 48.0),
         AcousticExcelCase("CLT", "wd_rec", 94.0, 84.0, 0.095, 6.0, 70.0, 45.0),
         AcousticExcelCase("BSH", "wd_rec", 94.0, 84.0, 0.060, 6.0, 67.0, 48.0),
-        AcousticExcelCase("HBV - CLT", "tcc", 207.0 + 82.5, 0.0, 0.050, 30.0, 74.0, 57.0),
-        AcousticExcelCase("HBV - BSH", "tcc", 286.0 + 56.4, 0.0, 0.080, 1.0 / (1.0 / 9.0 + 1.0 / 6.0), 72.0, 43.0),
+        AcousticExcelCase("HBV - CLT", "tcc", 207.0 + 82.5, 0.0, 0.050, 30.0, 74.0, 57.0,
+                          concrete_topping_mass=207.0),
+        AcousticExcelCase("HBV - BSH", "tcc", 286.0 + 56.4, 0.0, 0.080, 1.0 / (1.0 / 9.0 + 1.0 / 6.0), 72.0, 43.0,
+                          concrete_topping_mass=286.0),
     ]
 
     print("Acoustic floor generator validation against Lignum examples")

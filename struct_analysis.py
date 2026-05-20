@@ -1840,7 +1840,9 @@ class FloorStruc:  # create a floor structure
 
 class AcousticResult:
     def __init__(self, floorstruc, rw, lnw, gravel_thickness, screed_thickness,
-                 delta_gravel, delta_hollow_core, delta_rw_floating, delta_lnw_floating):
+                 delta_gravel, delta_hollow_core, delta_rw_floating, delta_lnw_floating,
+                 f0_airborne=None, f0_impact=None, delta_tcc_topping=0.0,
+                 model_branch="standard", validity_warnings=None):
         self.floorstruc = floorstruc
         self.rw = rw
         self.lnw = lnw
@@ -1850,6 +1852,11 @@ class AcousticResult:
         self.delta_hollow_core = delta_hollow_core
         self.delta_rw_floating = delta_rw_floating
         self.delta_lnw_floating = delta_lnw_floating
+        self.f0_airborne = f0_airborne
+        self.f0_impact = f0_impact
+        self.delta_tcc_topping = delta_tcc_topping
+        self.model_branch = model_branch
+        self.validity_warnings = validity_warnings or []
 
 
 class AcousticFloorGenerator:
@@ -1887,6 +1894,48 @@ class AcousticFloorGenerator:
         return min(min(max(m_gravel / m_section, 1), 2) * m_gravel / 40, 6)
 
     @staticmethod
+    def is_tcc(section):
+        return getattr(section, "section_type", None) == "tcc"
+
+    @staticmethod
+    def tcc_concrete_topping_mass(section):
+        if not AcousticFloorGenerator.is_tcc(section):
+            return 0.0
+        if hasattr(section, "acoustic_concrete_topping_mass"):
+            return max(float(section.acoustic_concrete_topping_mass), 0.0)
+        concrete = getattr(section, "concrete_type", None)
+        density = getattr(concrete, "density", 2500.0)
+        h_c = getattr(section, "h_c", 0.0)
+        return max(float(density) * float(h_c), 0.0)
+
+    @staticmethod
+    def floating_screed_improvement(m_base, m_screed, spring_stiffness, rw_mass, impact_band_max=5000):
+        f0_airborne = 1 / (2 * np.pi) * np.sqrt(spring_stiffness * 1e6 * (1 / m_base + 1 / m_screed))
+        delta_rw_floating = 74.4 - 20 * np.log10(f0_airborne) - rw_mass / 2
+
+        f0_impact = 160 * np.sqrt(spring_stiffness / m_screed)
+        band_frequencies = np.array([50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000,
+                                     1250, 1600, 2000, 2500, 3150, 4000, 5000])
+        band_frequencies = band_frequencies[band_frequencies <= impact_band_max]
+        delta_lnw_floating = np.average(30 * np.log10(band_frequencies / f0_impact))
+        return delta_rw_floating, delta_lnw_floating, f0_airborne, f0_impact
+
+    @staticmethod
+    def acoustic_validity_warnings(section, f0_airborne, f0_impact):
+        warnings = []
+        if AcousticFloorGenerator.is_tcc(section):
+            for label, f0 in (("airborne", f0_airborne), ("impact", f0_impact)):
+                if f0 is None:
+                    continue
+                if f0 > 100:
+                    warnings.append(f"TCC {label} resonance f0={f0:.1f} Hz > 100 Hz; avoid this range.")
+                elif f0 > 70:
+                    warnings.append(f"TCC {label} resonance f0={f0:.1f} Hz outside preferred 30-70 Hz range.")
+                elif f0 < 30:
+                    warnings.append(f"TCC {label} resonance f0={f0:.1f} Hz below preferred 30-70 Hz range.")
+        return warnings
+
+    @staticmethod
     def evaluate(section, database_name, layer_specs, screed_thickness=0.0,
                  gravel_thickness=0.0, spring_stiffness=6.0):
         floorstruc = FloorStruc(layer_specs, database_name)
@@ -1897,6 +1946,7 @@ class AcousticFloorGenerator:
         m_section = AcousticFloorGenerator.section_mass(section)
         gravel_layers = [layer for layer in floorstruc.layers if layer.name == AcousticFloorGenerator.gravel]
         m_gravel = sum(layer.density * layer.h for layer in gravel_layers)
+        m_tcc_topping = AcousticFloorGenerator.tcc_concrete_topping_mass(section)
         m_base = m_section + m_gravel
 
         rw_mass = 37.5 * np.log10(m_base) - 42
@@ -1904,24 +1954,33 @@ class AcousticFloorGenerator:
 
         delta_rw_floating = 0.0
         delta_lnw_floating = 0.0
+        f0_airborne = None
+        f0_impact = None
         screed_layers = [layer for layer in floorstruc.layers if layer.name == AcousticFloorGenerator.cement_screed]
         screed_thickness = sum(layer.h for layer in screed_layers)
         if screed_thickness > 0:
             m_screed = sum(layer.density * layer.h for layer in screed_layers)
-            f0_airborne = 1 / (2 * np.pi) * np.sqrt(spring_stiffness * 1e6 * (1 / m_base + 1 / m_screed))
-            delta_rw_floating = 74.4 - 20 * np.log10(f0_airborne) - rw_mass / 2
-            f0_impact = 160 * np.sqrt(spring_stiffness / m_screed)
-            band_frequencies = np.array([50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000,
-                                         1250, 1600, 2000, 2500, 3150, 4000, 5000])
-            delta_lnw_floating = np.average(30 * np.log10(band_frequencies / f0_impact))
+            # HBV/TCC floors are governed by low-frequency impact behavior. Using only
+            # the low-frequency part keeps the simplified model conservative.
+            impact_band_max = 500 if AcousticFloorGenerator.is_tcc(section) else 5000
+            delta_rw_floating, delta_lnw_floating, f0_airborne, f0_impact = (
+                AcousticFloorGenerator.floating_screed_improvement(
+                    m_base, m_screed, spring_stiffness, rw_mass, impact_band_max
+                )
+            )
 
         delta_gravel = AcousticFloorGenerator.gravel_damping(m_gravel, m_section)
+        m_tcc_timber = max(m_section - m_tcc_topping, 1e-9)
+        delta_tcc_topping = AcousticFloorGenerator.gravel_damping(m_tcc_topping, m_tcc_timber)
         delta_hollow_core = AcousticFloorGenerator.hollow_core_damping(section)
         rw = rw_mass + delta_rw_floating + delta_gravel + delta_hollow_core
-        lnw = lnw_mass - delta_lnw_floating - delta_gravel - delta_hollow_core
+        lnw = lnw_mass - delta_lnw_floating - delta_gravel - delta_tcc_topping - delta_hollow_core
         gravel_thickness = sum(layer.h for layer in gravel_layers)
+        model_branch = "tcc" if AcousticFloorGenerator.is_tcc(section) else "standard"
+        validity_warnings = AcousticFloorGenerator.acoustic_validity_warnings(section, f0_airborne, f0_impact)
         return AcousticResult(floorstruc, rw, lnw, gravel_thickness, screed_thickness,
-                              delta_gravel, delta_hollow_core, delta_rw_floating, delta_lnw_floating)
+                              delta_gravel, delta_hollow_core, delta_rw_floating, delta_lnw_floating,
+                              f0_airborne, f0_impact, delta_tcc_topping, model_branch, validity_warnings)
 
     @staticmethod
     def generate(section, database_name, requirements=None, gravel_step=0.01, gravel_max=0.30):
@@ -1940,6 +1999,9 @@ class AcousticFloorGenerator:
             result = AcousticFloorGenerator.evaluate(section, database_name, layers, screed_thickness=screed_thickness)
             if result.rw >= rw_target and result.lnw <= lnw_target:
                 return result
+
+        if AcousticFloorGenerator.is_tcc(section):
+            return result
 
         gravel_thickness = gravel_step
         while gravel_thickness <= gravel_max + 1e-12:
