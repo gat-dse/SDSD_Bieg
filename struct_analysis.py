@@ -729,10 +729,13 @@ class PostTensionedConcrete(RectangularConcrete):
     def calc_EIeff(self, P_total, l, MEd_SLS, M_sec, m_r):
         # in: self
         # out: f (factor cracked/uncracked), cracked bending stiffness, uncracked bending stiffness
-        zeta = max(0.0, min(1.0, 1 - 0.5 * (MEd_SLS / m_r)**2))  # degree of partial cracking
         E_c = self.concrete_type.Ecm  # effective modulus of elasticity of concrete (creep is considered in member)
         EI_uncracked_inf = E_c * self.i  # bending stiffness of uncracked section [Nm2/m]
-        EI_cracked_inf = 0
+        m_eff = abs(MEd_SLS + M_sec)
+        if m_r <= 0 or m_eff <= m_r:
+            return 1.0, EI_uncracked_inf, EI_uncracked_inf
+
+        zeta = max(0.0, min(1.0, 1 - 0.5 * (m_r / m_eff)**2))  # degree of partial cracking
         # Solve set of equations: three equations for three unknowns
         # 1) Moment equilibrium: self.d*self.as_p*sigma_s + self.dp*P_total/l + MEd_SLS + M_sec = b*x_II**2/6*sigma_c_inf.
         # 2) Force equilibrium: self.as_p*sigma_s + P_total/l = b*x_II/2*sigma_c_inf
@@ -772,6 +775,11 @@ class PostTensionedConcrete(RectangularConcrete):
             equations,
             x0=[x_II_guess, sigma_s_guess, sigma_c_inf_guess],
             bounds=(lower_bounds, upper_bounds),
+            x_scale=[max(self.d, 1e-3), max(self.rebar_type.fsd, 1.0), max(self.concrete_type.fcd, 1.0)],
+            ftol=1e-5,
+            xtol=1e-5,
+            gtol=1e-5,
+            max_nfev=40,
         )
 
         x_II = solution.x[0]

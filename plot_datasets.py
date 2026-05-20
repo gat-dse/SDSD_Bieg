@@ -9,11 +9,58 @@ from shapely.geometry import Polygon
 from scipy.interpolate import interp1d
 from scipy.spatial import ConvexHull
 
+
+def selected_epd_extreme_product_ids(cursor, material_like):
+    valid_filter = """
+        DENSITY IS NOT NULL
+        AND MECH_PROP IS NOT NULL
+        AND Statistik = 1
+        AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
+        AND "SOURCE" NOT LIKE '%Ecoinvent%'
+        AND "SOURCE" NOT LIKE '%KBOB%'
+    """
+    inquiry = f"""
+        SELECT DISTINCT p.PRO_ID
+        FROM products p
+        WHERE {valid_filter}
+        AND p."MATERIAL" LIKE {material_like}
+        AND (
+            p.Total_GWP = (
+                SELECT MIN(p_min.Total_GWP)
+                FROM products p_min
+                WHERE {valid_filter.replace('p.', 'p_min.')}
+                AND p_min."MATERIAL" LIKE {material_like}
+                AND p_min.MECH_PROP = p.MECH_PROP
+            )
+            OR p.Total_GWP = (
+                SELECT MAX(p_max.Total_GWP)
+                FROM products p_max
+                WHERE {valid_filter.replace('p.', 'p_max.')}
+                AND p_max."MATERIAL" LIKE {material_like}
+                AND p_max.MECH_PROP = p.MECH_PROP
+            )
+        )
+        ORDER BY p.MECH_PROP, p.Total_GWP
+    """
+    cursor.execute(inquiry)
+    return [row[0] for row in cursor.fetchall()]
+
+
+def sql_id(value):
+    return "'" + str(value) + "'"
+
+
+def product_mech_prop(cursor, prod_id):
+    cursor.execute("SELECT MECH_PROP FROM products WHERE PRO_ID LIKE " + sql_id(prod_id))
+    return "'" + cursor.fetchall()[0][0] + "'"
+
+
 # PLOT DATASETS OF MEMBERS WITH DEFINED CROSS_SECTIONS AND VARIED MATERIALS
 # ----------------------------------------------------------------------------------------------------------------------
 def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requirements, crsec_type, mat_names,
                  g2k=0.75, qk=2.0, max_iter=100, idx_vrfctn=-1, fire_array=None,
-                 system_type="simple_span", auto_floor_buildup=False):
+                 system_type="simple_span", auto_floor_buildup=False, section_params=None,
+                 plot=True, return_series=False):
 
     if idx_vrfctn == -1:
         idx_vrfctn = random.randint(0, len(lengths)-1)
@@ -25,6 +72,27 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             section, database_name, requirements.acoustic
         ).floorstruc
 
+    def member_series(members, legend_entry):
+        def floor_value(mem, attr):
+            return getattr(mem.floorstruc, attr, 0.0)
+
+        return {
+            "legend": legend_entry,
+            "lengths": list(lengths),
+            "members": members,
+            "h_struct": [mem.section.h for mem in members],
+            "h_total": [mem.section.h + floor_value(mem, "h") for mem in members],
+            "gwp_struct": [mem.section.co2 for mem in members],
+            "gwp_total": [mem.section.co2 + floor_value(mem, "co2") for mem in members],
+            "m_struct": [mem.section.g0k / 1000 for mem in members],
+            "m_total": [(mem.section.g0k + floor_value(mem, "gk_area")) / 1000 for mem in members],
+            "cost_struct": [getattr(mem.section, "cost", 0.0) for mem in members],
+            "cost_total": [getattr(mem.section, "cost", 0.0) + floor_value(mem, "cost") for mem in members],
+            "floor_buildup": [getattr(mem.floorstruc, "description", "") for mem in members],
+        }
+
+    section_params = section_params or {}
+
     # GENERATE INITIAL CROSS-SECTIONS
     # Search database (table products, attribute material) for products
     # get prod_id of relevant materials from database and create initial cross-section for each product
@@ -34,178 +102,45 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
     for mat_name in mat_names:
         if crsec_type == "tcc":
             concrete_name, wood_name, conn_name = mat_name
-            # search database for concrete_name with highest and lowest GWP values
-            inquiry = ("""
-                            SELECT PRO_ID FROM products
-                            WHERE Total_GWP = (SELECT MIN(Total_GWP) FROM products
-                                                WHERE "MATERIAL" LIKE """ + concrete_name + """
-                                                AND DENSITY IS NOT NULL
-                                                AND MECH_PROP IS NOT NULL
-                                                AND Statistik = 1
-                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
-                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
-                                                AND "SOURCE" NOT LIKE '%KBOB%')
-                            OR Total_GWP = (SELECT MAX(Total_GWP) FROM products
-                                                WHERE "MATERIAL" LIKE """ + concrete_name + """
-                                                AND DENSITY IS NOT NULL
-                                                AND MECH_PROP IS NOT NULL
-                                                AND Statistik = 1
-                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
-                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
-                                                AND "SOURCE" NOT LIKE '%KBOB%')
-                            """
-                           )          
-            cursor.execute(inquiry)
-            result = cursor.fetchall()
-            concrete_prod_id_low = result[0]
-            concrete_prod_id_low_str = "'" + str(concrete_prod_id_low[0]) + "'"
-            concrete_prod_id_high = result[1]
-            concrete_prod_id_high_str = "'" + str(concrete_prod_id_high[0]) + "'"
-            #Get mechanical properties of concrete with lowest GWP value 
-            inquiry = ("""
-                    SELECT MECH_PROP FROM products
-                    WHERE  PRO_ID LIKE """ + concrete_prod_id_low_str
-            )
-            cursor.execute(inquiry)
-            result = cursor.fetchall()
-            mech_prop_concrete_low = "'" + result[0][0] + "'"
-            #Get mechanical properties of concrete with highest GWP value 
-            inquiry = ("""
-                    SELECT MECH_PROP FROM products
-                    WHERE  PRO_ID LIKE """ + concrete_prod_id_high_str
-            )
-            cursor.execute(inquiry)
-            result = cursor.fetchall()
-            mech_prop_concrete_high = "'" + result[0][0] + "'"
-
-            #search database for wood_name with highest and lowest GWP values
-            inquiry = ("""
-                            SELECT PRO_ID FROM products
-                            WHERE Total_GWP = (SELECT MIN(Total_GWP) FROM products
-                                                WHERE "MATERIAL" LIKE """ + wood_name + """
-                                                AND DENSITY IS NOT NULL
-                                                AND MECH_PROP IS NOT NULL
-                                                AND Statistik = 1
-                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
-                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
-                                                AND "SOURCE" NOT LIKE '%KBOB%')
-
-                            OR Total_GWP = (SELECT MAX(Total_GWP) FROM products
-                                                WHERE "MATERIAL" LIKE """ + wood_name + """
-                                                AND DENSITY IS NOT NULL
-                                                AND MECH_PROP IS NOT NULL
-                                                AND Statistik = 1
-                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
-                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
-                                                AND "SOURCE" NOT LIKE '%KBOB%')
-                            """
-
-                            )
-            cursor.execute(inquiry)
-            result = cursor.fetchall()
-            wood_prod_id_low = result[0]
-            wood_prod_id_low_str = "'" + str(wood_prod_id_low[0]) + "'"
-            wood_prod_id_high = result[1]
-            wood_prod_id_high_str = "'" + str(wood_prod_id_high[0]) + "'"
-
-            # Search database for reinforcing steel with mech prop B500B and highest and lowest GWP values
-            inquiry = ("""
-                            SELECT PRO_ID FROM products
-                            WHERE Total_GWP = (SELECT MIN(Total_GWP) FROM products
-                                                WHERE "MATERIAL" LIKE '%Steel_reinforcing_bar%'
-                                                AND DENSITY IS NOT NULL
-                                                AND MECH_PROP IS NOT NULL
-                                                AND Statistik = 1
-                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
-                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
-                                                AND "SOURCE" NOT LIKE '%KBOB%')
-                            OR Total_GWP = (SELECT MAX(Total_GWP) FROM products
-                                                WHERE "MATERIAL" LIKE '%Steel_reinforcing_bar%'
-                                                AND DENSITY IS NOT NULL
-                                                AND MECH_PROP IS NOT NULL
-                                                AND Statistik = 1
-                                                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'    
-                                                AND "SOURCE" NOT LIKE '%Ecoinvent%'
-                                                AND "SOURCE" NOT LIKE '%KBOB%')
-                            """
-                            )
-
-            cursor.execute(inquiry)
-            result = cursor.fetchall()
-            rebar_prod_id_low = result[0]
-            rebar_prod_id_low_str = "'" + str(rebar_prod_id_low[0]) + "'"
-            rebar_prod_id_high = result[1]
-            rebar_prod_id_high_str = "'" + str(rebar_prod_id_high[0]) + "'"
-            # Get mechanical properties of wood with lowest GWP value
-            inquiry = ("""
-                    SELECT MECH_PROP FROM products
-                    WHERE  PRO_ID LIKE """ + wood_prod_id_low_str
-            )
-            cursor.execute(inquiry)
-            result = cursor.fetchall()
-            mech_prop_wood_low = "'" + result[0][0] + "'"
-            # Get mechanical properties of wood with highest GWP value
-            inquiry = ("""
-                    SELECT MECH_PROP FROM products
-                    WHERE  PRO_ID LIKE """ + wood_prod_id_high_str
-            )
-            cursor.execute(inquiry)
-            result = cursor.fetchall()
-            mech_prop_wood_high = "'" + result[0][0] + "'"
-
-            # create material objects for concrete low/high emissions, wood low/high emissions and connector
-            concrete_low = struct_analysis.ReadyMixedConcrete(mech_prop_concrete_low, database_name, prod_id=concrete_prod_id_low_str)
-            concrete_low.get_design_values()
-            concrete_high = struct_analysis.ReadyMixedConcrete(mech_prop_concrete_high, database_name, prod_id=concrete_prod_id_high_str)
-            concrete_high.get_design_values()
-            timber_low = struct_analysis.Wood(mech_prop_wood_low, database_name, prod_id=wood_prod_id_low_str)
-            timber_low.get_design_values()
-            timber_high = struct_analysis.Wood(mech_prop_wood_high, database_name, prod_id=wood_prod_id_high_str)
-            timber_high.get_design_values()
-            rebar_low = struct_analysis.SteelReinforcingBar("'B500B'", database_name, prod_id=rebar_prod_id_low_str)
-            rebar_high = struct_analysis.SteelReinforcingBar("'B500B'", database_name, prod_id=rebar_prod_id_high_str)
-
             connector = struct_analysis.ConnectorTCC(conn_name, database_name) #Fix!
             connector.get_design_values()
 
-            # Create initial TCC sections with low/high emission values for concrete, wood and rebar   
+            # Create initial TCC sections with low/high emission values for concrete, wood and rebar
             # def __init__(self, concrete_type, rebar_type, wood_type, connector_type, s, a_ribs, h_c, h_w, b_w, d, l0, xi=0.01, eib=0.0):
-            section_low = struct_analysis.TCC(concrete_low, rebar_low, timber_low, connector, 0.4, 0.2, 0.08, 0.12, 0.2, 0.0, 2)
-            section_high = struct_analysis.TCC(concrete_high, rebar_high, timber_high, connector, 0.4, 0.2, 0.08, 0.12, 0.2, 0.0, 2)
+            tcc_params = {
+                "s": 0.4,
+                "a_ribs": 0.2,
+                "h_c": 0.08,
+                "h_w": 0.12,
+                "b_w": 0.2,
+                "d": 0.0,
+                "l0": 2,
+            }
+            tcc_params.update(section_params)
 
-            # Add section to content-definition of plot-line
-            line_i = [section_low, floorstruc]
-            line_i1 = [section_high, floorstruc]
-            to_plot.extend([line_i, line_i1])
+            for concrete_prod_id in selected_epd_extreme_product_ids(cursor, concrete_name):
+                concrete = struct_analysis.ReadyMixedConcrete(
+                    product_mech_prop(cursor, concrete_prod_id), database_name, prod_id=sql_id(concrete_prod_id)
+                )
+                concrete.get_design_values()
+                for wood_prod_id in selected_epd_extreme_product_ids(cursor, wood_name):
+                    timber = struct_analysis.Wood(
+                        product_mech_prop(cursor, wood_prod_id), database_name, prod_id=sql_id(wood_prod_id)
+                    )
+                    timber.get_design_values()
+                    for rebar_prod_id in selected_epd_extreme_product_ids(cursor, "'%Steel_reinforcing_bar%'"):
+                        rebar = struct_analysis.SteelReinforcingBar("'B500B'", database_name, prod_id=sql_id(rebar_prod_id))
+                        section = struct_analysis.TCC(concrete, rebar, timber, connector,
+                                                      tcc_params["s"], tcc_params["a_ribs"], tcc_params["h_c"],
+                                                      tcc_params["h_w"], tcc_params["b_w"], tcc_params["d"],
+                                                      tcc_params["l0"])
+                        to_plot.append([section, floorstruc])
             
             continue # Wir überspringen die SQL-Suche für diesen Durchlauf
 
-        # Wählt alle EPDs vom Material "mat-name" (z.B. ready mixed concrete), welche sich gem. Spalte Statistik zwischen dem 10% und 90% Quantil befindet. Wo Source = Betonsortenrechenr, Ecoinvent oder KBOB ist, wird die Zeile nicht gewählt.
-        inquiry = ("""
-                SELECT PRO_ID FROM products
-                WHERE DENSITY IS NOT NULL
-                AND MECH_PROP IS NOT NULL
-                AND Statistik = 1 
-                AND "SOURCE" NOT LIKE '%Betonsortenrechner%'
-                AND "SOURCE" NOT LIKE '%Ecoinvent%'
-                AND "SOURCE" NOT LIKE '%KBOB%'
-                AND "MATERIAL" LIKE """ + mat_name
-        )
-        # inquiry = ("SELECT PRO_ID FROM products WHERE"
-        #            " material=" + mat_name)
-        cursor.execute(inquiry)
-        result = cursor.fetchall()
-        for i, prod_id in enumerate(result):
-            prod_id_str = "'" + str(prod_id[0]) + "'"
-            inquiry = ("""
-                    SELECT MECH_PROP FROM products
-                    WHERE  PRO_ID LIKE """ + prod_id_str
-            )
-            # inquiry = ("SELECT mech_prop FROM products WHERE"
-            #            " PRO_ID=" + prod_id_str)
-            cursor.execute(inquiry)
-            result = cursor.fetchall()
-            mech_prop = "'" + result[0][0] + "'"
+        for prod_id in selected_epd_extreme_product_ids(cursor, mat_name):
+            prod_id_str = sql_id(prod_id)
+            mech_prop = product_mech_prop(cursor, prod_id)
 
             if crsec_type == "wd_rec":
                 # create a Wood material object
@@ -359,6 +294,7 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                 # add sections to content-definition of plot-line
                 line_i0 = [section_00, floorstruc]
                 line_i1 = [section_01, floorstruc]
+                to_plot.extend([line_i0, line_i1])
             
             else:
                 print("cross-section type is not defined inside function plot_dataset()")
@@ -368,6 +304,7 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
     # ANALYSIS AND OPTIMIZATION OF CROSS-SECTIONS
     member_list = []
     legend = []
+    series = []
     # create plot data
     for i in to_plot:
         for criterion in criteria:
@@ -417,7 +354,9 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                     material_lg = i[0].concrete_type.mech_prop + " + " + i[0].rebar_type.mech_prop + " + " + i[0].wood_type.mech_prop + " + " + i[0].connector_type.mech_prop
                 else:
                     material_lg = "error: section material is not defined"
-                legend.append([i[0].section_type, material_lg, criterion, optimum])
+                legend_entry = [i[0].section_type, material_lg, criterion, optimum]
+                legend.append(legend_entry)
+                series.append(member_series(members, legend_entry))
 
     # CREATE DATA OF ENVELOPE AREA OF DATASET
     # create data of envelope area for subplot 1: structural height
@@ -449,12 +388,13 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
     values_mean = [h_mean, h_tot_mean, co2_mean, co2_tot_mean]
 
     # PLOT DATASET TO FIGURE
-    plt.rcParams.update({
-        'font.family': 'Times New Roman'
-    })
-    plt.figure(1)
     data_max = [0, 0, 0, 0]
     vrfctn_members = [[], []]
+    if plot:
+        plt.rcParams.update({
+            'font.family': 'Times New Roman'
+        })
+        plt.figure(1)
     for i, members in enumerate(member_list):
         plotdata = [[], [], [], []]
         for j, mem in enumerate(members):
@@ -501,22 +441,16 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
         label = sec_typ + ", " + mat + ", " + cri + ", optimized for " + opt
         # plot data
         for idx, data in enumerate(plotdata):
-            plt.subplot(2, 2, idx + 1)
-            coords = list(zip(lengths, values_max[idx])) + list(zip(lengths[::-1], values_min[idx][::-1]))
-            polygon = Polygon(coords)
-            x, y = polygon.exterior.xy
-            plt.fill(x, y, alpha=0.05, facecolor=color, edgecolor = color, linewidth = 1.5)
-            # plot lines
-            #plt.plot(lengths, data, color=color, linestyle=linestyle, linewidth=linewidth, label=label, alpha=0.2)
             data_max[idx] = max(data_max[idx], max(data))
-            # # plot points of verification into graph
-            # ver_x, ver_y = lengths[idx_vrfctn], data[idx_vrfctn]
-            # plt.plot(ver_x, ver_y, 'o', color='black', markersize=2)
-            # plt.annotate(f'#{i}', xy=(ver_x, ver_y),
-            #              xytext=(ver_x + 0.05*lengths[-1], ver_y),
-            #              arrowprops=dict(facecolor='black', shrink=0.2, width=0.2, headwidth=2, headlength=4),
-            #              fontsize=9, color='black', va='center')
-            plt.plot(lengths, values_mean[idx], color=color, linestyle=linestyle, linewidth=1.5)
+            if plot:
+                plt.subplot(2, 2, idx + 1)
+                coords = list(zip(lengths, values_max[idx])) + list(zip(lengths[::-1], values_min[idx][::-1]))
+                polygon = Polygon(coords)
+                x, y = polygon.exterior.xy
+                plt.fill(x, y, alpha=0.05, facecolor=color, edgecolor = color, linewidth = 1.5)
+                plt.plot(lengths, values_mean[idx], color=color, linestyle=linestyle, linewidth=1.5)
+    if return_series:
+        return data_max, vrfctn_members, series
     return data_max, vrfctn_members
 
 
