@@ -4,6 +4,7 @@
 import struct_analysis  # file with code for structural analysis
 import plot_datasets_2D  # file with code for plotting results in a standardized way
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 import time
 print("START slab_2D_rc_pt(Test260514).py", flush=True)
@@ -138,8 +139,10 @@ for mem_group in vrfctn_members:
             print("sin(beta_x/y) =", tuple(round(v, 4) for v in mem.section.calc_prestress_sin_beta()))
 
 # SAVE FIGURE TO FILE
-output_path = "/Users/jonathanbieg/Documents/Master Thesis/1_Code/Python Repository/SDSD_Bieg/plots/rc_vs_pc_comparison.png"
-plt.savefig("rc_vs_pc_comparison.png", dpi=600, bbox_inches='tight')  # Increased DPI for better quality
+output_dir = Path("plots")
+output_dir.mkdir(exist_ok=True)
+output_path = output_dir / "rc_vs_pc_comparison.png"
+plt.savefig(output_path, dpi=600, bbox_inches='tight')  # Increased DPI for better quality
 
 # SHOW FIGURE
 #plt.show()

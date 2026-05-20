@@ -13,10 +13,19 @@ from scipy.spatial import ConvexHull
 # PLOT DATASETS OF MEMBERS WITH DEFINED CROSS_SECTIONS AND VARIED MATERIALS
 # ----------------------------------------------------------------------------------------------------------------------
 def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requirements, crsec_type, mat_names,
-                 g2k=0.75, qk=2.0, max_iter=100, idx_vrfctn=-1):
+                 g2k=0.75, qk=2.0, max_iter=100, idx_vrfctn=-1, slab_support="PL-eingespannt",
+                 auto_floor_buildup=False, pt_layout=None):
 
     if idx_vrfctn == -1:
         idx_vrfctn = random.randint(0, len(lengths)-1)
+    pt_layout = pt_layout or [1, 0, 1, 0]
+
+    def floor_for_section(section, fallback_floorstruc):
+        if not auto_floor_buildup:
+            return fallback_floorstruc
+        return struct_analysis.AcousticFloorGenerator.generate(
+            section, database_name, requirements.acoustic
+        ).floorstruc
 
     # GENERATE INITIAL CROSS-SECTIONS
     # Search database (table products, attribute material) for products
@@ -141,11 +150,11 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                 section_00 = struct_analysis.PostTensionedConcrete(concrete, rebar_low_em, pt_steel, 6, 6, 1.0, 0.20,
                                                                     0.010, 0.15, 0.010, 0.15,
                                                                     0.006, 0.15, 0.006, 0.15,
-                                                                    0.0, 0.15, 0)
+                                                                    0.0, 0.15, 0, layout=pt_layout)
                 section_01 = struct_analysis.PostTensionedConcrete(concrete, rebar_high_em, pt_steel, 6, 6, 1.0, 0.20,
                                                                     0.010, 0.15, 0.010, 0.15,
                                                                     0.006, 0.15, 0.006, 0.15,
-                                                                    0.0, 0.15, 0)
+                                                                    0.0, 0.15, 0, layout=pt_layout)
                 to_plot.extend([[section_00, floorstruc], [section_01, floorstruc]])
 
             elif crsec_type == "rc_rib":
@@ -257,7 +266,7 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             for optimum in optima:
                 members = []
                 for length in lengths:
-                    sys = struct_analysis.Slab(length,length,"PL-eingespannt")
+                    sys = struct_analysis.Slab(length, length, slab_support)
                     if i[0].section_type == "pc_rec":
                         section0 = struct_analysis.PostTensionedConcrete(
                             i[0].concrete_type, i[0].rebar_type, i[0].pt_steel_type,
@@ -265,13 +274,15 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                             i[0].bw[1][0], i[0].bw[1][1], i[0].bw[2][0], i[0].bw[2][1],
                             i[0].bw[3][0], i[0].bw[3][1], i[0].bw_bg[0], i[0].bw_bg[1],
                             i[0].bw_bg[2], i[0].phi, i[0].c_nom, i[0].xi, i[0].joint_surcharge,
-                            i[0].layout, i[0].c_nom_pt, i[0].A_p
+                            pt_layout, i[0].c_nom_pt, i[0].A_p
                         )
                     else:
                         section0 = i[0]
-                    member0 = struct_analysis.Member2D(section0, sys, i[1], requirements, g2k, qk)
+                    floorstruc = floor_for_section(section0, i[1])
+                    member0 = struct_analysis.Member2D(section0, sys, floorstruc, requirements, g2k, qk)
                     opt_section = struct_optimization_2D.get_optimized_section(member0, criterion, optimum, max_iter)
-                    opt_member = struct_analysis.Member2D(opt_section, sys, i[1], requirements, g2k, qk)
+                    floorstruc = floor_for_section(opt_section, floorstruc)
+                    opt_member = struct_analysis.Member2D(opt_section, sys, floorstruc, requirements, g2k, qk)
                     members.append(opt_member)
                 member_list.append(members)
                 if i[0].section_type[0:2] == "rc":

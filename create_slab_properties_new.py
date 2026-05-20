@@ -18,26 +18,9 @@ def create_database_slab_from_excel(database_name: str, excel_path: str, sheet_n
     df.columns = [str(c).strip() for c in df.columns]
 
     needed = ["NAME", "RAENDER", "LX", "LY", "MX_POS", "MX_NEG", "MY_POS", "MY_NEG", "V_POS", "V_NEG", "W", "F"]
-    column_aliases = {
-        "V_NEG": ["V_NEG", "V-"],
-        "W": ["W", "w"],
-        "F": ["F", "f"],
-    }
-
-    # Keep only needed columns; use raw-result aliases if the normalized column is missing or empty.
-    for c in needed:
-        if c in column_aliases:
-            source = next(
-                (
-                    alias
-                    for alias in column_aliases[c]
-                    if alias in df.columns and not df[alias].dropna().empty
-                ),
-                None,
-            )
-            df[c] = df[source] if source is not None else None
-        elif c not in df.columns:
-            df[c] = None
+    missing = [column for column in needed if column not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required slab-property columns in Excel sheet: {missing}")
     df = df[needed].dropna(how="all")
 
     # Convert comma decimals to dot decimals + numeric conversion
@@ -124,5 +107,4 @@ if __name__ == "__main__":
     for row in cursor.fetchall():
         print(row)
     connection.close()
-
 

@@ -195,9 +195,30 @@ def opt_pc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.18): #h_m
         phi, c_nom, xi, jnt_srch, m.section.layout, m.section.c_nom_pt, m.section.A_p
     ]
 
+    evaluation_cache = {}
+
+    def cached_pc_rqs(var, args):
+        # Powell revisits the same points often; cache only numerically identical
+        # designs so the structural model itself remains unchanged.
+        key = tuple(np.round(np.asarray(var, dtype=float), 10))
+        if key not in evaluation_cache:
+            evaluation_cache[key] = pc_rqs(var, args)
+        return evaluation_cache[key]
+
     bounded_step = RandomDisplacementBounds(np.array([bnd[0] for bnd in bounds]), np.array([bnd[1] for bnd in bounds]))
-    opt = basinhopping(pc_rqs, var0, niter=max_iter, T=1, minimizer_kwargs={"args": (add_arg,), "bounds": bounds,
-                                                                            "method": "Powell"}, take_step=bounded_step)
+    opt = basinhopping(
+        cached_pc_rqs,
+        var0,
+        niter=max_iter,
+        T=1,
+        minimizer_kwargs={
+            "args": (add_arg,),
+            "bounds": bounds,
+            "method": "Powell",
+            "options": {"maxfev": 250, "xtol": 1e-4, "ftol": 1e-4},
+        },
+        take_step=bounded_step,
+    )
     h, di_xu, di_xo, di_bw = opt.x
     return struct_analysis.PostTensionedConcrete(
         co, st, pt, m.system.lx, m.system.ly, b, h, di_xu, s_xu, di_xo, s_xo,
@@ -216,12 +237,14 @@ def pc_rqs(var, add_arg):
     if invalid_rectangular_geometry(h, c_nom, di_xu, di_xo, di_bw):
         return 1e12
 
+    evaluate_service = criterion in ("SLS1", "SLS2", "ENV")
     section = struct_analysis.PostTensionedConcrete(
         concrete, reinfsteel, pt_steel, system.lx, system.ly, b, h, di_xu, s_xu, di_xo, s_xo,
         di_xu, s_yu, di_xo, s_yo, di_bw, s_bw, n_bw, phi, c_nom, xi, jnt_srch,
-        layout, c_nom_pt, A_p
+        layout, c_nom_pt, A_p, compute_stiffness=evaluate_service
     )
-    evaluate_service = criterion in ("SLS1", "SLS2", "ENV")
+    if not section.minimal_reinforcement_ok:
+        return 1e12
     member = struct_analysis.Member2D(
         section, system, floorstruc, criteria, g2k, qk, evaluate_service=evaluate_service
     )

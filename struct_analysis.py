@@ -554,7 +554,8 @@ class RectangularConcrete(SupStrucRectangular):
 class PostTensionedConcrete(RectangularConcrete):
     # defines properties of rectangular, post-tensioned concrete cross-section
     def __init__(self, concrete_type, rebar_type, pt_steel_type, l_x, l_y, b, h, di_xu, s_xu, di_xo, s_xo,  di_yu=0.006, s_yu=0.15, di_yo=0.006, s_yo=0.15, di_bw=0.0, s_bw=0.15, n_bw=0,
-                  phi=2.0, c_nom=0.02, xi=0.02, jnt_srch=0.1, layout=[1,0,1,0], c_nom_pt=0.03, A_p=150e-6):
+                  phi=2.0, c_nom=0.02, xi=0.02, jnt_srch=0.1, layout=[1,0,1,0], c_nom_pt=0.03, A_p=150e-6,
+                  compute_stiffness=True):
         # Only for rectangular plates l_x = l_y or l_y = 1 for beams  
         super().__init__(concrete_type, rebar_type, b, h, di_xu, s_xu, di_xo, s_xo, di_yu, s_yu, di_yo, s_yo, di_bw, s_bw, n_bw, phi, c_nom, xi, jnt_srch)
         self.section_type = "pc_rec"
@@ -583,6 +584,7 @@ class PostTensionedConcrete(RectangularConcrete):
         self.pdx = tendon_info['distributed_x']['force'] # distributed post-tensioning force in x direction [N/m]
         self.Psy = tendon_info['drop_beam_y']['force'] # post-tensioning force in drop beam in y direction [N]
         self.pdy = tendon_info['distributed_y']['force'] # distributed post-tensioning force in y direction [N/m]
+        self._secondary_internal_forces_cache = {}
         # Totale spannkräfte in x- und y-Richtung
         self.Px_total = self.Psx + self.pdx*self.l_x
         self.Py_total = self.Psy + self.pdy*self.l_y
@@ -590,8 +592,14 @@ class PostTensionedConcrete(RectangularConcrete):
         # Cracking moment of concrete
         self.m_r = self.calc_mr_pt(self.Px_total,self.l_x)
         self.mr_p, self.mr_n = self.m_r, -self.m_r
-        #cracked stiffness and uncracked stiffness
-        self.f_w_ger, self.ei2, self.ei1 = self.calc_EIeff(self.Px_total, self.l_x, 0, 0, self.m_r) # calculate stiffness of post-tensioned concrete section, considering the effect of cracking and post-tensioning
+        # Cracked stiffness is only needed for serviceability checks. ULS optimisation
+        # creates many trial sections, so skip the nonlinear solve there.
+        if compute_stiffness:
+            self.f_w_ger, self.ei2, self.ei1 = self.calc_EIeff(self.Px_total, self.l_x, 0, 0, self.m_r)
+        else:
+            self.ei1 = self.concrete_type.Ecm * self.i
+            self.ei2 = self.ei1
+            self.f_w_ger = 1.0
 
         # Moment resistance x direction
         [self.mu_max, self.x_p, self.as_p, self.qs_class_p] = self.calc_mu_pt(self.Px_total, self.l_x, 'pos')
@@ -625,6 +633,7 @@ class PostTensionedConcrete(RectangularConcrete):
     def set_minimalReinforcement(self):
         # Keep the reinforcement chosen by the optimizer, but enforce a minimal bonded
         # reinforcement for robustness of unbonded PT slabs.
+        self.minimal_reinforcement_ok = True
         for layer in self.bw:
             layer[0] = max(layer[0], 0.006)
 
@@ -640,7 +649,10 @@ class PostTensionedConcrete(RectangularConcrete):
                 )[0]
                 if mu >= mr:
                     break
-                self.bw[idx_x][0] += 0.002
+                if self.bw[idx_x][0] >= 0.04:
+                    self.minimal_reinforcement_ok = False
+                    break
+                self.bw[idx_x][0] = min(self.bw[idx_x][0] + 0.002, 0.04)
                 self.bw[idx_y][0] = self.bw[idx_x][0]
                 self.d, self.ds = self.calc_d()
         return self.bw, self.d, self.ds
@@ -838,6 +850,10 @@ class PostTensionedConcrete(RectangularConcrete):
     def get_secondaryInternalForces(self, system):
         # in: self, system (structural system of the member)
         # out: secondary moments [Nm/m'] or secondary shear forces [N/m] 
+        cache_key = (system.raender, system.lx, system.ly)
+        if cache_key in self._secondary_internal_forces_cache:
+            return self._secondary_internal_forces_cache[cache_key]
+
         #Check whether there are drop beams
         M_sec_x = np.array([0.0, 0.0]) # secondary moments positive and negative bending x direction [Nm/m']
         M_sec_y = np.array([0.0, 0.0]) # secondary moments positive and negative bending y direction [Nm/m']
@@ -880,7 +896,9 @@ class PostTensionedConcrete(RectangularConcrete):
         V_sec[1] = V_tot[1] - self.Px_total/self.l_x * 4*self.f/self.l_x # secondary shear force [N/m]
 
 
-        return M_sec_x.tolist(), M_sec_y.tolist(), V_sec.tolist()
+        result = (M_sec_x.tolist(), M_sec_y.tolist(), V_sec.tolist())
+        self._secondary_internal_forces_cache[cache_key] = result
+        return result
 
     @staticmethod
     def mu_unsigned_pt(P_total, l, fpd, fsd, fcd, dp, ds, dis, s):
@@ -890,7 +908,8 @@ class PostTensionedConcrete(RectangularConcrete):
         a_s = np.pi * dis**2 / (4 * s)  # [m^2/m']
         x = (a_s * fsd + P_total / l) / (fcd * 1)  # Druckzonenhöhe [m]
         mu = P_total / l * (dp - 0.85 * x / 2) + a_s * fsd * (ds - 0.85 * x / 2)  # Biegewiderstand [Nm/m']
-        d_avg = (P_total / l / fpd * dp + a_s * ds) / (P_total / l + a_s)  # average static height of the section [m]
+        a_p = P_total / l / fpd  # equivalent prestressing steel area per metre [m2/m]
+        d_avg = (a_p * dp + a_s * ds) / max(a_p + a_s, 1e-12)  # average static height of the tensile reinforcement [m]
         if x / d_avg <= 0.35:
             return mu, x, a_s, 1
         elif x / d_avg <= 0.5:
@@ -1816,10 +1835,7 @@ class FloorStruc:  # create a floor structure
             self.ei = max(self.ei, current_layer.ei)
 
 
-class AcousticRequirements:
-    def __init__(self, rw_min=58.0, lnw_max=46.0):
-        self.rw_min = rw_min
-        self.lnw_max = lnw_max
+
 
 
 class AcousticResult:
@@ -1845,6 +1861,19 @@ class AcousticFloorGenerator:
     @staticmethod
     def section_mass(section):
         return section.w / 10 # convert from N/m^2 to kg/m^2
+
+    @staticmethod
+    def planning_surcharge(section):
+        if section.section_type in ("rc_rec", "pc_rec", "rc_rib", "tcc"):
+            return 5.0
+        if section.section_type in ("wd_rec", "wd_rib"):
+            return 8.0
+        return 0.0
+
+    @staticmethod
+    def target_values(section, requirements):
+        surcharge = AcousticFloorGenerator.planning_surcharge(section)
+        return requirements.rw_min + surcharge, requirements.lnw_max - surcharge
 
     @staticmethod
     def hollow_core_damping(section):
@@ -1897,6 +1926,7 @@ class AcousticFloorGenerator:
     @staticmethod
     def generate(section, database_name, requirements=None, gravel_step=0.01, gravel_max=0.30):
         requirements = requirements or AcousticRequirements()
+        rw_target, lnw_target = AcousticFloorGenerator.target_values(section, requirements)
         base_layers = [[AcousticFloorGenerator.parquet, False, False]]
         candidates = [
             (0.0, base_layers),
@@ -1908,7 +1938,7 @@ class AcousticFloorGenerator:
 
         for screed_thickness, layers in candidates:
             result = AcousticFloorGenerator.evaluate(section, database_name, layers, screed_thickness=screed_thickness)
-            if result.rw >= requirements.rw_min and result.lnw <= requirements.lnw_max:
+            if result.rw >= rw_target and result.lnw <= lnw_target:
                 return result
 
         gravel_thickness = gravel_step
@@ -1919,7 +1949,7 @@ class AcousticFloorGenerator:
             result = AcousticFloorGenerator.evaluate(
                 section, database_name, layers, screed_thickness=0.085, gravel_thickness=gravel_thickness
             )
-            if result.rw >= requirements.rw_min and result.lnw <= requirements.lnw_max:
+            if result.rw >= rw_target and result.lnw <= lnw_target:
                 return result
             gravel_thickness += gravel_step
 
@@ -1983,6 +2013,9 @@ class Slab:
     Tabelle wird direkt im Skript "create_slab_properties.py" erstellt.
     """
 
+    _property_cache = {}
+    _available_entries = None
+
     def __init__(self, length_x, length_y, support, column_width=0.25, column_length=0.25,
                  column_ke=0.9, column_tributary_area=None):
         self.raender = support
@@ -1995,29 +2028,33 @@ class Slab:
         self.column_length = column_length
         self.column_ke = column_ke #0.9 for internal columns
         self.column_tributary_area = column_tributary_area if column_tributary_area is not None else length_x * length_y
-        conn = sqlite3.connect("slab_properties.db")
-        cursor = conn.cursor()
-        # get mechanical properties from database
-        result = cursor.execute(
+        property_key = (self.raender, self.lx, self.ly)
+        if property_key not in self._property_cache:
+            conn = sqlite3.connect("slab_properties.db")
+            cursor = conn.cursor()
+            result = cursor.execute(
+                        """
+                        SELECT NAME, RAENDER, LX, LY, MX_POS, MX_NEG, MY_POS, MY_NEG, V_POS, V_NEG, W, F 
+                        FROM slab_properties
+                        WHERE RAENDER = ? AND LX = ? AND LY = ? """, property_key).fetchall()
+            if result:
+                self._property_cache[property_key] = result[0]
+            elif self._available_entries is None:
+                self.__class__._available_entries = cursor.execute(
                     """
-                    SELECT NAME, RAENDER, LX, LY, MX_POS, MX_NEG, MY_POS, MY_NEG, V_POS, V_NEG, W, F 
+                    SELECT DISTINCT RAENDER, LX, LY
                     FROM slab_properties
-                    WHERE RAENDER = ? AND LX = ? AND LY = ? """, (self.raender, self.lx, self.ly)).fetchall()
-
-        if not result:
-            available = cursor.execute(
-                """
-                SELECT DISTINCT RAENDER, LX, LY
-                FROM slab_properties
-                ORDER BY RAENDER, LX, LY
-                """
-            ).fetchall()
+                    ORDER BY RAENDER, LX, LY
+                    """
+                ).fetchall()
             conn.close()
+
+        if property_key not in self._property_cache:
             raise ValueError(
                 f"No slab_properties entry for support={self.raender!r}, LX={self.lx}, LY={self.ly}. "
-                f"Use one of the available entries: {available}"
+                f"Use one of the available entries: {self._available_entries}"
             )
-        self.result = result[0]
+        self.result = self._property_cache[property_key]
         #Faktor alpha_m_x: Bewehrungfür l_max
         #x-Richtung = Richtung mit maximaler Spannweite
         self.alpha_m_x = (float(self.result[4]), float(self.result[5])) #positive and negative moment
@@ -2071,9 +2108,10 @@ class Member1D:
         self.floorstruc = floorstruc
         self.requirements = requirements
         self.acoustic = AcousticFloorGenerator.evaluate_floorstruc(section, floorstruc)
+        rw_target, lnw_target = AcousticFloorGenerator.target_values(section, self.requirements.acoustic)
         self.acoustic_verified = (
-            self.acoustic.rw >= self.requirements.acoustic.rw_min
-            and self.acoustic.lnw <= self.requirements.acoustic.lnw_max
+            self.acoustic.rw >= rw_target
+            and self.acoustic.lnw <= lnw_target
         )
         self.li_max = self.system.li_max
 
@@ -2356,9 +2394,10 @@ class Member2D:
         self.floorstruc = floorstruc
         self.requirements = requirements
         self.acoustic = AcousticFloorGenerator.evaluate_floorstruc(section, floorstruc)
+        rw_target, lnw_target = AcousticFloorGenerator.target_values(section, self.requirements.acoustic)
         self.acoustic_verified = (
-            self.acoustic.rw >= self.requirements.acoustic.rw_min
-            and self.acoustic.lnw <= self.requirements.acoustic.lnw_max
+            self.acoustic.rw >= rw_target
+            and self.acoustic.lnw <= lnw_target
         )
         self.li_min = min(self.system.lx, self.system.ly)
         self.li_max = self.system.li_max
@@ -2580,9 +2619,13 @@ class Member2D:
             return float("inf")
         m_rd = self.calc_punching_m_rd()
         area = self.system.column_tributary_area
+        secondary_forces = None
+        if hasattr(self.section, "get_secondaryInternalForces"):
+            secondary_forces = self.section.get_secondaryInternalForces(self.system)
+        v_sec = self.calc_punching_secondary_force(secondary_forces)
 
         def residual(q_area):
-            m_ed = self.calc_punching_m_ed(q_area)
+            m_ed = self.calc_punching_m_ed(q_area, secondary_forces)
             v_rd = self.section.calc_punching_shear_resistance(
                 column_width=self.system.column_width,
                 column_length=self.system.column_length,
@@ -2592,7 +2635,6 @@ class Member2D:
                 m_ed=m_ed,
                 m_rd=m_rd,
             )
-            v_sec = self.calc_punching_secondary_force()
             return v_rd / area - (q_area + v_sec / area)
 
         q_low = 0.0
@@ -2607,7 +2649,7 @@ class Member2D:
                 q_high = q_mid
         return q_low
 
-    def calc_punching_m_ed(self, q_area):
+    def calc_punching_m_ed(self, q_area, secondary_forces=None):
         moments_x = [
             q_area * self.system.alpha_m_x[0] * self.system.l_tot ** 2,
             q_area * self.system.alpha_m_x[1] * self.system.l_tot ** 2,
@@ -2617,7 +2659,9 @@ class Member2D:
             q_area * self.system.alpha_m_y[1] * self.li_min ** 2,
         ]
         if hasattr(self.section, "get_secondaryInternalForces"):
-            m_sec_x, m_sec_y, _ = self.section.get_secondaryInternalForces(self.system)
+            if secondary_forces is None:
+                secondary_forces = self.section.get_secondaryInternalForces(self.system)
+            m_sec_x, m_sec_y, _ = secondary_forces
             moments_x[0] += m_sec_x[0]
             moments_x[1] += m_sec_x[1]
             moments_y[0] += m_sec_y[0]
@@ -2629,10 +2673,12 @@ class Member2D:
         m_rd_y = m_rd_x
         return m_rd_x, m_rd_y
 
-    def calc_punching_secondary_force(self):
+    def calc_punching_secondary_force(self, secondary_forces=None):
         if not hasattr(self.section, "get_secondaryInternalForces"):
             return 0.0
-        _, _, v_sec = self.section.get_secondaryInternalForces(self.system)
+        if secondary_forces is None:
+            secondary_forces = self.section.get_secondaryInternalForces(self.system)
+        _, _, v_sec = secondary_forces
         if not v_sec:
             return 0.0
         d_v = getattr(self.section, "d", 0.0)
@@ -2726,7 +2772,7 @@ class Member2D:
 
 class Requirements:
     def __init__(self, install="ductile", lw_install=350, lw_use=350, lw_app=300, f1=8, a_cd=0.1, w_f_cdr1=1.0e-3,
-                 alpha_ve_cd=1 / 3, fire='R60', rw_min=58.0, lnw_max=46.0):
+                 alpha_ve_cd=1 / 3, fire='R60', acoustic_level="normal"):
         self.install = install
         self.lw_install = lw_install  # preset value: SIA 260
         self.lw_use = lw_use  # preset value: SIA 260
@@ -2736,4 +2782,16 @@ class Requirements:
         self.w_f_cdr1 = w_f_cdr1  # preset value: HBT, Seite 48
         self.alpha_ve_cd = alpha_ve_cd  # preset value: HBT, Seite 49
         self.t_fire = int(fire[1:])  # unit: [min]
-        self.acoustic = AcousticRequirements(rw_min, lnw_max)
+        self.acoustic = AcousticRequirements(acoustic_level)
+
+class AcousticRequirements:
+    def __init__(self, level="normal"):
+        if level not in ("normal", "increased"):
+            raise ValueError("Acoustic requirement level has to be 'normal' or 'increased'.")
+        self.level = level
+        if level == "normal":
+            self.rw_min = 53.0
+            self.lnw_max = 51.0
+        else:
+            self.rw_min = 57.0
+            self.lnw_max = 47.0

@@ -12,10 +12,18 @@ from scipy.spatial import ConvexHull
 # PLOT DATASETS OF MEMBERS WITH DEFINED CROSS_SECTIONS AND VARIED MATERIALS
 # ----------------------------------------------------------------------------------------------------------------------
 def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requirements, crsec_type, mat_names,
-                 g2k=0.75, qk=2.0, max_iter=100, idx_vrfctn=-1, fire_array=None):
+                 g2k=0.75, qk=2.0, max_iter=100, idx_vrfctn=-1, fire_array=None,
+                 system_type="simple_span", auto_floor_buildup=False):
 
     if idx_vrfctn == -1:
         idx_vrfctn = random.randint(0, len(lengths)-1)
+
+    def floor_for_section(section, fallback_floorstruc):
+        if not auto_floor_buildup:
+            return fallback_floorstruc
+        return struct_analysis.AcousticFloorGenerator.generate(
+            section, database_name, requirements.acoustic
+        ).floorstruc
 
     # GENERATE INITIAL CROSS-SECTIONS
     # Search database (table products, attribute material) for products
@@ -366,16 +374,26 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             for optimum in optima:
                 members = []
                 for length in lengths:
-                    sys = struct_analysis.BeamSimpleSup(length)
+                    if system_type == "simple_span":
+                        sys = struct_analysis.BeamSimpleSup(length)
+                    elif system_type == "two_span":
+                        sys = struct_analysis.BeamTwoSpan(length)
+                    elif system_type == "continuous_elastic":
+                        sys = struct_analysis.BeamContinuousSupEl(length)
+                    elif system_type == "continuous_plastic":
+                        sys = struct_analysis.BeamContinuousSupPl(length)
+                    else:
+                        raise ValueError(f"Unknown 1D system_type: {system_type}")
                     section0 = i[0]
-                    floorstruc = i[1]
+                    floorstruc = floor_for_section(section0, i[1])
                     member0 = struct_analysis.Member1D(section0, sys, floorstruc, requirements, g2k, qk)
                     if fire_array is not None:
                         member0.fire = fire_array
                     opt_section = struct_optimization.get_optimized_section(member0, criterion, optimum, max_iter)
+                    floorstruc = floor_for_section(opt_section, floorstruc)
                     opt_member = struct_analysis.Member1D(opt_section, sys, floorstruc, requirements, g2k, qk)
                     # search for an alternative solution for rectangular concrete section with lower minimal h and fill in floorstructure
-                    if section0.section_type == "rc_rec":
+                    if section0.section_type == "rc_rec" and not auto_floor_buildup:
                         # create floor structure for slim reinforced concrete cross-section
                         bodenaufbau_rcdecke_slim = [["'Parkett 2-Schicht werkversiegelt, 11 mm'", False, False],
                                                     ["'Unterlagsboden Zement, 85 mm'", False, False],
