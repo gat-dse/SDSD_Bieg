@@ -559,39 +559,20 @@ class PostTensionedConcrete(RectangularConcrete):
         # Only for rectangular plates l_x = l_y or l_y = 1 for beams  
         super().__init__(concrete_type, rebar_type, b, h, di_xu, s_xu, di_xo, s_xo, di_yu, s_yu, di_yo, s_yo, di_bw, s_bw, n_bw, phi, c_nom, xi, jnt_srch)
         self.section_type = "pc_rec"
-        bw = self.set_minimalReinforcement() # minimal reinforcement for post-tensioned concrete sections, to ensure sufficient ductility and to avoid brittle failure modes. 
-        self.bw, self.d, self.ds = bw
-        self.as_p = (np.pi*self.bw[0][0]**2/4/self.bw[0][1]) # as for positive bending (lower layers) [m2/m]
-        self.as_n = (np.pi*self.bw[1][0]**2/4/self.bw[1][1]) # as for negative bending (upper layers) [m2/m]
-        self.as_yu = (np.pi*self.bw[2][0]**2/4/self.bw[2][1]) # as for lower y reinforcement [m2/m]
-        self.as_yo = (np.pi*self.bw[3][0]**2/4/self.bw[3][1]) # as for upper y reinforcement [m2/m]
-        self.i = self.h**3/12 # moment of inertia of the plate [m4/m]
-
         self.pt_steel_type = pt_steel_type
         self.A_p = A_p # cross-sectional area of post-tensioning tendon [m2]
         self.l_x = l_x # span in x direction [m]
         self.l_y = l_y # span in y direction [m]
         self.layout = layout #layout of post-tensioning tendons, 1: tendon present, 0: no tendon. Order of layout definition: [Drop beam x, Distributed x, Drop beam y , Distributed y]
         self.c_nom_pt = c_nom_pt #nominal cover for post-tensioning tendons [m]
-        self.e_support, self.e_midspan, self.dp = self.calc_eccentricity()  # eccentricity of post-tensioning tendons [m]
-        self.f = self.e_midspan - self.e_support #Pfeilhöhe
-        self.f_x = self.f
-        self.f_y = self.f
-
-        # Set the post tensioning system
-        tendon_info = self.set_loadBalancing() # post-tensioning forces [N]
-        self.Psx = tendon_info['drop_beam_x']['force'] # post-tensioning force in drop beam in x direction [N]
-        self.pdx = tendon_info['distributed_x']['force'] # distributed post-tensioning force in x direction [N/m]
-        self.Psy = tendon_info['drop_beam_y']['force'] # post-tensioning force in drop beam in y direction [N]
-        self.pdy = tendon_info['distributed_y']['force'] # distributed post-tensioning force in y direction [N/m]
-        self._secondary_internal_forces_cache = {}
-        # Totale spannkräfte in x- und y-Richtung
-        self.Px_total = self.Psx + self.pdx*self.l_x
-        self.Py_total = self.Psy + self.pdy*self.l_y
-
-        # Cracking moment of concrete
+        self.set_initial_pt_reinforcement()
+        self.i = self.h**3/12 # moment of inertia of the plate [m4/m]
+        tendon_info = self.update_prestressing_system()
         self.m_r = self.calc_mr_pt(self.Px_total,self.l_x)
         self.mr_p, self.mr_n = self.m_r, -self.m_r
+        bw = self.set_minimalReinforcement(self.m_r, use_pt=True)
+        self.bw, self.d, self.ds = bw
+        self.update_reinforcement_areas()
         # Cracked stiffness is only needed for serviceability checks. ULS optimisation
         # creates many trial sections, so skip the nonlinear solve there.
         if compute_stiffness:
@@ -620,6 +601,36 @@ class PostTensionedConcrete(RectangularConcrete):
         self.cost = volume_reinforcement * self.rebar_type.cost + volume_concrete * self.concrete_type.cost + volume_pt_steel * self.pt_steel_type.cost + self.concrete_type.cost2# [CHF/m]
         self.construction_time = volume_reinforcement * self.rebar_type.construction_time + volume_concrete * self.concrete_type.construction_time + volume_pt_steel * self.pt_steel_type.construction_time  + self.concrete_type.construction_time_scaffold # [h/m]
         
+    def set_initial_pt_reinforcement(self):
+        # Simplified PT layout assumption: use at least 12 mm bonded reinforcement
+        # in all slab directions before determining tendon eccentricity and force.
+        for layer in self.bw:
+            layer[0] = max(layer[0], 0.012)
+        self.d, self.ds = self.calc_d()
+        self.update_reinforcement_areas()
+
+    def update_reinforcement_areas(self):
+        self.as_p = (np.pi*self.bw[0][0]**2/4/self.bw[0][1]) # as for positive bending (lower layers) [m2/m]
+        self.as_n = (np.pi*self.bw[1][0]**2/4/self.bw[1][1]) # as for negative bending (upper layers) [m2/m]
+        self.as_yu = (np.pi*self.bw[2][0]**2/4/self.bw[2][1]) # as for lower y reinforcement [m2/m]
+        self.as_yo = (np.pi*self.bw[3][0]**2/4/self.bw[3][1]) # as for upper y reinforcement [m2/m]
+        self.roh, self.rohs = self.as_p / self.d, self.as_n / self.ds
+
+    def update_prestressing_system(self):
+        self.e_support, self.e_midspan, self.dp = self.calc_eccentricity()  # eccentricity of post-tensioning tendons [m]
+        self.f = self.e_midspan - self.e_support #Pfeilhöhe
+        self.f_x = self.f
+        self.f_y = self.f
+        tendon_info = self.set_loadBalancing() # post-tensioning forces [N]
+        self.Psx = tendon_info['drop_beam_x']['force'] # post-tensioning force in drop beam in x direction [N]
+        self.pdx = tendon_info['distributed_x']['force'] # distributed post-tensioning force in x direction [N/m]
+        self.Psy = tendon_info['drop_beam_y']['force'] # post-tensioning force in drop beam in y direction [N]
+        self.pdy = tendon_info['distributed_y']['force'] # distributed post-tensioning force in y direction [N/m]
+        self._secondary_internal_forces_cache = {}
+        self.Px_total = self.Psx + self.pdx*self.l_x
+        self.Py_total = self.Psy + self.pdy*self.l_y
+        return tendon_info
+
 
     def calc_eccentricity(self):
         # in: self, A_p (cross-sectional area of post-tensioning tendon [m2])
@@ -627,26 +638,32 @@ class PostTensionedConcrete(RectangularConcrete):
         r_P = np.sqrt(self.A_p / np.pi)  # radius of post-tensioning tendon [m]
         e_support = -(self.h / 2 - max(self.c_nom_pt, -(self.c_nom + self.bw[1][0] + self.bw[3][0] + self.bw_bg[0])) - r_P)
         e_midspan = (self.h / 2 - max(self.c_nom_pt, -(self.c_nom + self.bw[0][0] + self.bw[2][0] + self.bw_bg[0])) - r_P)
-        dp = self.h / 2 + abs(e_midspan)
+        dp = self.h / 2 + abs(e_midspan) # distance from the top/bottom of the cross-section to the centroid of the post-tensioning tendons [m]
         return e_support, e_midspan, dp
         
-    def set_minimalReinforcement(self):
+    def set_minimalReinforcement(self, target_mr=None, use_pt=False):
         # Keep the reinforcement chosen by the optimizer, but enforce a minimal bonded
         # reinforcement for robustness of unbonded PT slabs.
         self.minimal_reinforcement_ok = True
         for layer in self.bw:
-            layer[0] = max(layer[0], 0.006)
+            layer[0] = max(layer[0], 0.012 if use_pt else 0.006)
 
         self.d, self.ds = self.calc_d()
 
-        layer_pairs = ((0, 2, self.mr_p, "pos"), (1, 3, abs(self.mr_n), "neg"))
+        mr_pos = abs(target_mr) if target_mr is not None else abs(self.mr_p)
+        mr_neg = abs(target_mr) if target_mr is not None else abs(self.mr_n)
+        layer_pairs = ((0, 2, mr_pos, "pos"), (1, 3, mr_neg, "neg"))
         for idx_x, idx_y, mr, sign in layer_pairs:
             while True:
                 d_eff = self.d if sign == "pos" else self.ds
-                mu = self.mu_unsigned(
-                    self.bw[idx_x][0], self.bw[idx_x][1], d_eff, self.b,
-                    self.rebar_type.fsd, self.concrete_type.fcd, mr
-                )[0]
+                if use_pt:
+                    self.update_reinforcement_areas()
+                    mu = abs(self.calc_mu_pt(self.Px_total, self.l_x, sign)[0])
+                else:
+                    mu = self.mu_unsigned(
+                        self.bw[idx_x][0], self.bw[idx_x][1], d_eff, self.b,
+                        self.rebar_type.fsd, self.concrete_type.fcd, mr
+                    )[0]
                 if mu >= mr:
                     break
                 if self.bw[idx_x][0] >= 0.04:
@@ -809,6 +826,8 @@ class PostTensionedConcrete(RectangularConcrete):
         else:
             [mu, x, a_s, qs_klasse] = [0, 0, 0, 0]
             print("sign of moment resistance has to be 'neg' or 'pos'")
+        if abs(mu) < abs(self.m_r):
+            qs_klasse = 99
         return mu, x, a_s, qs_klasse
 
     def calc_punching_shear_resistance(self, column_width=0.25, column_length=0.25, ke=0.9,
@@ -1521,9 +1540,22 @@ class TCC(SupStrucTCC):
         self.Mu = self.calc_mu() #Nm/m'
         self.Vu = self.calc_vu() #N/m'
 
-        self.co2 = (self.A_w * self.wood_type.GWP * self.wood_type.density + 0.998 * self.a_ribs * self.h_c * self.concrete_type.GWP * self.concrete_type.density + self.a_ribs*self.h_c*0.002 * self.rebar_type.GWP * self.rebar_type.density)/a_ribs  # [kg_CO2_eq/m], 0.2% minimal reinforcement
-        self.cost = (self.connector_type.cost/self.s + (self.d+self.A_w) * self.wood_type.cost + 0.998 * self.a_ribs * self.h_c * self.concrete_type.cost + self.a_ribs*self.h_c*0.002 * self.rebar_type.cost)/a_ribs  # [CHF/m], 0.2% minimal reinforcement 
-        self.construction_time = (self.connector_type.construction_time/self.s + (self.d+self.A_w) * self.wood_type.construction_time + 0.998 * self.a_ribs * self.h_c * self.concrete_type.construction_time + self.a_ribs*self.h_c*0.002 * self.rebar_type.construction_time)/a_ribs  # [h/m], 0.2% minimal reinforcement, no formwork needed
+        self.rebar_d = 0.010
+        self.rebar_s = 0.150
+        self.rebar_layers = 4 if self.h_c > 0.12 else 2
+        self.as_rebar = self.calc_tcc_rebar_area(self.rebar_d, self.rebar_s, self.rebar_layers)
+        concrete_volume = max(self.h_c - self.as_rebar, 0.0)
+        self.co2 = (self.A_w / self.a_ribs * self.wood_type.GWP * self.wood_type.density
+                    + concrete_volume * self.concrete_type.GWP * self.concrete_type.density
+                    + self.as_rebar * self.rebar_type.GWP * self.rebar_type.density)  # [kg_CO2_eq/m2]
+        self.cost = (self.connector_type.cost / (self.s * self.a_ribs)
+                     + (self.d + self.A_w / self.a_ribs) * self.wood_type.cost
+                     + concrete_volume * self.concrete_type.cost
+                     + self.as_rebar * self.rebar_type.cost)  # [CHF/m2]
+        self.construction_time = (self.connector_type.construction_time / (self.s * self.a_ribs)
+                                  + (self.d + self.A_w / self.a_ribs) * self.wood_type.construction_time
+                                  + concrete_volume * self.concrete_type.construction_time
+                                  + self.as_rebar * self.rebar_type.construction_time)  # [h/m2]
         self.g0k = self.calc_weight() 
         self.ei1 = self.EI_SLS[0]  # elastic stiffness at t=0 for SLS checks
         self.xi = xi
@@ -1540,6 +1572,10 @@ class TCC(SupStrucTCC):
         self.h_installation = self.get_h_installation() # height available for installation of services. In case of box beam floor, this is the web height.
         # Define string as plot label that names connector type and fixed geometric parameters of TCC for plotting purposes
         #self.plot_label = f"TCC: {connector_type.name}, b_w={b_w}m, a_ribs={a_ribs}, s={s}m, d={d}m"
+    @staticmethod
+    def calc_tcc_rebar_area(di=0.010, spacing=0.150, n_layers=2):
+        return n_layers * np.pi * di ** 2 / 4 / spacing
+
     def get_h_installation(self):
         if self.b_w == self.a_ribs: #Solid slab
             return max(self.h_c - 0.04*2,0)
@@ -2086,6 +2122,13 @@ class Slab:
     _property_cache = {}
     _available_entries = None
 
+    @staticmethod
+    def calc_alpha_w_f_cd(alpha_w):
+        # slab_properties stores the uniform-load deflection coefficient W.
+        # Derive an equivalent point-load coefficient from the beam ratio (approximation)
+        # (P L^3 / 48 EI) / (5 q L^4 / 384 EI) = 1.6 instead of using a dummy.
+        return 1.6 * abs(alpha_w)
+
     def __init__(self, length_x, length_y, support, column_width=0.25, column_length=0.25,
                  column_ke=0.9, column_tributary_area=None):
         self.raender = support
@@ -2135,7 +2178,7 @@ class Slab:
         self.qs_cl_erf = [2, 1]
         self.alpha_w = float(self.result[10])
         self.kf2 = 1.0
-        self.alpha_w_f_cd = 10000
+        self.alpha_w_f_cd = self.calc_alpha_w_f_cd(self.alpha_w)
 
         #self.factors = [self.alpha_m, self.alpha_v, self.qs_cl_erf, self.alpha_w, self.kf2, self.alpha_w_f_cd]
 
@@ -2302,6 +2345,20 @@ class Member1D:
         qs_class_erf = self.system.qs_cl_erf  # z.B. [0, 2]
         qs_class_vorh = [self.section.qs_class_n, self.section.qs_class_p]
 
+        if self.section.section_type == "rc_rib":
+            v_pos = getattr(self.section, "vu_PB_p", self.section.vu_p)
+            v_neg = abs(getattr(self.section, "vu_PB_n", self.section.vu_n))
+        else:
+            v_pos = self.section.vu_p
+            v_neg = abs(self.section.vu_n)
+
+        shear_candidates = []
+        for alpha in alpha_v:
+            if abs(alpha) <= 1e-12:
+                continue
+            v_rd = v_pos if alpha > 0 else v_neg
+            shear_candidates.append(v_rd / (abs(alpha) * self.system.l_tot))
+        qu_shear = max(min(shear_candidates), 0.0) if shear_candidates else float("inf")
 
         if min(alpha_m) >= 0 or abs(alpha_m[1]) >= abs(alpha_m[0]):
             if qs_class_vorh[1] <= qs_class_erf[1]:
@@ -2327,9 +2384,8 @@ class Member1D:
                 else:
                     # for all other cross-sections bending strength = 0
                     qu_bend = 0
-            qu_shear = self.section.vu_p / (max(alpha_v) * self.system.l_tot)
         else:
-            if qs_class_vorh[1] <= qs_class_erf[1]:
+            if qs_class_vorh[0] <= qs_class_erf[0]:
                 qu_bend = self.section.mu_min / (min(alpha_m) * self.system.l_tot ** 2)
             else:
                 # if the cross-section is not fulfilling the ductility criterion (e.g. required: EP, present PP) then
@@ -2350,7 +2406,6 @@ class Member1D:
                 else:
                     # for all other cross-sections bending strength = 0
                     qu_bend = 0
-            qu_shear = self.section.vu_n / (min(alpha_v) * self.system.l_tot)
         return min(qu_bend, qu_shear)
 
     def calc_qk_zul_gzt(self):
@@ -2453,7 +2508,8 @@ class Member1D:
 
 class Member2D:
     def __init__(self, section, system, floorstruc, requirements, g2k=0.0, qk=2e3, psi0=0.7, psi1=0.5, psi2=0.3,
-                     fire_b=True, fire_l=False, fire_t=False, fire_r=False, evaluate_service=True):
+                     fire_b=True, fire_l=False, fire_t=False, fire_r=False, evaluate_service=True,
+                     check_punching=True):
         """
         Definiert ein 2-Dimensionales Bauteil (Platte) mit Eigenschaften
         :section:
@@ -2461,6 +2517,7 @@ class Member2D:
         """
         self.section = section
         self.system = system
+        self.check_punching = check_punching
         self.floorstruc = floorstruc
         self.requirements = requirements
         self.acoustic = AcousticFloorGenerator.evaluate_floorstruc(section, floorstruc)
@@ -2510,6 +2567,7 @@ class Member2D:
         if fire_r is True:
             self.fire[3] = 1
         self.fire_resistance = []
+        self.punching_vrds_required = 0.0
         self.co2 = system.l_tot * (self.floorstruc.co2 + self.section.co2)
 
         if not evaluate_service:
@@ -2567,11 +2625,11 @@ class Member2D:
         elif section_material == "pc":
             M_sec_x, _, _ = self.section.get_secondaryInternalForces(self.system)
             alpha_m_x = max(abs(self.system.alpha_m_x[0]), abs(self.system.alpha_m_x[1]))
-            MEd_SLS = (self.q_freq - self.gk) * alpha_m_x * self.system.l_tot ** 2
+            MEd_SLS = (self.q_freq - self.g0k) * alpha_m_x * self.system.l_tot ** 2
             M_sec = M_sec_x[0] if abs(M_sec_x[0]) >= abs(M_sec_x[1]) else M_sec_x[1]
             _, ei_eff, _ = self.section.calc_EIeff(self.section.Px_total, self.system.l_tot, MEd_SLS, M_sec, self.section.m_r)
             unit_def_pc = self.system.alpha_w * self.system.l_tot ** 4 / ei_eff
-            self.w_use = unit_def_pc * ((self.q_freq - self.gk) + (self.q_per - self.gk) * (self.section.phi - 1))
+            self.w_use = unit_def_pc * ((self.q_freq - self.g0k) + (self.q_per - self.g0k) * (self.section.phi - 1))
         self.w_app = unit_def * (self.q_per * (1 + self.section.phi))
         if section_material == "rc":  # Alternative Durchbiegungsberechnung für Betonquerschnitte gem. SIA262,(102)
             self.w_app_ger = unit_def * (
@@ -2607,6 +2665,9 @@ class Member2D:
                 self.r1 = 1.25
             self.ve_cd = self.requirements.alpha_ve_cd * 100 ** (self.f1 * self.section.xi - 1)
 
+    def should_check_punching(self):
+        return bool(self.check_punching and getattr(self.system, "has_columns", False))
+
     def calc_qu(self):
         """
         Idea: qu von maximaler Spannweite definiert
@@ -2617,6 +2678,31 @@ class Member2D:
         alpha_v = self.system.alpha_v
         qs_class_erf = self.system.qs_cl_erf  # z.B. [0, 2]
         qs_class_vorh = [self.section.qs_class_n, self.section.qs_class_p]
+        if self.section.section_type == "pc_rec":
+            if not (qs_class_vorh[0] <= qs_class_erf[0] and qs_class_vorh[1] <= qs_class_erf[1]):
+                qu_bend = 0.0
+                if self.should_check_punching():
+                    qu_shear = self.calc_punching_qu()
+                else:
+                    qu_shear = self.calc_shear_qu()
+                return min(qu_bend, qu_shear)
+
+            m_sec_x, _, _ = self.section.get_secondaryInternalForces(self.system)
+            q_bend_candidates = []
+            for alpha_i, m_sec_i, m_rd_i in (
+                (alpha_m[0], m_sec_x[0], self.section.mu_max),
+                (alpha_m[1], m_sec_x[1], self.section.mu_min),
+            ):
+                if abs(alpha_i) <= 1e-12:
+                    continue
+                q_cap = (m_rd_i - m_sec_i) / (alpha_i * self.system.l_tot ** 2)
+                q_bend_candidates.append(q_cap)
+            qu_bend = max(min(q_bend_candidates), 0.0) if q_bend_candidates else float("inf")
+            if self.should_check_punching():
+                qu_shear = self.calc_punching_qu()
+            else:
+                qu_shear = self.calc_shear_qu()
+            return min(qu_bend, qu_shear)
 
         if min(alpha_m) == 0:
             if qs_class_vorh[1] <= qs_class_erf[1]:
@@ -2643,7 +2729,7 @@ class Member2D:
                 else:
                     # for all other cross-sections bending strength = 0
                     qu_bend = 0
-            if self.system.has_columns:
+            if self.should_check_punching():
                 qu_shear = self.calc_punching_qu()
             else:
                 qu_shear = self.calc_shear_qu()
@@ -2653,7 +2739,7 @@ class Member2D:
                               (min(alpha_m) * self.system.l_tot ** 2))
             else:
                 qu_bend = 0
-            if self.system.has_columns:
+            if self.should_check_punching():
                 qu_shear = self.calc_punching_qu()
             else:
                 qu_shear = self.calc_shear_qu()
@@ -2771,6 +2857,38 @@ class Member2D:
             m_rd=m_rd,
         )
         return v_rd / self.system.column_tributary_area
+
+    def calc_required_punching_shear_reinforcement_resistance(self, q_area=None):
+        if not getattr(self.system, "has_columns", False):
+            return 0.0
+        if not hasattr(self.section, "calc_punching_shear_resistance"):
+            return 0.0
+        q_area = self.load_combinations.uls() if q_area is None else q_area
+        secondary_forces = None
+        if hasattr(self.section, "get_secondaryInternalForces"):
+            secondary_forces = self.section.get_secondaryInternalForces(self.system)
+        v_sec = self.calc_punching_secondary_force(secondary_forces)
+        v_ed = q_area * self.system.column_tributary_area + v_sec
+        m_ed = self.calc_punching_m_ed(q_area, secondary_forces)
+        m_rd = self.calc_punching_m_rd()
+        original_bw_bg = getattr(self.section, "bw_bg", None)
+        try:
+            if original_bw_bg is not None:
+                self.section.bw_bg = (0.0, original_bw_bg[1], 0)
+            v_rd_without_s = self.section.calc_punching_shear_resistance(
+                column_width=self.system.column_width,
+                column_length=self.system.column_length,
+                ke=self.system.column_ke,
+                l_x=self.system.lx,
+                l_y=self.system.ly,
+                m_ed=m_ed,
+                m_rd=m_rd,
+            )
+        finally:
+            if original_bw_bg is not None:
+                self.section.bw_bg = original_bw_bg
+        self.punching_vrds_required = max(v_ed - v_rd_without_s, 0.0)
+        return self.punching_vrds_required
 
     def calc_qk_zul_gzt(self, gamma_g=1.35, gamma_q=1.5):
         self.qu = self.calc_qu()

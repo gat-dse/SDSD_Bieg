@@ -59,7 +59,7 @@ def product_mech_prop(cursor, prod_id):
 # ----------------------------------------------------------------------------------------------------------------------
 def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requirements, crsec_type, mat_names,
                  g2k=0.75, qk=2.0, max_iter=100, idx_vrfctn=-1, slab_support="PL-eingespannt",
-                 auto_floor_buildup=False, pt_layout=None, plot=True, return_series=False):
+                 auto_floor_buildup=False, pt_layout=None, check_punching=True, plot=True, return_series=False):
 
     if idx_vrfctn == -1:
         idx_vrfctn = random.randint(0, len(lengths)-1)
@@ -75,17 +75,21 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
     def member_series(members, legend_entry):
         def floor_value(mem, attr):
             return getattr(mem.floorstruc, attr, 0.0)
+        def section_height(section):
+            return float(getattr(section, "h", 0.0) or 0.0)
+        def section_weight(section):
+            return float(getattr(section, "g0k", 0.0) or getattr(section, "w", 0.0) or 0.0)
 
         return {
             "legend": legend_entry,
             "lengths": list(lengths),
             "members": members,
-            "h_struct": [mem.section.h for mem in members],
-            "h_total": [mem.section.h + floor_value(mem, "h") for mem in members],
+            "h_struct": [section_height(mem.section) for mem in members],
+            "h_total": [section_height(mem.section) + floor_value(mem, "h") for mem in members],
             "gwp_struct": [mem.section.co2 for mem in members],
             "gwp_total": [mem.section.co2 + floor_value(mem, "co2") for mem in members],
-            "m_struct": [mem.section.g0k / 1000 for mem in members],
-            "m_total": [(mem.section.g0k + floor_value(mem, "gk_area")) / 1000 for mem in members],
+            "m_struct": [section_weight(mem.section) / 1000 for mem in members],
+            "m_total": [(section_weight(mem.section) + floor_value(mem, "gk_area")) / 1000 for mem in members],
             "cost_struct": [getattr(mem.section, "cost", 0.0) for mem in members],
             "cost_total": [getattr(mem.section, "cost", 0.0) + floor_value(mem, "cost") for mem in members],
             "floor_buildup": [getattr(mem.floorstruc, "description", "") for mem in members],
@@ -322,10 +326,12 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                     else:
                         section0 = i[0]
                     floorstruc = floor_for_section(section0, i[1])
-                    member0 = struct_analysis.Member2D(section0, sys, floorstruc, requirements, g2k, qk)
+                    member0 = struct_analysis.Member2D(section0, sys, floorstruc, requirements, g2k, qk,
+                                                       check_punching=check_punching)
                     opt_section = struct_optimization_2D.get_optimized_section(member0, criterion, optimum, max_iter)
                     floorstruc = floor_for_section(opt_section, floorstruc)
-                    opt_member = struct_analysis.Member2D(opt_section, sys, floorstruc, requirements, g2k, qk)
+                    opt_member = struct_analysis.Member2D(opt_section, sys, floorstruc, requirements, g2k, qk,
+                                                          check_punching=check_punching)
                     members.append(opt_member)
                 member_list.append(members)
                 if i[0].section_type[0:2] == "rc":

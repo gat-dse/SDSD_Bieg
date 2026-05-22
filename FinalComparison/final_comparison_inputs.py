@@ -15,7 +15,7 @@ OUTPUT_DIR = "plots"
 DESIGN_CRITERIA = ["ULS", "SLS1", "SLS2", "FIRE"]
 ENV_CRITERIA = ["ENV"]
 OPTIMA = ["GWP"]
-MAX_ITER = 150
+MAX_ITER = 6
 G2K = 0.75e3
 VERIFICATION_INDEX = 1
 
@@ -24,6 +24,7 @@ FIRE_BOTTOM_AND_SIDES = [1, 1, 0, 1]
 
 AUTO_FLOOR_BUILDUP = True
 ACOUSTIC_LEVEL = "normal"
+CHECK_PUNCHING_SHEAR = False
 
 # The dataset functions require an initial floor object. With AUTO_FLOOR_BUILDUP
 # enabled this placeholder is replaced by AcousticFloorGenerator for every

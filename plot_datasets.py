@@ -75,17 +75,21 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
     def member_series(members, legend_entry):
         def floor_value(mem, attr):
             return getattr(mem.floorstruc, attr, 0.0)
+        def section_height(section):
+            return float(getattr(section, "h", 0.0) or 0.0)
+        def section_weight(section):
+            return float(getattr(section, "g0k", 0.0) or getattr(section, "w", 0.0) or 0.0)
 
         return {
             "legend": legend_entry,
             "lengths": list(lengths),
             "members": members,
-            "h_struct": [mem.section.h for mem in members],
-            "h_total": [mem.section.h + floor_value(mem, "h") for mem in members],
+            "h_struct": [section_height(mem.section) for mem in members],
+            "h_total": [section_height(mem.section) + floor_value(mem, "h") for mem in members],
             "gwp_struct": [mem.section.co2 for mem in members],
             "gwp_total": [mem.section.co2 + floor_value(mem, "co2") for mem in members],
-            "m_struct": [mem.section.g0k / 1000 for mem in members],
-            "m_total": [(mem.section.g0k + floor_value(mem, "gk_area")) / 1000 for mem in members],
+            "m_struct": [section_weight(mem.section) / 1000 for mem in members],
+            "m_total": [(section_weight(mem.section) + floor_value(mem, "gk_area")) / 1000 for mem in members],
             "cost_struct": [getattr(mem.section, "cost", 0.0) for mem in members],
             "cost_total": [getattr(mem.section, "cost", 0.0) + floor_value(mem, "cost") for mem in members],
             "floor_buildup": [getattr(mem.floorstruc, "description", "") for mem in members],

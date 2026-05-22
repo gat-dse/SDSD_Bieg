@@ -268,17 +268,19 @@ def opt_rc_rib(m, to_opt="GWP", criterion="ULS", max_iter=100):
     h_w0 = m.section.h-m.section.h_f  # start value for height corresponds to 1/20 of system length
     h_f0 = m.section.h_f
     di_x_w0 = m.section.bw_r[0]  # start value for rebar diameter 40 mm
+    di_xo0 = m.section.bw[1][0]
     b_w0 = m.section.b_w
     b0 = m.section.b
-    var0 = [h_w0, h_f0, di_x_w0, b_w0, b0]
+    var0 = [h_w0, h_f0, di_x_w0, di_xo0, b_w0, b0]
 
     # define bounds of variables
     bh_f = (0.08, 0.5)  # height between 12 cm and 50 cm
     bh_w = (0.04, 2)  # height between 10 cm and 2.0 m
     bdi_x_w = (0.008, 0.04)  # diameter of rebars between 8 mm and 40 mm
+    bdi_xo = (0.008, 0.04)  # upper reinforcement over supports
     bb_w = (0.15, 0.4)  # rib width between 15 and 40 cm
     bb = (0.4, 2.5)  # rib spacing between 0.4 and 2.5 m
-    bounds = [bh_w, bh_f, bdi_x_w, bb_w, bb]
+    bounds = [bh_w, bh_f, bdi_x_w, bdi_xo, bb_w, bb]
 
     # definition of fixed values of cross-section
     l0 = m.li_max
@@ -294,7 +296,7 @@ def opt_rc_rib(m, to_opt="GWP", criterion="ULS", max_iter=100):
     bounded_step = RandomDisplacementBounds(np.array([b[0] for b in bounds]), np.array([b[1] for b in bounds]))
     opt = basinhopping(rc_rib_rqs, var0, niter=max_iter, T=1, minimizer_kwargs={"args": (add_arg,), "bounds": bounds,
                                                                             "method": "Powell"}, take_step=bounded_step)
-    h_w, h_f, di_x_w, b_w, b = opt.x
+    h_w, h_f, di_x_w, di_xo, b_w, b = opt.x
     optimized_section = struct_analysis.RibbedConcrete(co, st, l0, b, b_w, h_f+h_w, h_f, di_xu, s_xu, di_xo, s_xo, di_x_w, n_x_w, di_pb_bw, s_pb_bw, n_pb_bw, phi, c_nom, xi, jnt_srch)
     #print(l0,round(b,5),round(b_w,5), round(h_w,5), round(h_f,5), di_x_w)
 
@@ -305,13 +307,13 @@ def rc_rib_rqs(var, add_arg):
     # input: variables, which have to be optimized, additional info about cross-section and system, optimizing option
     # output: if criterion == GWP -> co2 of cross-section, punished by delta 10*(qk_zul-qk)
     # output: if criterion == h -> height of cross-section, punished by delta 1*(qk_zul-qk)
-    h_w, h_f, di_x_w, b_w, b = var
+    h_w, h_f, di_x_w, di_xo, b_w, b = var
     system = add_arg[0]
     concrete = add_arg[1]
     reinfsteel = add_arg[2]
     l0 = add_arg[3]
     #h_f = add_arg[4]
-    di_xu, s_xu, di_xo, s_xo, n_x_w, di_pb_bw, s_pb_bw, n_pb_bw = add_arg[4:12]
+    di_xu, s_xu, _di_xo_initial, s_xo, n_x_w, di_pb_bw, s_pb_bw, n_pb_bw = add_arg[4:12]
     floorstruc = add_arg[12]
     criteria = add_arg[13]
     to_opt = add_arg[14]
@@ -327,8 +329,6 @@ def rc_rib_rqs(var, add_arg):
     member.calc_qk_zul_gzt()  # calculate admissible live load
     # define penalty1, if ULS is not fulfilled
     penalty1 = max(member.qk - member.qk_zul_gzt, 0)
-    if penalty1 > 1e-6:
-        return uls_infeasible_penalty(member, penalty1)
 
     # define penalty2, if SLS1 (deflections) are not fulfilled
     if member.mkd_p < member.section.mr_p and member.mkd_n < member.section.mr_n:
@@ -613,7 +613,8 @@ def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.08, hw_min=
     hc_opt, hw_opt = opt.x
     optimized_section = struct_analysis.TCC(conc, reb, wood, conn, s, a_ribs, hc_opt, hw_opt, bw, d, l0)
 
-    print(f"Optimized TCC section: hc = {hc_opt:.3f} m, hw = {hw_opt:.3f} m, l0 = {l0:.3f} m, GWP = {optimized_section.co2:.2f} kg CO2e, height = {optimized_section.h:.3f} m")
+    #TCC debugging line
+    #print(f"Optimized TCC section: hc = {hc_opt:.3f} m, hw = {hw_opt:.3f} m, l0 = {l0:.3f} m, GWP = {optimized_section.co2:.2f} kg CO2e, height = {optimized_section.h:.3f} m")
     return optimized_section
 
 # Inner function for evaluating penalties

@@ -1,0 +1,229 @@
+system,target,target_column,feature,spearman_rho,abs_spearman_rho,n
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_h,0.9638229719983802,0.9638229719983802,400
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],h_total [m],0.9601649354069525,0.9601649354069525,400
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],h_struct [m],0.960125727731059,0.960125727731059,400
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],m_struct [kN/m2],0.9601231951778314,0.9601231951778314,400
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],m_total [kN/m2],0.9601214617579272,0.9601214617579272,400
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_d,0.9547461464687291,0.9547461464687291,400
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_ds,0.9533266340251711,0.9533266340251711,400
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_struct [CHF/m2],0.9528262834064684,0.9528262834064684,400
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_total [CHF/m2],0.9527692540971773,0.9527692540971773,400
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],qk_kN_m2,0.809424931717262,0.809424931717262,400
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],span_l_m,0.783719631118304,0.783719631118304,400
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],f1_Hz,0.16501625056775435,0.16501625056775435,400
+Rectangular concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],w_app_mm,0.11437017317577812,0.11437017317577812,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],geom_h,0.9636267732777001,0.9636267732777001,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],h_total [m],0.9600548162406868,0.9600548162406868,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],m_total [kN/m2],0.9599860170657413,0.9599860170657413,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],h_struct [m],0.9599300645446618,0.9599300645446618,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],m_struct [kN/m2],0.9599275319914342,0.9599275319914342,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],geom_d,0.9545517005521922,0.9545517005521922,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],geom_ds,0.9531337813209727,0.9531337813209727,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],cost_total [CHF/m2],0.9529189560340663,0.9529189560340663,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],cost_struct [CHF/m2],0.9527658773617588,0.9527658773617588,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],qk_kN_m2,0.809424931717262,0.809424931717262,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],span_l_m,0.783719631118304,0.783719631118304,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],f1_Hz,0.1645410685138933,0.1645410685138933,400
+Rectangular concrete,gwp_total,GWP_total [kg-CO2-eq/m2],w_app_mm,0.11482135643038636,0.11482135643038636,400
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],span_l_m,0.968378950522387,0.968378950522387,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_l_x,0.968378950522387,0.968378950522387,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_l_y,0.968378950522387,0.968378950522387,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_ds,0.9629417099701734,0.9629417099701734,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_d,0.9627881380509189,0.9627881380509189,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_h,0.9609666631936034,0.9609666631936034,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_dp,0.9609666631936034,0.9609666631936034,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_e_support,-0.9609666631936034,0.9609666631936034,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_e_midspan,0.9609666631936034,0.9609666631936034,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],h_total [m],0.9609201719176804,0.9609201719176804,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],m_struct [kN/m2],0.9609201719176804,0.9609201719176804,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],m_total [kN/m2],0.9609201719176804,0.9609201719176804,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],h_struct [m],0.960919456922577,0.960919456922577,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_struct [CHF/m2],0.9342039558839292,0.9342039558839292,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_total [CHF/m2],0.9342039558839292,0.9342039558839292,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_Psx,0.9291506724792231,0.9291506724792231,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_Psy,0.9291506724792231,0.9291506724792231,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_Px_total,0.9291506724792231,0.9291506724792231,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_Py_total,0.9291506724792231,0.9291506724792231,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],w_app_mm,-0.8545937563818139,0.8545937563818139,160
+Rectangular concrete PT band.,gwp_struct,GWP_struct [kg-CO2-eq/m2],f1_Hz,0.3926104772710235,0.3926104772710235,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],span_l_m,0.968378950522387,0.968378950522387,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_l_x,0.968378950522387,0.968378950522387,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_l_y,0.968378950522387,0.968378950522387,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_ds,0.9629417099701734,0.9629417099701734,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_d,0.9627881380509189,0.9627881380509189,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_h,0.9609666631936034,0.9609666631936034,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_dp,0.9609666631936034,0.9609666631936034,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_e_support,-0.9609666631936034,0.9609666631936034,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_e_midspan,0.9609666631936034,0.9609666631936034,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],h_total [m],0.9609201719176804,0.9609201719176804,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],m_struct [kN/m2],0.9609201719176804,0.9609201719176804,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],m_total [kN/m2],0.9609201719176804,0.9609201719176804,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],h_struct [m],0.960919456922577,0.960919456922577,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],cost_struct [CHF/m2],0.9342039558839292,0.9342039558839292,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],cost_total [CHF/m2],0.9342039558839292,0.9342039558839292,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_Psx,0.9291506724792231,0.9291506724792231,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_Psy,0.9291506724792231,0.9291506724792231,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_Px_total,0.9291506724792231,0.9291506724792231,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_Py_total,0.9291506724792231,0.9291506724792231,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],w_app_mm,-0.8545937563818139,0.8545937563818139,160
+Rectangular concrete PT band.,gwp_total,GWP_total [kg-CO2-eq/m2],f1_Hz,0.3926104772710235,0.3926104772710235,160
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_e_support,-0.9699917542908112,0.9699917542908112,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_e_midspan,0.9699917542908112,0.9699917542908112,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_h,0.9699914708063289,0.9699914708063289,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_dp,0.9699914708063289,0.9699914708063289,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_d,0.9677381768722011,0.9677381768722011,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_ds,0.9673665647609283,0.9673665647609283,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_struct [CHF/m2],0.9658755131709111,0.9658755131709111,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_total [CHF/m2],0.96587546469362,0.96587546469362,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],h_total [m],0.9596852804997805,0.9596852804997805,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],h_struct [m],0.9596852317320244,0.9596852317320244,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],m_struct [kN/m2],0.9596852317320244,0.9596852317320244,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],m_total [kN/m2],0.9596852317320244,0.9596852317320244,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],span_l_m,0.8200211762933204,0.8200211762933204,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_l_x,0.8200211762933204,0.8200211762933204,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_l_y,0.8200211762933204,0.8200211762933204,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_Px_total,0.7698182119563469,0.7698182119563469,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_Py_total,0.7698182119563469,0.7698182119563469,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],qk_kN_m2,0.7588228807820462,0.7588228807820462,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_pdx,0.7348913269496758,0.7348913269496758,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_pdy,0.7348913269496758,0.7348913269496758,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],w_app_mm,-0.32869025977165545,0.32869025977165545,400
+Rectangular concrete PT dist.,gwp_struct,GWP_struct [kg-CO2-eq/m2],f1_Hz,0.10757210762920234,0.10757210762920234,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_e_support,-0.9699917997602464,0.9699917997602464,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_e_midspan,0.9699917997602464,0.9699917997602464,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_h,0.9699915162757509,0.9699915162757509,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_dp,0.9699915162757509,0.9699915162757509,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_d,0.9677382222359975,0.9677382222359975,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_ds,0.9673666101073048,0.9673666101073048,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],cost_total [CHF/m2],0.9658755099700995,0.9658755099700995,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],cost_struct [CHF/m2],0.9658754646489889,0.9658754646489889,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],h_struct [m],0.9596852767183299,0.9596852767183299,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],m_struct [kN/m2],0.9596852767183299,0.9596852767183299,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],m_total [kN/m2],0.9596852767183299,0.9596852767183299,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],h_total [m],0.9596852316875568,0.9596852316875568,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],span_l_m,0.820021214732719,0.820021214732719,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_l_x,0.820021214732719,0.820021214732719,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_l_y,0.820021214732719,0.820021214732719,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_Px_total,0.7698182480424262,0.7698182480424262,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_Py_total,0.7698182480424262,0.7698182480424262,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],qk_kN_m2,0.758822916352707,0.758822916352707,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_pdx,0.7348913613985187,0.7348913613985187,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],geom_pdy,0.7348913613985187,0.7348913613985187,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],w_app_mm,-0.32869027517937455,0.32869027517937455,400
+Rectangular concrete PT dist.,gwp_total,GWP_total [kg-CO2-eq/m2],f1_Hz,0.10757211267176375,0.10757211267176375,400
+Rectangular wood,gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_struct [CHF/m2],0.7759973565947271,0.7759973565947271,90
+Rectangular wood,gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_total [CHF/m2],0.7759428503771403,0.7759428503771403,90
+Rectangular wood,gwp_struct,GWP_struct [kg-CO2-eq/m2],m_struct [kN/m2],0.7463918758309241,0.7463918758309241,90
+Rectangular wood,gwp_struct,GWP_struct [kg-CO2-eq/m2],h_struct [m],0.7463897964583865,0.7463897964583865,90
+Rectangular wood,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_h,0.7463814791353152,0.7463814791353152,90
+Rectangular wood,gwp_struct,GWP_struct [kg-CO2-eq/m2],h_total [m],0.7451729769045152,0.7451729769045152,90
+Rectangular wood,gwp_struct,GWP_struct [kg-CO2-eq/m2],m_total [kN/m2],0.7098786382475966,0.7098786382475966,90
+Rectangular wood,gwp_struct,GWP_struct [kg-CO2-eq/m2],span_l_m,0.5971100325198231,0.5971100325198231,90
+Rectangular wood,gwp_struct,GWP_struct [kg-CO2-eq/m2],w_app_mm,0.011550118592863416,0.011550118592863416,90
+Rectangular wood,gwp_struct,GWP_struct [kg-CO2-eq/m2],f1_Hz,-0.011550118592863416,0.011550118592863416,90
+Rectangular wood,gwp_total,GWP_total [kg-CO2-eq/m2],cost_struct [CHF/m2],0.7583915312656523,0.7583915312656523,90
+Rectangular wood,gwp_total,GWP_total [kg-CO2-eq/m2],cost_total [CHF/m2],0.7582957323911189,0.7582957323911189,90
+Rectangular wood,gwp_total,GWP_total [kg-CO2-eq/m2],h_struct [m],0.7279885949146317,0.7279885949146317,90
+Rectangular wood,gwp_total,GWP_total [kg-CO2-eq/m2],m_struct [kN/m2],0.7279825699404333,0.7279825699404333,90
+Rectangular wood,gwp_total,GWP_total [kg-CO2-eq/m2],geom_h,0.7279796682501267,0.7279796682501267,90
+Rectangular wood,gwp_total,GWP_total [kg-CO2-eq/m2],h_total [m],0.7269287239376211,0.7269287239376211,90
+Rectangular wood,gwp_total,GWP_total [kg-CO2-eq/m2],m_total [kN/m2],0.6968441679616438,0.6968441679616438,90
+Rectangular wood,gwp_total,GWP_total [kg-CO2-eq/m2],span_l_m,0.5788245908377598,0.5788245908377598,90
+Rectangular wood,gwp_total,GWP_total [kg-CO2-eq/m2],w_app_mm,0.010569102798938338,0.010569102798938338,90
+Rectangular wood,gwp_total,GWP_total [kg-CO2-eq/m2],f1_Hz,-0.010569102798938338,0.010569102798938338,90
+Ribbed concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],w_app_mm,-0.14243386150346946,0.14243386150346946,160
+Ribbed concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],f1_Hz,0.14243386150346946,0.14243386150346946,160
+Ribbed concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],span_l_m,0.0,0.0,160
+Ribbed concrete,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_l0,0.0,0.0,160
+Ribbed concrete,gwp_total,GWP_total [kg-CO2-eq/m2],w_app_mm,-0.14243386150346946,0.14243386150346946,160
+Ribbed concrete,gwp_total,GWP_total [kg-CO2-eq/m2],f1_Hz,0.14243386150346946,0.14243386150346946,160
+Ribbed concrete,gwp_total,GWP_total [kg-CO2-eq/m2],span_l_m,0.0,0.0,160
+Ribbed concrete,gwp_total,GWP_total [kg-CO2-eq/m2],geom_l0,0.0,0.0,160
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_total [CHF/m2],0.5136095015484633,0.5136095015484633,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_struct [CHF/m2],0.5131917923234675,0.5131917923234675,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],m_struct [kN/m2],0.4883020840202607,0.4883020840202607,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_h,0.44587370834426526,0.44587370834426526,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],h_struct [m],0.44265449068375795,0.44265449068375795,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],h_total [m],0.4312158424977852,0.4312158424977852,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_t3,0.40542968851828615,0.40542968851828615,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_t2,0.3681797772015485,0.3681797772015485,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],span_l_m,0.36592613733987883,0.36592613733987883,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_l0,0.36592613733987883,0.36592613733987883,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],m_total [kN/m2],-0.07549837031687807,0.07549837031687807,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],w_app_mm,0.009316557708889223,0.009316557708889223,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],f1_Hz,-0.008925411343764528,0.008925411343764528,180
+Ribbed timber hollow core,gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_b,0.004096549557608059,0.004096549557608059,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],cost_total [CHF/m2],0.48153231382205053,0.48153231382205053,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],cost_struct [CHF/m2],0.48110020083067545,0.48110020083067545,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],m_struct [kN/m2],0.45250255152528795,0.45250255152528795,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],geom_h,0.4131116280823302,0.4131116280823302,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],h_struct [m],0.40985505695747526,0.40985505695747526,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],h_total [m],0.3990522321730974,0.3990522321730974,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],geom_t3,0.3801829531919507,0.3801829531919507,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],span_l_m,0.34219884802391404,0.34219884802391404,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],geom_l0,0.34219884802391404,0.34219884802391404,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],geom_t2,0.33994390320149126,0.33994390320149126,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],m_total [kN/m2],-0.05900811549363911,0.05900811549363911,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],w_app_mm,0.016199801339200532,0.016199801339200532,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],f1_Hz,-0.015826014673174175,0.015826014673174175,180
+Ribbed timber hollow core,gwp_total,GWP_total [kg-CO2-eq/m2],geom_b,0.0072694599631036175,0.0072694599631036175,180
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],m_struct [kN/m2],0.6386217213381897,0.6386217213381897,480
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],m_total [kN/m2],0.6386114281571319,0.6386114281571319,480
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],span_l_m,0.6363323296219547,0.6363323296219547,480
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_l0,0.6363323296219547,0.6363323296219547,480
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_h,0.6344253400869974,0.6344253400869974,480
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],h_struct [m],0.6340496531738514,0.6340496531738514,480
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],h_total [m],0.6339312410067878,0.6339312410067878,480
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_struct [CHF/m2],0.6307386616751839,0.6307386616751839,480
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_total [CHF/m2],0.6307386616751839,0.6307386616751839,480
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_h_w,0.6295348999086975,0.6295348999086975,480
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],f1_Hz,-0.5555230573093669,0.5555230573093669,480
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],w_app_mm,0.5185483058749195,0.5185483058749195,480
+"TCC flat, kerve",gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_h_c,0.23135175302376562,0.23135175302376562,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],m_struct [kN/m2],0.6386216105482213,0.6386216105482213,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],m_total [kN/m2],0.6386114801277315,0.6386114801277315,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],span_l_m,0.6363323814070798,0.6363323814070798,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],geom_l0,0.6363323814070798,0.6363323814070798,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],geom_h,0.6344253917169305,0.6344253917169305,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],h_struct [m],0.634049704773211,0.634049704773211,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],h_total [m],0.6339312925965108,0.6339312925965108,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],cost_struct [CHF/m2],0.6307387130050928,0.6307387130050928,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],cost_total [CHF/m2],0.6307387130050928,0.6307387130050928,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],geom_h_w,0.6295349511406435,0.6295349511406435,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],f1_Hz,-0.5555231025181826,0.5555231025181826,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],w_app_mm,0.5185483480747067,0.5185483480747067,480
+"TCC flat, kerve",gwp_total,GWP_total [kg-CO2-eq/m2],geom_h_c,0.23135177185131678,0.23135177185131678,480
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],m_struct [kN/m2],0.7625693862590708,0.7625693862590708,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],m_total [kN/m2],0.7625591908538761,0.7625591908538761,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_struct [CHF/m2],0.7518039404432592,0.7518039404432592,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],cost_total [CHF/m2],0.7517971679410174,0.7517971679410174,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],span_l_m,0.750372286438512,0.750372286438512,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_l0,0.750372286438512,0.750372286438512,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],f1_Hz,-0.7418308470746078,0.7418308470746078,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],w_app_mm,0.7405479232896792,0.7405479232896792,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],h_struct [m],0.7375553089515214,0.7375553089515214,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_h,0.7371573777971085,0.7371573777971085,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],h_total [m],0.7371553211508414,0.7371553211508414,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_h_w,0.7291299609226934,0.7291299609226934,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],qk_kN_m2,0.5871098659756762,0.5871098659756762,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_b_w,0.5871098659756762,0.5871098659756762,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_rebar_layers,0.21957821532173102,0.21957821532173102,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_as_rebar,0.21957821532173102,0.21957821532173102,800
+"TCC ribs, DBS",gwp_struct,GWP_struct [kg-CO2-eq/m2],geom_h_c,-0.20736912003736466,0.20736912003736466,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],m_total [kN/m2],0.7621002335561248,0.7621002335561248,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],m_struct [kN/m2],0.7620902256526348,0.7620902256526348,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],cost_total [CHF/m2],0.7522624997241458,0.7522624997241458,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],cost_struct [CHF/m2],0.7522469127924124,0.7522469127924124,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],span_l_m,0.7510510458184184,0.7510510458184184,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],geom_l0,0.7510510458184184,0.7510510458184184,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],f1_Hz,-0.7431164465907653,0.7431164465907653,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],w_app_mm,0.7416970019851298,0.7416970019851298,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],h_struct [m],0.7377195134828448,0.7377195134828448,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],h_total [m],0.7373762917933359,0.7373762917933359,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],geom_h,0.737320648181163,0.737320648181163,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],geom_h_w,0.7296585081151229,0.7296585081151229,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],qk_kN_m2,0.5878611686137827,0.5878611686137827,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],geom_b_w,0.5878611686137827,0.5878611686137827,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],geom_rebar_layers,0.21259735077171957,0.21259735077171957,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],geom_as_rebar,0.21259735077171957,0.21259735077171957,800
+"TCC ribs, DBS",gwp_total,GWP_total [kg-CO2-eq/m2],geom_h_c,-0.21038783018255394,0.21038783018255394,800
