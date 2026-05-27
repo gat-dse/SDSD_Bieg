@@ -596,7 +596,6 @@ def plot_case(df, case_name, span):
     safe_case = case_name.lower().replace(" ", "_")
     path = OUTPUT_DIR / f"final_cross_sections_{safe_case}_{int(span)}m.png"
     fig.savefig(path, dpi=400, bbox_inches="tight")
-    fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
     plt.close(fig)
     return path
 

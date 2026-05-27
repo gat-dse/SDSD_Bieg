@@ -9,13 +9,15 @@ The runner uses these inputs to create:
 - one ENV comparison plot per use case with structural and total values
 """
 
+import os
+
 DATABASE_NAME = "database_260126.db"
 OUTPUT_DIR = "plots"
 
 DESIGN_CRITERIA = ["ULS", "SLS1", "SLS2", "FIRE"]
 ENV_CRITERIA = ["ENV"]
 OPTIMA = ["GWP"]
-MAX_ITER = 6
+MAX_ITER = 2
 G2K = 0.75e3
 VERIFICATION_INDEX = 1
 
@@ -205,3 +207,39 @@ SCENARIOS = {
         ],
     },
 }
+
+
+def _csv_env(name):
+    value = os.environ.get(name, "")
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _float_csv_env(name):
+    return [float(item) for item in _csv_env(name)]
+
+
+def apply_smoke_overrides():
+    scenario_filter = set(_csv_env("SDSD_SCENARIOS"))
+    system_filter = set(_csv_env("SDSD_SYSTEMS"))
+    length_filter = set(_float_csv_env("SDSD_LENGTHS"))
+
+    if scenario_filter:
+        for scenario_id in list(SCENARIOS):
+            if scenario_id not in scenario_filter:
+                del SCENARIOS[scenario_id]
+
+    for scenario in SCENARIOS.values():
+        if system_filter:
+            scenario["systems"] = [
+                system for system in scenario["systems"]
+                if system["id"] in system_filter or system["label"] in system_filter
+            ]
+        if length_filter:
+            scenario["lengths"] = [
+                length for length in scenario["lengths"]
+                if float(length) in length_filter
+            ]
+            scenario["span_range"] = ", ".join(f"{length:g}" for length in scenario["lengths"]) + " m"
+
+
+apply_smoke_overrides()

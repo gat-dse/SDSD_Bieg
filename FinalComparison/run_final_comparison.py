@@ -43,7 +43,8 @@ SYSTEM_COLORS = {
     "pc_rec_band": "#0B3D91",
     "rc_rib": "#005F3C",
     "wd_rec": "#8B5A2B",
-    "tcc": "#7A7A7A",
+    "tcc_flat": "#7A7A7A",
+    "tcc_rib": "#6A3D9A",
     "wd_rib": "#B86B2B",
 }
 
@@ -68,8 +69,15 @@ CRITERION_MIX = {
     "FIRE": ("#D55E00", 0.45),
 }
 
-BAND_ALPHA_SINGLE = 0.48
-BAND_ALPHA_COMPARISON = 0.30
+CRITERION_LINE_STYLES = {
+    "ULS": {"linestyle": "-", "marker": "o"},
+    "SLS1": {"linestyle": "--", "marker": "s"},
+    "SLS2": {"linestyle": ":", "marker": "^"},
+    "FIRE": {"linestyle": "-.", "marker": "D"},
+}
+
+BAND_ALPHA_SINGLE = 0.72
+BAND_ALPHA_COMPARISON = 0.45
 
 SUMMARY_METRICS = [
     ("gwp_struct", "GWP_struct [kg-CO2-eq/m2]"),
@@ -234,8 +242,39 @@ def geometry_description(section):
     return " | ".join(parts)
 
 
+def ensure_qk_zul(member):
+    if callable(getattr(member, "calc_qk_zul_gzt", None)):
+        try:
+            member.calc_qk_zul_gzt()
+        except Exception:
+            pass
+    try:
+        return float(getattr(member, "qk_zul_gzt", float("nan")))
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+def member_is_uls_feasible(member, tol=1e-6):
+    qk_zul = ensure_qk_zul(member)
+    try:
+        qk = float(getattr(member, "qk", 0.0))
+    except (TypeError, ValueError):
+        return False
+    return pd.notna(qk_zul) and qk_zul + tol >= qk
+
+
+def feasible_series_at_length(series, idx):
+    return [item for item in series if member_is_uls_feasible(item["members"][idx])]
+
+
 def member_summary_row(case_name, scenario, system, criterion, optimum, variant, length, member, prefix=None):
     section = member.section
+    qk_zul = ensure_qk_zul(member)
+    qk = getattr(member, "qk", scenario["qk"])
+    try:
+        qk_deficit = max(float(qk) - qk_zul, 0.0)
+    except (TypeError, ValueError):
+        qk_deficit = ""
     punching_vrds_required = ""
     if getattr(section, "section_type", "") in ("rc_rec", "pc_rec"):
         punching_vrds_required = number_or_empty(
@@ -259,7 +298,9 @@ def member_summary_row(case_name, scenario, system, criterion, optimum, variant,
         "geometry": geometry_description(section),
         "materials": material_description(section),
         "floor_buildup": floor_description(member),
-        "qk_zul_gzt_kN_m2": number_or_empty(getattr(member, "qk_zul_gzt", ""), scale=1 / 1000),
+        "qk_zul_gzt_kN_m2": number_or_empty(qk_zul, scale=1 / 1000),
+        "uls_feasible": member_is_uls_feasible(member),
+        "qk_deficit_kN_m2": number_or_empty(qk_deficit, scale=1 / 1000),
         "punching_V_Rd_s_required_kN": punching_vrds_required,
         "w_app_mm": number_or_empty(getattr(member, "w_app", ""), scale=1000),
         "f1_Hz": number_or_empty(getattr(member, "f1", "")),
@@ -284,6 +325,10 @@ def system_color(system):
         if "band" in label or layout in ([1, 0, 1, 0], [1, 1, 1, 1]):
             return SYSTEM_COLORS["pc_rec_band"]
         return SYSTEM_COLORS["pc_rec_dist"]
+    if crsec_type == "tcc":
+        if "rib" in system["label"].lower() or "rib" in system["id"].lower():
+            return SYSTEM_COLORS["tcc_rib"]
+        return SYSTEM_COLORS["tcc_flat"]
     return SYSTEM_COLORS.get(crsec_type, "#333333")
 
 
@@ -293,7 +338,7 @@ def criterion_color(system, criterion):
     return mix_color(base, target, amount)
 
 
-def envelope_by_length(series, key):
+def envelope_by_length(series, key, require_uls_feasible=False):
     if not series:
         raise ValueError("No result series available.")
     lengths = series[0]["lengths"]
@@ -301,7 +346,13 @@ def envelope_by_length(series, key):
     values_med = []
     values_max = []
     for idx, _ in enumerate(lengths):
-        values = sorted(item[key][idx] for item in series)
+        candidates = feasible_series_at_length(series, idx) if require_uls_feasible else series
+        if not candidates:
+            values_min.append(float("nan"))
+            values_med.append(float("nan"))
+            values_max.append(float("nan"))
+            continue
+        values = sorted(item[key][idx] for item in candidates)
         values_min.append(min(values))
         values_med.append(pd.Series(values).median())
         values_max.append(max(values))
@@ -314,11 +365,35 @@ def draw_envelope_lines(ax, envelope, color):
     ax.plot(envelope["lengths"], envelope["max"], color=color, linewidth=0.55, alpha=0.62, zorder=2)
 
 
-def envelope_member(series, key, idx, boundary):
+def draw_single_criterion_envelope(ax, envelope, color, criterion):
+    style = CRITERION_LINE_STYLES.get(criterion, {"linestyle": "-", "marker": "o"})
+    ax.plot(
+        envelope["lengths"],
+        envelope["median"],
+        color=color,
+        linewidth=1.8,
+        alpha=0.98,
+        zorder=4,
+        linestyle=style["linestyle"],
+        marker=style["marker"],
+        markersize=4.2,
+        markerfacecolor="white",
+        markeredgewidth=0.8,
+    )
+    ax.plot(envelope["lengths"], envelope["min"], color=color, linewidth=0.65, alpha=0.62, zorder=2,
+            linestyle=style["linestyle"])
+    ax.plot(envelope["lengths"], envelope["max"], color=color, linewidth=0.65, alpha=0.62, zorder=2,
+            linestyle=style["linestyle"])
+
+
+def envelope_member(series, key, idx, boundary, require_uls_feasible=False):
+    candidates = feasible_series_at_length(series, idx) if require_uls_feasible else series
+    if not candidates:
+        return None
     if boundary == "best/lower":
-        return min(series, key=lambda item: item[key][idx])
+        return min(candidates, key=lambda item: item[key][idx])
     if boundary == "worst/upper":
-        return max(series, key=lambda item: item[key][idx])
+        return max(candidates, key=lambda item: item[key][idx])
     raise ValueError(f"Unknown envelope boundary: {boundary}")
 
 
@@ -326,8 +401,8 @@ def collect_variant_rows(case_name, scenario, system, series):
     rows = []
     for item in series:
         legend = item.get("legend", ("", "", ""))
-        material_variant = clean_text(legend[0]) if len(legend) > 0 else ""
-        optimum = clean_text(legend[1]) if len(legend) > 1 else ""
+        material_variant = clean_text(legend[1]) if len(legend) > 1 else ""
+        optimum = clean_text(legend[3]) if len(legend) > 3 else ""
         criterion = clean_text(legend[2]) if len(legend) > 2 else ""
         for idx, length in enumerate(item["lengths"]):
             member = item["members"][idx]
@@ -347,7 +422,9 @@ def collect_envelope_rows(case_name, scenario, system, series, criteria, metrics
         for key, label in metrics:
             for idx, length in enumerate(subset[0]["lengths"]):
                 for boundary in ("best/lower", "worst/upper"):
-                    item = envelope_member(subset, key, idx, boundary)
+                    item = envelope_member(subset, key, idx, boundary, require_uls_feasible=True)
+                    if item is None:
+                        continue
                     legend = item.get("legend", ("", "", ""))
                     member = item["members"][idx]
                     row = member_summary_row(
@@ -355,8 +432,8 @@ def collect_envelope_rows(case_name, scenario, system, series, criteria, metrics
                         scenario,
                         system,
                         criterion,
+                        clean_text(legend[3]) if len(legend) > 3 else "",
                         clean_text(legend[1]) if len(legend) > 1 else "",
-                        clean_text(legend[0]) if len(legend) > 0 else "",
                         length,
                         member,
                     )
@@ -419,7 +496,13 @@ def select_best_by_length(series, selection_key="gwp_total"):
         best[key] = []
 
     for idx, _ in enumerate(lengths):
-        chosen = min(series, key=lambda item: item[selection_key][idx])
+        candidates = feasible_series_at_length(series, idx)
+        if not candidates:
+            for key in keys:
+                best[key].append(float("nan"))
+            best["members"].append(None)
+            continue
+        chosen = min(candidates, key=lambda item: item[selection_key][idx])
         for key in keys:
             best[key].append(chosen[key][idx])
         best["members"].append(chosen["members"][idx])
@@ -438,7 +521,7 @@ def plot_single_system(case_name, scenario, system, all_series, output_dir):
         subset = series_for_criterion(all_series, criterion)
         if not subset:
             continue
-        envelope = envelope_by_length(subset, "gwp_struct")
+        envelope = envelope_by_length(subset, "gwp_struct", require_uls_feasible=True)
         y_values.extend(envelope["min"])
         y_values.extend(envelope["max"])
         color = criterion_color(system, criterion)
@@ -451,7 +534,7 @@ def plot_single_system(case_name, scenario, system, all_series, output_dir):
             linewidth=0,
             alpha=BAND_ALPHA_SINGLE,
         )
-        draw_envelope_lines(ax, envelope, color)
+        draw_single_criterion_envelope(ax, envelope, color, criterion)
         handles.append(Patch(facecolor=color, edgecolor="none", alpha=BAND_ALPHA_SINGLE, label=criterion))
 
     if not handles:
@@ -471,7 +554,6 @@ def plot_single_system(case_name, scenario, system, all_series, output_dir):
     fig.tight_layout()
     path = output_dir / f"final_single_{case_name}_{system['id']}.png"
     fig.savefig(path, dpi=400, bbox_inches="tight")
-    fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
     plt.close(fig)
     return path
 
@@ -494,7 +576,7 @@ def plot_env_comparison(case_name, scenario, env_results, output_dir):
         y_values = []
         for item in env_results:
             color = item["color"]
-            envelope = envelope_by_length(item["series"], key)
+            envelope = envelope_by_length(item["series"], key, require_uls_feasible=True)
             y_values.extend(envelope["min"])
             y_values.extend(envelope["max"])
             ax.fill_between(
@@ -540,7 +622,6 @@ def plot_env_comparison(case_name, scenario, env_results, output_dir):
     fig.tight_layout(rect=(0, 0, 1, 0.875))
     path = output_dir / f"final_env_comparison_{case_name}.png"
     fig.savefig(path, dpi=400, bbox_inches="tight")
-    fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
     plt.close(fig)
     return path
 
@@ -572,6 +653,9 @@ def export_excel_summary(output_dir, variant_rows, envelope_rows, best_rows):
 def print_floor_buildups(scenario, system, data):
     print(f"    floor build-up examples for {system['label']}:", flush=True)
     for length, member in zip(data["lengths"], data["members"]):
+        if member is None:
+            print(f"      l={length:g} m: no ULS-feasible candidate", flush=True)
+            continue
         print(f"      l={length:g} m: {floor_description(member)}", flush=True)
 
 
@@ -619,6 +703,22 @@ def main():
             ))
             env_best = select_best_by_length(env_series, "gwp_total")
             for idx, length in enumerate(env_best["lengths"]):
+                if env_best["members"][idx] is None:
+                    best_rows.append({
+                        "case": scenario["label"],
+                        "case_id": case_name,
+                        "system": system["label"],
+                        "system_id": system["id"],
+                        "criterion": "ENV",
+                        "optimum": "GWP",
+                        "variant": "no ULS-feasible candidate",
+                        "span_l_m": length,
+                        "qk_kN_m2": scenario["qk"] / 1000,
+                        "description": system.get("description", ""),
+                        "structural_system": system.get("structural_system", ""),
+                        "uls_feasible": False,
+                    })
+                    continue
                 row = member_summary_row(
                     case_name,
                     scenario,

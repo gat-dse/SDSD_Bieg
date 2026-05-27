@@ -6,6 +6,12 @@ import numpy as np
 
 ULS_INFEASIBLE_BASE_PENALTY = 1e9
 ULS_INFEASIBLE_DEFICIT_FACTOR = 1e6
+ULS_PENALTY_WEIGHT = 1.0
+SLS1_DEFLECTION_PENALTY_WEIGHT = 1e5
+SLS2_ACCELERATION_PENALTY_WEIGHT = 1e2
+SLS2_WALKING_DEFLECTION_PENALTY_WEIGHT = 1e5
+SLS2_VELOCITY_PENALTY_WEIGHT = 1e3
+FIRE_PENALTY_WEIGHT = 1.0
 
 
 def uls_infeasible_penalty(member, deficit=None):
@@ -36,6 +42,78 @@ def invalid_rectangular_geometry(h, c_nom, di_xu, di_xo, di_bw):
     d = h - c_nom - di_bw - di_xu / 2
     ds = h - c_nom - di_bw - di_xo / 2
     return d <= 0 or ds <= 0
+
+
+def calc_uls_penalty(member):
+    deficit = max(member.qk - member.qk_zul_gzt, 0.0)
+    return ULS_PENALTY_WEIGHT * deficit
+
+
+def calc_sls1_penalty(member, use_cracked_deflection=True):
+    use_cracked = use_cracked_deflection and not (
+        member.mkd_p < member.section.mr_p and member.mkd_n > member.section.mr_n
+    )
+    if use_cracked:
+        checks = [
+            (member.w_install_ger - member.w_install_adm, member.w_install_adm),
+            (member.w_use_ger - member.w_use_adm, member.w_use_adm),
+            (member.w_app_ger - member.w_app_adm, member.w_app_adm),
+        ]
+    else:
+        checks = [
+            (member.w_install - member.w_install_adm, member.w_install_adm),
+            (member.w_use - member.w_use_adm, member.w_use_adm),
+            (member.w_app - member.w_app_adm, member.w_app_adm),
+        ]
+    return SLS1_DEFLECTION_PENALTY_WEIGHT * max(max(value, 0.0) for value, _reference in checks)
+
+
+def calc_sls2_penalty(member):
+    pen_a = member.a_ed - member.requirements.a_cd
+    pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1
+    pen_v = member.ve_ed - member.ve_cd
+    if member.f1 < member.requirements.f1:
+        return max(
+            SLS2_ACCELERATION_PENALTY_WEIGHT * pen_a,
+            SLS2_WALKING_DEFLECTION_PENALTY_WEIGHT * pen_w,
+            SLS2_VELOCITY_PENALTY_WEIGHT * pen_v,
+            0.0,
+        )
+    return max(
+        SLS2_WALKING_DEFLECTION_PENALTY_WEIGHT * pen_w,
+        SLS2_VELOCITY_PENALTY_WEIGHT * pen_v,
+        0.0,
+    )
+
+
+def calc_fire_penalty(member):
+    member.get_fire_resistance()
+    deficit = max(member.requirements.t_fire - member.fire_resistance, 0.0)
+    return FIRE_PENALTY_WEIGHT * deficit
+
+
+def criterion_penalty(member, criterion, include_uls_guard=True, use_cracked_deflection=True):
+    penalty_uls = calc_uls_penalty(member)
+    if criterion == "ULS":
+        return penalty_uls
+
+    guard = penalty_uls if include_uls_guard else 0.0
+    if criterion == "SLS1":
+        return guard + calc_sls1_penalty(member, use_cracked_deflection=use_cracked_deflection)
+    if criterion == "SLS2":
+        return guard + calc_sls2_penalty(member)
+    if criterion == "FIRE":
+        return guard + calc_fire_penalty(member)
+    if criterion == "ENV":
+        return (
+            penalty_uls
+            + calc_sls1_penalty(member, use_cracked_deflection=use_cracked_deflection)
+            + calc_sls2_penalty(member)
+            + calc_fire_penalty(member)
+        )
+    print("criterion " + criterion + " is not defined")
+    print("criterion has to be 'ULS', 'SLS1', 'SLS2', 'FIRE' or 'ENV'")
+    return 99.0
 
 # OPTIMIZATION OF CROSS-SECTIONS FOR DEFINED MEMBERS
 # ----------------------------------------------------------------------------------------------------------------------
@@ -115,73 +193,12 @@ def rc_rqs(var, add_arg):
                                       check_punching=check_punching)
     member.calc_qk_zul_gzt()  # calculate admissible live load
 
-    # define penalty1, if ULS is not fulfilled
-    penalty1 = max(member.qk - member.qk_zul_gzt, 0)
-    if penalty1 > 1e-6:
-        return uls_infeasible_penalty(member, penalty1)
-
-    # define penalty2, if SLS1 (deflections) are not fulfilled
-    if member.mkd_p < member.section.mr_p and member.mkd_n < member.section.mr_n:
-        d1, d2, d3 = [member.w_install - member.w_install_adm, member.w_use - member.w_use_adm,
-                      member.w_app - member.w_app_adm]
-    else:
-        d1, d2, d3 = [member.w_install_ger - member.w_install_adm, member.w_use_ger - member.w_use_adm,
-                      member.w_app_ger - member.w_app_adm]
-    penalty2 = 1e5 * max(d1, d2, d3, 0)
-
-    # define penalty3, if SLS2 (vibrations) are not fulfilled
-    pen_a = member.a_ed - member.requirements.a_cd  # Grössenordnung 1e-2
-    pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1  # HBT S. 48. r2 wird gleich 1 gesetzt
-    # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
-    pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
-    if member.f1 < member.requirements.f1:
-        penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
-    else:
-        penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
-
-    # define penalty4, if fire resistance is not fulfilled
-    member.get_fire_resistance()
-    penalty4 = max(member.requirements.t_fire-member.fire_resistance, 0)
-
-    # optimize ULS only
-    if criterion == "ULS":  # optimize ultimate limit state
-        if to_opt == "GWP":
-            return member.section.co2*(1+penalty1)
-        elif to_opt == "h":
-            return member.section.h*(1+penalty1)
-
-    # optimize SLS1 (deflections). Make sure, that also ULS is fulfilled
-    elif criterion == "SLS1":  # optimize service limit state (deflections)
-        if to_opt == "GWP":
-            return member.section.co2*(1+penalty2)
-        elif to_opt == "h":
-            return member.section.h*(1+penalty2)
-
-    # optimize SLS2 (vibrations). Make sure, that also ULS is fulfilled
-    elif criterion == "SLS2":
-        if to_opt == "GWP":
-            to_minimize = member.section.co2*(1+penalty3)
-        elif to_opt == "h":
-            to_minimize = member.section.h*(1+penalty3)
-
-    # optimize fire resistance only
-    elif criterion == "FIRE":
-        if to_opt == "GWP":
-            return member.section.co2*(1+penalty4)
-        elif to_opt == "h":
-            return member.section.h * (1+penalty4)
-
-    # optimize solution, which fulfills all requirements (ULS, SLS1 and SLS2, FIRE)
-    elif criterion == "ENV":
-        if to_opt == "GWP":
-            to_minimize = member.section.co2*(1+penalty1+penalty2+penalty3+penalty4)
-        elif to_opt == "h":
-            to_minimize = member.section.h*(1+penalty1+penalty2+penalty3+penalty4)
-    else:
-        to_minimize = 99
-        print("criterion " + criterion + " is not defined")
-        print("criterion has to be 'ULS', 'SLS1', 'SLS2', 'FIRE' or 'ENV'")
-    return to_minimize
+    penalty = criterion_penalty(member, criterion, include_uls_guard=True, use_cracked_deflection=True)
+    if to_opt == "GWP":
+        return member.section.co2 * (1 + penalty)
+    elif to_opt == "h":
+        return member.section.h * (1 + penalty)
+    return 99
 
 
 # OPTIMIZATION OF RECTANGULAR POST-TENSIONED CONCRETE CROSS-SECTIONS
@@ -268,46 +285,7 @@ def pc_rqs(var, add_arg):
     )
     member.calc_qk_zul_gzt()
 
-    penalty1 = max(member.qk - member.qk_zul_gzt, 0)
-
-    if criterion == "ULS":
-        penalty = penalty1
-    elif criterion == "SLS1":
-        d1, d2, d3 = [member.w_install - member.w_install_adm, member.w_use - member.w_use_adm,
-                      member.w_app - member.w_app_adm]
-        penalty2 = 1e5 * max(d1, d2, d3, 0)
-        penalty = penalty2
-    elif criterion == "SLS2":
-        pen_a = member.a_ed - member.requirements.a_cd
-        pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1
-        pen_v = member.ve_ed - member.ve_cd
-        if member.f1 < member.requirements.f1:
-            penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
-        else:
-            penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
-        penalty = penalty3
-    elif criterion == "FIRE":
-        member.get_fire_resistance()
-        penalty4 = max(member.requirements.t_fire - member.fire_resistance, 0)
-        penalty = penalty4
-    elif criterion == "ENV":
-        d1, d2, d3 = [member.w_install - member.w_install_adm, member.w_use - member.w_use_adm,
-                      member.w_app - member.w_app_adm]
-        penalty2 = 1e5 * max(d1, d2, d3, 0)
-        pen_a = member.a_ed - member.requirements.a_cd
-        pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1
-        pen_v = member.ve_ed - member.ve_cd
-        if member.f1 < member.requirements.f1:
-            penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
-        else:
-            penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
-        member.get_fire_resistance()
-        penalty4 = max(member.requirements.t_fire - member.fire_resistance, 0)
-        penalty = penalty1 + penalty2 + penalty3 + penalty4
-    else:
-        print("criterion " + criterion + " is not defined")
-        print("criterion has to be 'ULS', 'SLS1', 'SLS2', 'FIRE' or 'ENV'")
-        penalty = 99
+    penalty = criterion_penalty(member, criterion, include_uls_guard=True, use_cracked_deflection=False)
 
     if to_opt == "GWP":
         return member.section.co2 * (1 + penalty)

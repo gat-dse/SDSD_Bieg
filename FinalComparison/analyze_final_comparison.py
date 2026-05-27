@@ -32,8 +32,19 @@ SYSTEM_COLORS = {
     "Ribbed concrete": "#005F3C",
     "Rectangular wood": "#8B5A2B",
     "TCC flat, kerve": "#7A7A7A",
-    "TCC ribs, DBS": "#7A7A7A",
+    "TCC ribs, DBS": "#6A3D9A",
     "Ribbed timber hollow core": "#B86B2B",
+}
+
+SYSTEM_MARKERS = {
+    "Rectangular concrete": "o",
+    "Rectangular concrete PT dist.": "s",
+    "Rectangular concrete PT band.": "D",
+    "Ribbed concrete": "^",
+    "Rectangular wood": "v",
+    "TCC flat, kerve": "P",
+    "TCC ribs, DBS": "X",
+    "Ribbed timber hollow core": "*",
 }
 
 STATIC_SYSTEM_COLORS = {
@@ -195,8 +206,7 @@ def remove_single_scatter_outputs(output_dir: Path) -> None:
         "scatter_gwp_total_vs_mass_total",
     ]
     for stem in old_stems:
-        for suffix in (".png", ".pdf"):
-            (output_dir / f"{stem}{suffix}").unlink(missing_ok=True)
+        (output_dir / f"{stem}.png").unlink(missing_ok=True)
 
 
 def overview_plot(
@@ -218,12 +228,14 @@ def overview_plot(
     for ax, (x_col, x_label, title) in zip(axes, plots):
         for category, group in df.groupby(group_col):
             color = colors.get(str(category), "#444444")
+            marker = SYSTEM_MARKERS.get(str(category), "o") if group_col == "system" else "o"
             ax.scatter(
                 group[x_col],
                 group["GWP_total [kg-CO2-eq/m2]"],
                 s=19,
-                alpha=0.34,
+                alpha=0.51,
                 color=color,
+                marker=marker,
                 edgecolors="white",
                 linewidths=0.18,
             )
@@ -249,7 +261,6 @@ def overview_plot(
     )
     fig.tight_layout(rect=(0, 0, 1, 0.90 if len(handles) > 8 else 0.94))
     fig.savefig(output_dir / f"{filename}.png", dpi=350, bbox_inches="tight")
-    fig.savefig(output_dir / f"{filename}.pdf", bbox_inches="tight")
     plt.close(fig)
 
 

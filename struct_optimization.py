@@ -711,6 +711,8 @@ def get_optimized_section(member, criterion, to_opt, max_iter, h_min=0.2):
         # available criterion arguments: "ULS", "SLS1", "SLS2"
         return opt_wd_rib(member, to_opt, criterion, max_iter)
     elif member.section.section_type == "tcc":
+        # available to_opt arguments: "GWP", "h"
+        # available criterion arguments: "ULS", "SLS1", "SLS2", "FIRE", "ENV"
         return opt_tcc(member, to_opt, criterion, max_iter)
     else:
         print("There is no optimization for the section type " + member.section.section_type + " available!")

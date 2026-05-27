@@ -202,8 +202,13 @@ class ConnectorTCC:
         cursor.execute(inquiry)
         result = cursor.fetchall()
         self.name = result[0][0]
-        # get GWP properties from database
-        #TODO: Tabelle für TCC-Verbinder in Datenbank ergänzen, damit GWP und Kosten berücksichtigt werden können
+        try:
+            inquiry = "SELECT GWP FROM connector_TCC WHERE name=" + mech_prop
+            cursor.execute(inquiry)
+            result = cursor.fetchall()
+            self.GWP = 0.0 if result[0][0] is None else float(result[0][0])
+        except sqlite3.OperationalError:
+            self.GWP = 0.0
 
     def get_design_values(self):
         return self.K_ser 
@@ -1067,16 +1072,18 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         [self.vu_PB_p, self.vu_PB_n, self.as_PB_bw] = self.calc_shear_resistance(
             'Plattenbalken')  #Rippe Plattenbalken "Längsrichtung"
         self.g0k = self.calc_weight(concrete_type.weight)
-        a_s_stat = self.as_p + self.as_n + self.as_bw + self.as_PB_p + self.as_PB_n + self.as_PB_bw
+        a_s_slab = self.as_p + self.as_n + self.as_bw
+        a_s_rib = self.as_PB_p + self.as_PB_n + self.as_PB_bw
         #TODO: Achtung - es fehlt die Spreizbewehrung
         self.joint_surcharge = jnt_srch
-        a_s_tot = a_s_stat * (1 + self.joint_surcharge)
+        a_s_tot = (a_s_slab * self.b + a_s_rib) * (1 + self.joint_surcharge)
+        concrete_area = max(self.a_brutt - a_s_tot, 0.0)
         co2_rebar = a_s_tot * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
-        co2_concrete = (self.a_brutt - a_s_tot) * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
+        co2_concrete = concrete_area * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.ei1 = self.concrete_type.Ecm * self.iy  # elastic stiffness concrete (uncracked behaviour) [Nm^2]
         self.co2 = (co2_rebar + co2_concrete)/self.b
-        self.cost = (a_s_tot * self.rebar_type.cost + (self.a_brutt - a_s_tot) * self.concrete_type.cost)/self.b + self.concrete_type.cost2*2 # [CHF/m] 
-        self.construction_time = (a_s_tot * self.rebar_type.construction_time + (self.a_brutt - a_s_tot) * self.concrete_type.construction_time)/self.b + self.concrete_type.construction_time_scaffold*2 # [h/m]
+        self.cost = (a_s_tot * self.rebar_type.cost + concrete_area * self.concrete_type.cost)/self.b + self.concrete_type.cost2*2 # [CHF/m] 
+        self.construction_time = (a_s_tot * self.rebar_type.construction_time + concrete_area * self.concrete_type.construction_time)/self.b + self.concrete_type.construction_time_scaffold*2 # [h/m]
         self.ei_b = self.ei1  #!!!!!!!ANPASSEN AUF PB
         self.xi = xi  # XXXXXXX preset value is an assumption. Has to be verified with literature. XXXXXXX
         self.ei2 = self.ei1 / self.f_w_ger(self.roh, self.rohs, 0, self.h, self.d_PB)  #!!!!!ANPASSEN AUF PB
@@ -1544,16 +1551,19 @@ class TCC(SupStrucTCC):
         self.rebar_s = 0.150
         self.rebar_layers = 4 if self.h_c > 0.12 else 2
         self.as_rebar = self.calc_tcc_rebar_area(self.rebar_d, self.rebar_s, self.rebar_layers)
+        wood_volume = self.d + self.A_w / self.a_ribs
         concrete_volume = max(self.h_c - self.as_rebar, 0.0)
-        self.co2 = (self.A_w / self.a_ribs * self.wood_type.GWP * self.wood_type.density
+        connector_gwp = getattr(self.connector_type, "GWP", 0.0) / (self.s * self.a_ribs)
+        self.co2 = (wood_volume * self.wood_type.GWP * self.wood_type.density
                     + concrete_volume * self.concrete_type.GWP * self.concrete_type.density
-                    + self.as_rebar * self.rebar_type.GWP * self.rebar_type.density)  # [kg_CO2_eq/m2]
+                    + self.as_rebar * self.rebar_type.GWP * self.rebar_type.density
+                    + connector_gwp)  # [kg_CO2_eq/m2]
         self.cost = (self.connector_type.cost / (self.s * self.a_ribs)
-                     + (self.d + self.A_w / self.a_ribs) * self.wood_type.cost
+                     + wood_volume * self.wood_type.cost
                      + concrete_volume * self.concrete_type.cost
                      + self.as_rebar * self.rebar_type.cost)  # [CHF/m2]
         self.construction_time = (self.connector_type.construction_time / (self.s * self.a_ribs)
-                                  + (self.d + self.A_w / self.a_ribs) * self.wood_type.construction_time
+                                  + wood_volume * self.wood_type.construction_time
                                   + concrete_volume * self.concrete_type.construction_time
                                   + self.as_rebar * self.rebar_type.construction_time)  # [h/m2]
         self.g0k = self.calc_weight() 
@@ -2177,7 +2187,7 @@ class Slab:
         self.alpha_v = (float(self.result[8]), float(self.result[9])) #positive and negative shear
         self.qs_cl_erf = [2, 1]
         self.alpha_w = float(self.result[10])
-        self.kf2 = 1.0
+        self.kf2 = float(self.result[11]) # Hilfsfaktor zur Brücksichtigung der Spannweitenverhältnisse bei Berechnung f1 gem. HBT, S. 46 aus ZC1 Grundlagen Baudynamik
         self.alpha_w_f_cd = self.calc_alpha_w_f_cd(self.alpha_w)
 
         #self.factors = [self.alpha_m, self.alpha_v, self.qs_cl_erf, self.alpha_w, self.kf2, self.alpha_w_f_cd]
@@ -2668,13 +2678,43 @@ class Member2D:
     def should_check_punching(self):
         return bool(self.check_punching and getattr(self.system, "has_columns", False))
 
+    def uls_redistributed_moment_factors(self):
+        elastic_factors = (self.system.alpha_m_x, self.system.alpha_m_y)
+        factors = { #factors for plastic redistribution of moments
+            "LL-eingespannt": (1.51, 0.76),
+            "PL-eingespannt": (1.47, 0.68),
+        }.get(self.system.raender)
+        if factors is None:
+            return elastic_factors
+
+        if self.section.section_type not in ("rc_rec", "pc_rec"):
+            return elastic_factors
+
+        #Check wheter cross section allows for plastic redistribution in bending according to ductility classes
+        qs_class_vorh = [self.section.qs_class_n, self.section.qs_class_p]
+        if not (
+            qs_class_vorh[0] <= self.system.qs_cl_erf[0]
+            and qs_class_vorh[1] <= self.system.qs_cl_erf[1]
+        ):
+            return elastic_factors
+
+        pos_factor, neg_factor = factors
+
+        def redistribute(alpha_m):
+            return tuple(
+                alpha * (pos_factor if alpha >= 0 else neg_factor)
+                for alpha in alpha_m
+            )
+
+        return redistribute(self.system.alpha_m_x), redistribute(self.system.alpha_m_y)
+
     def calc_qu(self):
         """
         Idea: qu von maximaler Spannweite definiert
         Schauen, welche Nachweise man alles in beide Richtungen machen muss und bei welchen einfach l_max ausreicht!
         """
         # calculates maximal load qu in respect to bearing moment mu_max, mu_min and static system
-        alpha_m = self.system.alpha_m_x
+        alpha_m, _ = self.uls_redistributed_moment_factors()
         alpha_v = self.system.alpha_v
         qs_class_erf = self.system.qs_cl_erf  # z.B. [0, 2]
         qs_class_vorh = [self.section.qs_class_n, self.section.qs_class_p]
@@ -2806,13 +2846,14 @@ class Member2D:
         return q_low
 
     def calc_punching_m_ed(self, q_area, secondary_forces=None):
+        alpha_m_x, alpha_m_y = self.uls_redistributed_moment_factors()
         moments_x = [
-            q_area * self.system.alpha_m_x[0] * self.system.l_tot ** 2,
-            q_area * self.system.alpha_m_x[1] * self.system.l_tot ** 2,
+            q_area * alpha_m_x[0] * self.system.l_tot ** 2,
+            q_area * alpha_m_x[1] * self.system.l_tot ** 2,
         ]
         moments_y = [
-            q_area * self.system.alpha_m_y[0] * self.li_min ** 2,
-            q_area * self.system.alpha_m_y[1] * self.li_min ** 2,
+            q_area * alpha_m_y[0] * self.li_min ** 2,
+            q_area * alpha_m_y[1] * self.li_min ** 2,
         ]
         if hasattr(self.section, "get_secondaryInternalForces"):
             if secondary_forces is None:
@@ -2908,7 +2949,8 @@ class Member2D:
             eil = self.section.ei1
         m = self.m
  #       print("m =", m)
-        f1 = kf2 * np.pi / (2 * l_rech ** 2) * (abs(eil) / abs(m)) ** 0.5  # HBT, Seite 46
+        nu_c = 0.2 # Poisson's ratio for concrete, used for correction of frequency according to SIA 262
+        f1 = kf2 / (2*np.pi*l_rech**2)* (abs(eil) / (abs(m)*(1-nu_c**2)))**0.5 #eigenfrequency for slabs according to ZC1 Grundlagen Baudynamik
         return f1
 
     def calc_vib1(self, f0=700):
@@ -2925,12 +2967,11 @@ class Member2D:
         else:
             alpha = 0.06
             ff = 6.9
-        a_ed = 0.4 * f0 * alpha / m_gen * 1 / (
-                    ((f1 / ff) ** 2 - 1) ** 2 + (2 * xi * f1 / ff) ** 2) ** 0.5  # HBT, Seite 47
+        a_ed = 0.4 * f0 * alpha / m_gen * 1 / (((f1 / ff) ** 2 - 1) ** 2 + (2 * xi * f1 / ff) ** 2) ** 0.5  # HBT, Seite 47
         return a_ed
 
     def calc_vib2(self, f=1000):
-        # calculates W_F,ED according to to HBT, Seite 48
+        # calculates W_F,ED according to to HBT, Seite 48 (alpha_w_f_cd is approximated from simple span beam to slab within class slab)
         wf_ed = self.system.alpha_w_f_cd * f * self.system.li_max ** 3 / (self.bm_rech * self.section.ei1)
         section_material = self.section.section_type[0:2]
         if section_material in ("rc", "pc"):  # take cracked stiffness for calculation of concrete sections

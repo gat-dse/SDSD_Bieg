@@ -72,6 +72,47 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             section, database_name, requirements.acoustic
         ).floorstruc
 
+    def acoustic_verified(section, floorstruc):
+        result = struct_analysis.AcousticFloorGenerator.evaluate_floorstruc(section, floorstruc)
+        rw_target, lnw_target = struct_analysis.AcousticFloorGenerator.target_values(
+            section, requirements.acoustic
+        )
+        return result.rw >= rw_target and result.lnw <= lnw_target
+
+    def tcc_with_concrete_height(section, h_c):
+        return struct_analysis.TCC(
+            section.concrete_type,
+            section.rebar_type,
+            section.wood_type,
+            section.connector_type,
+            section.s,
+            section.a_ribs,
+            h_c,
+            section.h_w,
+            section.b_w,
+            section.d,
+            section.l0,
+            section.xi,
+        )
+
+    def adjust_tcc_concrete_for_acoustics(section, fallback_floorstruc, h_step=0.01, h_max=0.24):
+        floorstruc = floor_for_section(section, fallback_floorstruc)
+        if not auto_floor_buildup or section.section_type != "tcc" or acoustic_verified(section, floorstruc):
+            return section, floorstruc
+
+        best_section = section
+        best_floorstruc = floorstruc
+        h_c = section.h_c + h_step
+        while h_c <= h_max + 1e-12:
+            candidate = tcc_with_concrete_height(section, h_c)
+            candidate_floorstruc = floor_for_section(candidate, fallback_floorstruc)
+            best_section, best_floorstruc = candidate, candidate_floorstruc
+            if acoustic_verified(candidate, candidate_floorstruc):
+                return candidate, candidate_floorstruc
+            h_c += h_step
+
+        return best_section, best_floorstruc
+
     def member_series(members, legend_entry):
         def floor_value(mem, attr):
             return getattr(mem.floorstruc, attr, 0.0)
@@ -331,7 +372,7 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                     if fire_array is not None:
                         member0.fire = fire_array
                     opt_section = struct_optimization.get_optimized_section(member0, criterion, optimum, max_iter)
-                    floorstruc = floor_for_section(opt_section, floorstruc)
+                    opt_section, floorstruc = adjust_tcc_concrete_for_acoustics(opt_section, floorstruc)
                     opt_member = struct_analysis.Member1D(opt_section, sys, floorstruc, requirements, g2k, qk)
                     # search for an alternative solution for rectangular concrete section with lower minimal h and fill in floorstructure
                     if section0.section_type == "rc_rec" and not auto_floor_buildup:
