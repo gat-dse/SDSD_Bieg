@@ -371,8 +371,9 @@ class RectangularConcrete(SupStrucRectangular):
         self.w = self.calc_weight(25000)/self.b # weight of cross section per m length [N/m]
 
     def calc_d(self):
-        d = self.h - self.c_nom - self.bw_bg[0] - self.bw[0][0] / 2 #Statische Höhe für Positives Biegemoment
-        ds = self.h - self.c_nom - self.bw_bg[0] - self.bw[1][0] / 2 #Statische Höhe für Negatives Biegemoment
+        # Simplification: Static height is height avg height between two layers of reinforcement
+        d = self.h - self.c_nom - self.bw_bg[0] - self.bw[0][0] #Statische Höhe für Positives Biegemoment 
+        ds = self.h - self.c_nom - self.bw_bg[0] - self.bw[1][0] #Statische Höhe für Negatives Biegemoment
         return d, ds
 
     def calc_mu(self, sign='pos'):

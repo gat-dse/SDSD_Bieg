@@ -114,6 +114,22 @@ def number_or_empty(value, scale=1.0, ndigits=4):
         return ""
 
 
+def safe_float(value):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return float("nan")
+    return value
+
+
+def safe_ratio(numerator, denominator):
+    numerator = safe_float(numerator)
+    denominator = safe_float(denominator)
+    if pd.isna(numerator) or pd.isna(denominator) or abs(denominator) <= 1e-12:
+        return float("nan")
+    return numerator / denominator
+
+
 def finite_values(values):
     clean = []
     for value in values:
@@ -263,6 +279,72 @@ def member_is_uls_feasible(member, tol=1e-6):
     return pd.notna(qk_zul) and qk_zul + tol >= qk
 
 
+def system_max_iter(system):
+    if system["crsec_type"] in inputs.HIGH_ITER_SECTION_TYPES:
+        return inputs.HIGH_ITER
+    return inputs.MAX_ITER
+
+
+def utilization_row(member):
+    qk_zul = ensure_qk_zul(member)
+    uls_util = safe_ratio(getattr(member, "qk", float("nan")), qk_zul)
+
+    sls1_components = {
+        "sls1_install_util": abs(safe_ratio(getattr(member, "w_install", float("nan")), getattr(member, "w_install_adm", float("nan")))),
+        "sls1_use_util": abs(safe_ratio(getattr(member, "w_use", float("nan")), getattr(member, "w_use_adm", float("nan")))),
+        "sls1_app_util": abs(safe_ratio(getattr(member, "w_app", float("nan")), getattr(member, "w_app_adm", float("nan")))),
+    }
+    sls1_ger_components = {
+        "sls1_install_ger_util": abs(safe_ratio(getattr(member, "w_install_ger", float("nan")), getattr(member, "w_install_adm", float("nan")))),
+        "sls1_use_ger_util": abs(safe_ratio(getattr(member, "w_use_ger", float("nan")), getattr(member, "w_use_adm", float("nan")))),
+        "sls1_app_ger_util": abs(safe_ratio(getattr(member, "w_app_ger", float("nan")), getattr(member, "w_app_adm", float("nan")))),
+    }
+    sls1_util = max(finite_values([*sls1_components.values(), *sls1_ger_components.values()]) or [float("nan")])
+
+    requirements = getattr(member, "requirements", None)
+    f1_req = getattr(requirements, "f1", float("nan"))
+    a_cd = getattr(requirements, "a_cd", float("nan"))
+    wf_cd = getattr(requirements, "w_f_cdr1", float("nan"))
+    sls2_components = {
+        "sls2_f1_util": safe_ratio(f1_req, getattr(member, "f1", float("nan"))),
+        "sls2_acceleration_util": safe_ratio(getattr(member, "a_ed", float("nan")), a_cd),
+        "sls2_walking_deflection_util": safe_ratio(getattr(member, "wf_ed", float("nan")), wf_cd),
+        "sls2_velocity_util": safe_ratio(getattr(member, "ve_ed", float("nan")), getattr(member, "ve_cd", float("nan"))),
+    }
+    sls2_util = max(finite_values(sls2_components.values()) or [float("nan")])
+
+    fire_resistance = getattr(member, "fire_resistance", float("nan"))
+    if not isinstance(fire_resistance, (int, float)):
+        try:
+            member.get_fire_resistance()
+            fire_resistance = getattr(member, "fire_resistance", float("nan"))
+        except Exception:
+            fire_resistance = float("nan")
+    fire_util = safe_ratio(getattr(requirements, "t_fire", float("nan")), fire_resistance)
+
+    checks = {
+        "ULS": uls_util,
+        "SLS1": sls1_util,
+        "SLS2": sls2_util,
+        "FIRE": fire_util,
+    }
+    finite_checks = {key: value for key, value in checks.items() if pd.notna(value)}
+    governing_check = max(finite_checks, key=finite_checks.get) if finite_checks else ""
+    governing_util = finite_checks.get(governing_check, float("nan")) if governing_check else float("nan")
+
+    result = {
+        "governing_check": governing_check,
+        "governing_utilization": number_or_empty(governing_util),
+        "uls_utilization": number_or_empty(uls_util),
+        "sls1_utilization": number_or_empty(sls1_util),
+        "sls2_utilization": number_or_empty(sls2_util),
+        "fire_utilization": number_or_empty(fire_util),
+    }
+    for key, value in {**sls1_components, **sls1_ger_components, **sls2_components}.items():
+        result[key] = number_or_empty(value)
+    return result
+
+
 def feasible_series_at_length(series, idx):
     return [item for item in series if member_is_uls_feasible(item["members"][idx])]
 
@@ -289,6 +371,7 @@ def member_summary_row(case_name, scenario, system, criterion, optimum, variant,
         "system_id": system["id"],
         "criterion": criterion,
         "optimum": optimum,
+        "n_iter": system_max_iter(system),
         "variant": variant,
         "span_l_m": length,
         "qk_kN_m2": scenario["qk"] / 1000,
@@ -303,9 +386,16 @@ def member_summary_row(case_name, scenario, system, criterion, optimum, variant,
         "qk_deficit_kN_m2": number_or_empty(qk_deficit, scale=1 / 1000),
         "punching_V_Rd_s_required_kN": punching_vrds_required,
         "w_app_mm": number_or_empty(getattr(member, "w_app", ""), scale=1000),
+        "w_install_util": "",
+        "w_use_util": "",
+        "w_app_util": "",
         "f1_Hz": number_or_empty(getattr(member, "f1", "")),
         "acoustic_verified": getattr(member, "acoustic_verified", ""),
     }
+    row.update(utilization_row(member))
+    row["w_install_util"] = row.get("sls1_install_util", "")
+    row["w_use_util"] = row.get("sls1_use_util", "")
+    row["w_app_util"] = row.get("sls1_app_util", "")
     if prefix:
         row = {f"{prefix}_{key}" if key in {"geometry", "materials", "floor_buildup"} else key: value for key, value in row.items()}
     return row
@@ -450,6 +540,7 @@ def collect_envelope_rows(case_name, scenario, system, series, criteria, metrics
 def run_system(scenario, system, criteria):
     floor_building = make_floor_building(inputs.DATABASE_NAME)
     requirements = struct_analysis.Requirements(acoustic_level=inputs.ACOUSTIC_LEVEL)
+    max_iter = system_max_iter(system)
     common = dict(
         lengths=scenario["lengths"],
         database_name=inputs.DATABASE_NAME,
@@ -461,7 +552,7 @@ def run_system(scenario, system, criteria):
         mat_names=inputs.MATERIAL_GROUPS[system["materials"]],
         g2k=inputs.G2K,
         qk=scenario["qk"],
-        max_iter=inputs.MAX_ITER,
+        max_iter=max_iter,
         idx_vrfctn=min(inputs.VERIFICATION_INDEX, len(scenario["lengths"]) - 1),
         auto_floor_buildup=inputs.AUTO_FLOOR_BUILDUP,
         plot=False,
@@ -543,7 +634,7 @@ def plot_single_system(case_name, scenario, system, all_series, output_dir):
 
     ax.set_title(f"{scenario['label']} - {system['label']}\n"
                  f"q$_k$={scenario['qk'] / 1000:.1f} kN/m$^2$, "
-                 f"n$_{{iter}}$={inputs.MAX_ITER}, envelope of material/product variants")
+                 f"n$_{{iter}}$={system_max_iter(system)}, envelope of material/product variants")
     ax.set_xlabel("l [m]")
     ax.set_ylabel("GWP$_{struct}$ [kg-CO$_2$-eq/m$^2$]")
     ax.set_xticks(scenario["lengths"])
@@ -608,7 +699,7 @@ def plot_env_comparison(case_name, scenario, env_results, output_dir):
     ]
     fig.suptitle(
         f"{scenario['label']}, q$_k$={scenario['qk'] / 1000:.1f} kN/m$^2$ - ENV comparison\n"
-        f"n$_{{iter}}$={inputs.MAX_ITER}, "
+        f"n$_{{iter}}$={inputs.MAX_ITER}/{inputs.HIGH_ITER}, "
         f"envelopes of geometry and material/product variants",
         y=0.992,
     )
@@ -631,10 +722,13 @@ def export_excel_summary(output_dir, variant_rows, envelope_rows, best_rows):
     metadata_rows = [
         {"key": "created", "value": datetime.now().isoformat(timespec="seconds")},
         {"key": "database", "value": inputs.DATABASE_NAME},
-        {"key": "max_iter", "value": inputs.MAX_ITER},
+        {"key": "max_iter_default", "value": inputs.MAX_ITER},
+        {"key": "max_iter_high", "value": inputs.HIGH_ITER},
+        {"key": "max_iter_high_section_types", "value": ", ".join(sorted(inputs.HIGH_ITER_SECTION_TYPES))},
         {"key": "check_punching_shear", "value": inputs.CHECK_PUNCHING_SHEAR},
         {"key": "acoustic_level", "value": inputs.ACOUSTIC_LEVEL},
         {"key": "auto_floor_buildup", "value": inputs.AUTO_FLOOR_BUILDUP},
+        {"key": "diagnostics", "value": "Utilization columns are exported for ULS, SLS1 deflection, SLS2 vibration and FIRE; governing_check is the largest available utilization."},
         {"key": "note", "value": "Envelope borders identify the member variant forming the lower or upper plot boundary at each span."},
     ]
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
@@ -673,7 +767,7 @@ def main():
         env_results = []
         for system in scenario["systems"]:
             t_system = time.time()
-            print(f"  running {system['label']} - design criteria", flush=True)
+            print(f"  running {system['label']} - design criteria (n_iter={system_max_iter(system)})", flush=True)
             design_series = run_system(scenario, system, inputs.DESIGN_CRITERIA)
             variant_rows.extend(collect_variant_rows(case_name, scenario, system, design_series))
             envelope_rows.extend(collect_envelope_rows(
@@ -689,7 +783,7 @@ def main():
             if single_path:
                 print(f"    saved {single_path}", flush=True)
 
-            print(f"  running {system['label']} - ENV", flush=True)
+            print(f"  running {system['label']} - ENV (n_iter={system_max_iter(system)})", flush=True)
             env_series = run_system(scenario, system, inputs.ENV_CRITERIA)
             variant_rows.extend(collect_variant_rows(case_name, scenario, system, env_series))
             envelope_rows.extend(collect_envelope_rows(
@@ -711,6 +805,7 @@ def main():
                         "system_id": system["id"],
                         "criterion": "ENV",
                         "optimum": "GWP",
+                        "n_iter": system_max_iter(system),
                         "variant": "no ULS-feasible candidate",
                         "span_l_m": length,
                         "qk_kN_m2": scenario["qk"] / 1000,

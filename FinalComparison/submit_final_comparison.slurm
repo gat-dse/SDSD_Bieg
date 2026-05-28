@@ -19,7 +19,8 @@ export MKL_NUM_THREADS=1
 unset SDSD_SCENARIOS
 unset SDSD_SYSTEMS
 unset SDSD_LENGTHS
-export SDSD_MAX_ITER=150
+export SDSD_MAX_ITER=75
+export SDSD_HIGH_ITER=150
 
 REPO_ROOT="/cluster/home/jobieg/SDSD_Bieg"
 SCRIPT_DIR="$REPO_ROOT/FinalComparison"

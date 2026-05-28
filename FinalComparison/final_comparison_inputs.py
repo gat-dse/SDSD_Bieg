@@ -17,7 +17,9 @@ OUTPUT_DIR = "plots"
 DESIGN_CRITERIA = ["ULS", "SLS1", "SLS2", "FIRE"]
 ENV_CRITERIA = ["ENV"]
 OPTIMA = ["GWP"]
-MAX_ITER = 2
+MAX_ITER = int(os.environ.get("SDSD_MAX_ITER", 75))
+HIGH_ITER = int(os.environ.get("SDSD_HIGH_ITER", 150))
+HIGH_ITER_SECTION_TYPES = {"rc_rec", "pc_rec", "rc_rib", "tcc"}
 G2K = 0.75e3
 VERIFICATION_INDEX = 1
 
