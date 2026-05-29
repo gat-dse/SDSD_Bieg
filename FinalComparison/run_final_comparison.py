@@ -109,7 +109,10 @@ def clean_text(value):
 
 def number_or_empty(value, scale=1.0, ndigits=4):
     try:
-        return round(float(value) * scale, ndigits)
+        value = float(value) * scale
+        if pd.isna(value):
+            return ""
+        return round(value, ndigits)
     except (TypeError, ValueError):
         return ""
 
@@ -125,8 +128,12 @@ def safe_float(value):
 def safe_ratio(numerator, denominator):
     numerator = safe_float(numerator)
     denominator = safe_float(denominator)
-    if pd.isna(numerator) or pd.isna(denominator) or abs(denominator) <= 1e-12:
+    if pd.isna(numerator) or pd.isna(denominator):
         return float("nan")
+    if abs(denominator) <= 1e-12:
+        if abs(numerator) <= 1e-12:
+            return 0.0
+        return float("inf")
     return numerator / denominator
 
 
@@ -279,6 +286,28 @@ def member_is_uls_feasible(member, tol=1e-6):
     return pd.notna(qk_zul) and qk_zul + tol >= qk
 
 
+def member_is_feasible_for_criterion(member, criterion="ENV", tol=1e-4):
+    diagnostics = utilization_row(member)
+    if criterion == "ULS":
+        required = ["uls_utilization"]
+    elif criterion == "SLS1":
+        required = ["sls1_utilization"]
+    elif criterion == "SLS2":
+        required = ["sls2_utilization"]
+    elif criterion == "FIRE":
+        required = ["fire_utilization"]
+    else:
+        required = ["uls_utilization", "sls1_utilization", "sls2_utilization", "fire_utilization"]
+
+    for key in required:
+        value = safe_float(diagnostics.get(key, float("nan")))
+        if key == "fire_utilization" and pd.isna(value):
+            continue
+        if pd.isna(value) or value > 1.0 + tol:
+            return False
+    return True
+
+
 def system_max_iter(system):
     if system["crsec_type"] in inputs.HIGH_ITER_SECTION_TYPES:
         return inputs.HIGH_ITER
@@ -289,6 +318,7 @@ def utilization_row(member):
     qk_zul = ensure_qk_zul(member)
     uls_util = safe_ratio(getattr(member, "qk", float("nan")), qk_zul)
 
+    section_type = getattr(getattr(member, "section", None), "section_type", "")
     sls1_components = {
         "sls1_install_util": abs(safe_ratio(getattr(member, "w_install", float("nan")), getattr(member, "w_install_adm", float("nan")))),
         "sls1_use_util": abs(safe_ratio(getattr(member, "w_use", float("nan")), getattr(member, "w_use_adm", float("nan")))),
@@ -299,7 +329,17 @@ def utilization_row(member):
         "sls1_use_ger_util": abs(safe_ratio(getattr(member, "w_use_ger", float("nan")), getattr(member, "w_use_adm", float("nan")))),
         "sls1_app_ger_util": abs(safe_ratio(getattr(member, "w_app_ger", float("nan")), getattr(member, "w_app_adm", float("nan")))),
     }
-    sls1_util = max(finite_values([*sls1_components.values(), *sls1_ger_components.values()]) or [float("nan")])
+    sls1_basis = "elastic"
+    sls1_active_components = sls1_components
+    if section_type == "rc_rec":
+        is_uncracked = (
+            safe_float(getattr(member, "mkd_p", float("nan"))) < safe_float(getattr(member.section, "mr_p", float("nan")))
+            and safe_float(getattr(member, "mkd_n", float("nan"))) > safe_float(getattr(member.section, "mr_n", float("nan")))
+        )
+        if not is_uncracked:
+            sls1_basis = "cracked"
+            sls1_active_components = sls1_ger_components
+    sls1_util = max(finite_values(sls1_active_components.values()) or [float("nan")])
 
     requirements = getattr(member, "requirements", None)
     f1_req = getattr(requirements, "f1", float("nan"))
@@ -337,6 +377,7 @@ def utilization_row(member):
         "governing_utilization": number_or_empty(governing_util),
         "uls_utilization": number_or_empty(uls_util),
         "sls1_utilization": number_or_empty(sls1_util),
+        "sls1_basis": sls1_basis,
         "sls2_utilization": number_or_empty(sls2_util),
         "fire_utilization": number_or_empty(fire_util),
     }
@@ -345,8 +386,8 @@ def utilization_row(member):
     return result
 
 
-def feasible_series_at_length(series, idx):
-    return [item for item in series if member_is_uls_feasible(item["members"][idx])]
+def feasible_series_at_length(series, idx, criterion="ULS"):
+    return [item for item in series if member_is_feasible_for_criterion(item["members"][idx], criterion)]
 
 
 def member_summary_row(case_name, scenario, system, criterion, optimum, variant, length, member, prefix=None):
@@ -382,6 +423,17 @@ def member_summary_row(case_name, scenario, system, criterion, optimum, variant,
         "materials": material_description(section),
         "floor_buildup": floor_description(member),
         "qk_zul_gzt_kN_m2": number_or_empty(qk_zul, scale=1 / 1000),
+        "qk_zul_bending_gzt_kN_m2": number_or_empty(getattr(member, "qk_zul_bending_gzt", ""), scale=1 / 1000),
+        "qk_zul_shear_gzt_kN_m2": number_or_empty(getattr(member, "qk_zul_shear_gzt", ""), scale=1 / 1000),
+        "qu_bending_kN_m2": number_or_empty(getattr(member, "qu_bending", ""), scale=1 / 1000),
+        "qu_shear_kN_m2": number_or_empty(getattr(member, "qu_shear", ""), scale=1 / 1000),
+        "uls_governing_mode": getattr(member, "uls_governing_mode", ""),
+        "pt_uls_m_rd_pos_kNm_m": number_or_empty(getattr(member, "pt_uls_m_rd_pos", ""), scale=1 / 1000),
+        "pt_uls_m_rd_neg_kNm_m": number_or_empty(getattr(member, "pt_uls_m_rd_neg", ""), scale=1 / 1000),
+        "pt_uls_m_sec_pos_kNm_m": number_or_empty(getattr(member, "pt_uls_m_sec_pos", ""), scale=1 / 1000),
+        "pt_uls_m_sec_neg_kNm_m": number_or_empty(getattr(member, "pt_uls_m_sec_neg", ""), scale=1 / 1000),
+        "pt_uls_q_bend_pos_kN_m2": number_or_empty(getattr(member, "pt_uls_q_bend_pos", ""), scale=1 / 1000),
+        "pt_uls_q_bend_neg_kN_m2": number_or_empty(getattr(member, "pt_uls_q_bend_neg", ""), scale=1 / 1000),
         "uls_feasible": member_is_uls_feasible(member),
         "qk_deficit_kN_m2": number_or_empty(qk_deficit, scale=1 / 1000),
         "punching_V_Rd_s_required_kN": punching_vrds_required,
@@ -428,7 +480,7 @@ def criterion_color(system, criterion):
     return mix_color(base, target, amount)
 
 
-def envelope_by_length(series, key, require_uls_feasible=False):
+def envelope_by_length(series, key, require_uls_feasible=False, criterion="ULS"):
     if not series:
         raise ValueError("No result series available.")
     lengths = series[0]["lengths"]
@@ -436,7 +488,7 @@ def envelope_by_length(series, key, require_uls_feasible=False):
     values_med = []
     values_max = []
     for idx, _ in enumerate(lengths):
-        candidates = feasible_series_at_length(series, idx) if require_uls_feasible else series
+        candidates = feasible_series_at_length(series, idx, criterion) if require_uls_feasible else series
         if not candidates:
             values_min.append(float("nan"))
             values_med.append(float("nan"))
@@ -476,8 +528,8 @@ def draw_single_criterion_envelope(ax, envelope, color, criterion):
             linestyle=style["linestyle"])
 
 
-def envelope_member(series, key, idx, boundary, require_uls_feasible=False):
-    candidates = feasible_series_at_length(series, idx) if require_uls_feasible else series
+def envelope_member(series, key, idx, boundary, require_uls_feasible=False, criterion="ULS"):
+    candidates = feasible_series_at_length(series, idx, criterion) if require_uls_feasible else series
     if not candidates:
         return None
     if boundary == "best/lower":
@@ -512,7 +564,7 @@ def collect_envelope_rows(case_name, scenario, system, series, criteria, metrics
         for key, label in metrics:
             for idx, length in enumerate(subset[0]["lengths"]):
                 for boundary in ("best/lower", "worst/upper"):
-                    item = envelope_member(subset, key, idx, boundary, require_uls_feasible=True)
+                    item = envelope_member(subset, key, idx, boundary, require_uls_feasible=True, criterion=criterion)
                     if item is None:
                         continue
                     legend = item.get("legend", ("", "", ""))
@@ -564,6 +616,7 @@ def run_system(scenario, system, criteria):
             slab_support=system.get("slab_support", "PL-eingespannt"),
             pt_layout=system.get("pt_layout"),
             check_punching=inputs.CHECK_PUNCHING_SHEAR,
+            start_h_by_span=system.get("start_h_by_span"),
         )
         return series
     if system["dimension"] == "1D":
@@ -587,7 +640,7 @@ def select_best_by_length(series, selection_key="gwp_total"):
         best[key] = []
 
     for idx, _ in enumerate(lengths):
-        candidates = feasible_series_at_length(series, idx)
+        candidates = feasible_series_at_length(series, idx, "ENV")
         if not candidates:
             for key in keys:
                 best[key].append(float("nan"))
@@ -612,7 +665,7 @@ def plot_single_system(case_name, scenario, system, all_series, output_dir):
         subset = series_for_criterion(all_series, criterion)
         if not subset:
             continue
-        envelope = envelope_by_length(subset, "gwp_struct", require_uls_feasible=True)
+        envelope = envelope_by_length(subset, "gwp_struct", require_uls_feasible=True, criterion=criterion)
         y_values.extend(envelope["min"])
         y_values.extend(envelope["max"])
         color = criterion_color(system, criterion)
@@ -667,7 +720,7 @@ def plot_env_comparison(case_name, scenario, env_results, output_dir):
         y_values = []
         for item in env_results:
             color = item["color"]
-            envelope = envelope_by_length(item["series"], key, require_uls_feasible=True)
+            envelope = envelope_by_length(item["series"], key, require_uls_feasible=True, criterion="ENV")
             y_values.extend(envelope["min"])
             y_values.extend(envelope["max"])
             ax.fill_between(
@@ -748,7 +801,7 @@ def print_floor_buildups(scenario, system, data):
     print(f"    floor build-up examples for {system['label']}:", flush=True)
     for length, member in zip(data["lengths"], data["members"]):
         if member is None:
-            print(f"      l={length:g} m: no ULS-feasible candidate", flush=True)
+            print(f"      l={length:g} m: no ENV-feasible candidate", flush=True)
             continue
         print(f"      l={length:g} m: {floor_description(member)}", flush=True)
 
@@ -806,7 +859,7 @@ def main():
                         "criterion": "ENV",
                         "optimum": "GWP",
                         "n_iter": system_max_iter(system),
-                        "variant": "no ULS-feasible candidate",
+                        "variant": "no ENV-feasible candidate",
                         "span_l_m": length,
                         "qk_kN_m2": scenario["qk"] / 1000,
                         "description": system.get("description", ""),

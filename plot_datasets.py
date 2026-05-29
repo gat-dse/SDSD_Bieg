@@ -80,7 +80,7 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
         return result.rw >= rw_target and result.lnw <= lnw_target
 
     def tcc_with_concrete_height(section, h_c):
-        return struct_analysis.TCC(
+        new_section = struct_analysis.TCC(
             section.concrete_type,
             section.rebar_type,
             section.wood_type,
@@ -94,6 +94,8 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             section.l0,
             section.xi,
         )
+        new_section.h_w_max = getattr(section, "h_w_max", None)
+        return new_section
 
     def adjust_tcc_concrete_for_acoustics(section, fallback_floorstruc, h_step=0.01, h_max=0.24):
         floorstruc = floor_for_section(section, fallback_floorstruc)
@@ -112,6 +114,29 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             h_c += h_step
 
         return best_section, best_floorstruc
+
+    def section_for_length(section, length):
+        if section.section_type == "tcc":
+            h_by_span = section_params.get("h_by_span", {})
+            span_values = h_by_span.get(length, h_by_span.get(float(length), None))
+            if span_values:
+                new_section = struct_analysis.TCC(
+                    section.concrete_type,
+                    section.rebar_type,
+                    section.wood_type,
+                    section.connector_type,
+                    section.s,
+                    section.a_ribs,
+                    span_values.get("h_c", section.h_c),
+                    span_values.get("h_w", section.h_w),
+                    section.b_w,
+                    section.d,
+                    section.l0,
+                    section.xi,
+                )
+                new_section.h_w_max = getattr(section, "h_w_max", None)
+                return new_section
+        return section
 
     def member_series(members, legend_entry):
         def floor_value(mem, attr):
@@ -179,6 +204,7 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                                                       tcc_params["s"], tcc_params["a_ribs"], tcc_params["h_c"],
                                                       tcc_params["h_w"], tcc_params["b_w"], tcc_params["d"],
                                                       tcc_params["l0"])
+                        section.h_w_max = tcc_params.get("h_w_max")
                         to_plot.append([section, floorstruc])
             
             continue # Wir überspringen die SQL-Suche für diesen Durchlauf
@@ -247,6 +273,14 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                 to_plot.extend([line_i0, line_i1])
 
             elif crsec_type == "rc_rib":
+                rc_rib_params = {
+                    "l0": 4,
+                    "b": 1.0,
+                    "b_w": 0.15,
+                    "h": 0.30,
+                    "h_f": 0.18,
+                }
+                rc_rib_params.update(section_params)
                 # create a Concrete material object
                 concrete = struct_analysis.ReadyMixedConcrete(mech_prop, database_name, prod_id=prod_id_str)
                 concrete.get_design_values()
@@ -283,8 +317,13 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                 rebar_high_em = struct_analysis.SteelReinforcingBar("'B500B'", database_name, prod_id=prod_id_high_str)
 
                 # create initial cross-sections
-                section_00 = struct_analysis.RibbedConcrete(concrete, rebar_low_em, 4, 1.0, 0.15, 0.3, 0.18, 0.01, 0.15, 0.01, 0.15, 0.02, 2, 0.01, 0.15, 2)
-                section_01 = struct_analysis.RibbedConcrete(concrete, rebar_high_em, 4, 1.0, 0.15, 0.3, 0.18, 0.01, 0.15,
+                section_00 = struct_analysis.RibbedConcrete(
+                    concrete, rebar_low_em, rc_rib_params["l0"], rc_rib_params["b"], rc_rib_params["b_w"],
+                    rc_rib_params["h"], rc_rib_params["h_f"], 0.01, 0.15, 0.01, 0.15, 0.02, 2, 0.01, 0.15, 2
+                )
+                section_01 = struct_analysis.RibbedConcrete(
+                    concrete, rebar_high_em, rc_rib_params["l0"], rc_rib_params["b"], rc_rib_params["b_w"],
+                    rc_rib_params["h"], rc_rib_params["h_f"], 0.01, 0.15,
                                                             0.01, 0.15, 0.02, 2, 0.01, 0.15, 2)
                 # add sections to content-definition of plot-line
                 line_i0 = [section_00, floorstruc]
@@ -366,7 +405,7 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                         sys = struct_analysis.BeamContinuousSupPl(length)
                     else:
                         raise ValueError(f"Unknown 1D system_type: {system_type}")
-                    section0 = i[0]
+                    section0 = section_for_length(i[0], length)
                     floorstruc = floor_for_section(section0, i[1])
                     member0 = struct_analysis.Member1D(section0, sys, floorstruc, requirements, g2k, qk)
                     if fire_array is not None:

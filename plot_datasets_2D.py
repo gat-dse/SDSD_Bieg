@@ -59,11 +59,13 @@ def product_mech_prop(cursor, prod_id):
 # ----------------------------------------------------------------------------------------------------------------------
 def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requirements, crsec_type, mat_names,
                  g2k=0.75, qk=2.0, max_iter=100, idx_vrfctn=-1, slab_support="PL-eingespannt",
-                 auto_floor_buildup=False, pt_layout=None, check_punching=True, plot=True, return_series=False):
+                 auto_floor_buildup=False, pt_layout=None, check_punching=True, start_h_by_span=None,
+                 plot=True, return_series=False):
 
     if idx_vrfctn == -1:
         idx_vrfctn = random.randint(0, len(lengths)-1)
     pt_layout = pt_layout or [1, 0, 1, 0]
+    start_h_by_span = start_h_by_span or {}
 
     def floor_for_section(section, fallback_floorstruc):
         if not auto_floor_buildup:
@@ -154,10 +156,10 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                 # create initial cross-sections
                 section_00 = struct_analysis.RectangularConcrete(concrete, rebar_low_em, 1.0, 0.20,
                                                                 0.014, 0.15, 0.01, 0.15,
-                                                                0, 0.15, 2)
+                                                                0, 0.15, 10)
                 section_01 = struct_analysis.RectangularConcrete(concrete, rebar_high_em, 1.0, 0.20,
                                                                  0.014, 0.15, 0.01, 0.15,
-                                                                 0, 0.15, 2)
+                                                                 0, 0.15, 10)
                 # add sections to content-definition of plot-line
                 line_i0 = [section_00, floorstruc]
                 line_i1 = [section_01, floorstruc]
@@ -196,11 +198,11 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                 section_00 = struct_analysis.PostTensionedConcrete(concrete, rebar_low_em, pt_steel, 6, 6, 1.0, 0.20,
                                                                     0.010, 0.15, 0.010, 0.15,
                                                                     0.006, 0.15, 0.006, 0.15,
-                                                                    0.0, 0.15, 0, layout=pt_layout)
+                                                                    0.0, 0.15, 10, layout=pt_layout)
                 section_01 = struct_analysis.PostTensionedConcrete(concrete, rebar_high_em, pt_steel, 6, 6, 1.0, 0.20,
                                                                     0.010, 0.15, 0.010, 0.15,
                                                                     0.006, 0.15, 0.006, 0.15,
-                                                                    0.0, 0.15, 0, layout=pt_layout)
+                                                                    0.0, 0.15, 10, layout=pt_layout)
                 to_plot.extend([[section_00, floorstruc], [section_01, floorstruc]])
 
             elif crsec_type == "rc_rib":
@@ -314,14 +316,23 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                 members = []
                 for length in lengths:
                     sys = struct_analysis.Slab(length, length, slab_support)
+                    h_start = start_h_by_span.get(length, start_h_by_span.get(float(length), i[0].h))
                     if i[0].section_type == "pc_rec":
                         section0 = struct_analysis.PostTensionedConcrete(
                             i[0].concrete_type, i[0].rebar_type, i[0].pt_steel_type,
-                            length, length, i[0].b, i[0].h, i[0].bw[0][0], i[0].bw[0][1],
+                            length, length, i[0].b, h_start, i[0].bw[0][0], i[0].bw[0][1],
                             i[0].bw[1][0], i[0].bw[1][1], i[0].bw[2][0], i[0].bw[2][1],
                             i[0].bw[3][0], i[0].bw[3][1], i[0].bw_bg[0], i[0].bw_bg[1],
                             i[0].bw_bg[2], i[0].phi, i[0].c_nom, i[0].xi, i[0].joint_surcharge,
                             pt_layout, i[0].c_nom_pt, i[0].A_p
+                        )
+                    elif i[0].section_type == "rc_rec":
+                        section0 = struct_analysis.RectangularConcrete(
+                            i[0].concrete_type, i[0].rebar_type, i[0].b, h_start,
+                            i[0].bw[0][0], i[0].bw[0][1], i[0].bw[1][0], i[0].bw[1][1],
+                            i[0].bw[2][0], i[0].bw[2][1], i[0].bw[3][0], i[0].bw[3][1],
+                            i[0].bw_bg[0], i[0].bw_bg[1], i[0].bw_bg[2],
+                            i[0].phi, i[0].c_nom, i[0].xi, i[0].joint_surcharge
                         )
                     else:
                         section0 = i[0]

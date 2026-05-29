@@ -40,7 +40,7 @@
 
     Residential & 2.0 & 3, 5, 6, 7, 8, 10 &
     TCC &
-    ribs, connection ``DBS\_10'', $s=0.15$\,m &
+    ribs, connection ``DBS\_10'', $s=0.06$\,m &
     Simple span &
     ready-mixed concrete, B500B, BSH, \texttt{DBS\_10}; $a_{\mathrm{ribs}}=0.625$\,m, $b_w=0.18$\,m \\
 
@@ -72,11 +72,11 @@
     Ribbed concrete &
     conventionally reinforced &
     Continuous beam &
-    ready-mixed concrete, B500B; fire from bottom and sides \\
+    ready-mixed concrete, B500B; start $b_w=0.25$\,m; fire from bottom and sides \\
 
     Office & 3.0 & 8, 10, 12, 16 &
     TCC &
-    ribs, connection ``DBS\_10'', $s=0.15$\,m &
+    ribs, connection ``DBS\_10'', $s=0.04$\,m &
     Simple span &
     ready-mixed concrete, B500B, BSH, \texttt{DBS\_10}; $a_{\mathrm{ribs}}=0.625$\,m, $b_w=0.24$\,m \\ \hline
     \end{tabularx}
@@ -98,14 +98,14 @@
     \textbf{Bounds / fixed values} \\ \hline
 
     Rectangular concrete 2D &
-    $b=1.00$\,m, $h=0.20$\,m, $\varnothing_{xu}=\varnothing_{xo}=10$\,mm, $s=0.15$\,m &
+    $b=1.00$\,m, $h=0.20$\,m generally; office start heights $h_0=\{0.25,0.35,0.45,0.60\}$\,m for $l=\{8,10,12,16\}$\,m &
     $h$, $\varnothing_{xu}$, $\varnothing_{xo}$, $\varnothing_w$ &
-    $h=0.16$--$1.20$\,m, $\varnothing_{xu/xo}=6$--$40$\,mm, $\varnothing_w=0$--$20$\,mm; y-reinforcement follows x-reinforcement \\
+    $h=0.16$--$1.20$\,m, $\varnothing_{xu/xo}=6$--$40$\,mm, $\varnothing_w=0$--$16$\,mm; $s_w=0.15$\,m, $n_w=6$ if shear reinforcement is active; y-reinforcement follows x-reinforcement \\
 
     Rectangular concrete PT 2D &
-    $b=1.00$\,m, $h=0.20$\,m, $\varnothing_{xu}=\varnothing_{xo}=10$\,mm, $s=0.15$\,m &
+    $b=1.00$\,m, $h=0.20$\,m generally; office start heights $h_0=\{0.20,0.25,0.30,0.40\}$\,m for $l=\{8,10,12,16\}$\,m &
     $h$, $\varnothing_{xu}$, $\varnothing_{xo}$, $\varnothing_w$ &
-    $h=0.18$--$1.20$\,m, $\varnothing_{xu/xo}=6$--$40$\,mm, $\varnothing_w=0$--$20$\,mm; Y1860 monostrands; load balancing from PT layout \\
+    $h=0.18$--$1.20$\,m, $\varnothing_{xu/xo}=6$--$40$\,mm, $\varnothing_w=0$--$16$\,mm; $s_w=0.15$\,m, $n_w=6$ if shear reinforcement is active; Y1860 monostrands; load balancing from PT layout \\
 
     Rectangular wood 1D &
     $b=1.00$\,m, $h=0.10$\,m &
@@ -118,14 +118,14 @@
     $b=0.10$--$0.52$\,m, $h=0.22$--$2.00$\,m, $t_2=25$--$160$\,mm, $t_3=27$--$160$\,mm; rib spacing fixed at $a=0.625$\,m \\
 
     Ribbed concrete 1D &
-    $b=1.00$\,m, $b_w=0.14$--$0.15$\,m, $h=0.30$\,m, $h_f=0.18$\,m &
+    $b=1.00$\,m, $b_w=0.15$\,m generally; office start $b_w=0.25$\,m; $h=0.30$\,m, $h_f=0.18$\,m &
     $h_w$, $h_f$, $\varnothing_{x,w}$, $b_w$, $b$ &
     $h_w=0.04$--$2.00$\,m, $h_f=0.08$--$0.50$\,m in 1D / $0.12$--$0.50$\,m in 2D optimizer, $\varnothing_{x,w}=8$--$40$\,mm, $b_w=0.15$--$0.40$\,m, $b=0.40$--$2.50$\,m \\
 
     TCC 1D &
-    $h_c=0.08$\,m, $h_w=0.12$\,m; flat: $s=0.50$\,m; ribs: $s=0.15$\,m &
+    Residential: $h_c=0.08$\,m, $h_w=0.12$\,m; office TCC starts $(h_c/h_w)=0.12/0.30$, $0.16/0.35$, $0.20/0.40$, $0.25/0.70$\,m for $l=8$, 10, 12, 16\,m &
     $h_c$, $h_w$ &
-    $h_c=0.08$--$0.50$\,m, $h_w=0.08$--$1.00$\,m; connection type, spacing, rib spacing and rib width fixed by the case definition \\ \hline
+    $h_c=0.08$--$0.50$\,m, $h_w=0.08$--$1.50$\,m; flat residential $s=0.50$\,m; ribbed residential $s=0.06$\,m, $b_w=0.18$\,m; ribbed office $s=0.04$\,m, $b_w=0.24$\,m \\ \hline
     \end{tabularx}
     \endgroup
     \caption{Start values, optimisation variables and bounds used for the final comparison. All systems are optimised for GWP with $n_{\mathrm{iter}}=150$; the automated acoustic floor build-up is enabled with normal acoustic requirements. Material variations are generated from the EPD best and worst cases within each mechanical property class.}

@@ -6,12 +6,20 @@ import numpy as np
 
 ULS_INFEASIBLE_BASE_PENALTY = 1e9
 ULS_INFEASIBLE_DEFICIT_FACTOR = 1e6
+SLS2_FREQUENCY_PENALTY_WEIGHT = 25.0
+SLS2_INFEASIBLE_BASE_PENALTY = 1e8
+SLS2_FREQUENCY_DEFICIT_FACTOR = 1e7
 
 
 def uls_infeasible_penalty(member, deficit=None):
     if deficit is None:
         deficit = max(member.qk - member.qk_zul_gzt, 0)
     return ULS_INFEASIBLE_BASE_PENALTY + ULS_INFEASIBLE_DEFICIT_FACTOR * deficit
+
+
+def sls2_frequency_infeasible_penalty(member):
+    deficit = max(member.requirements.f1 - member.f1, 0.0)
+    return SLS2_INFEASIBLE_BASE_PENALTY + SLS2_FREQUENCY_DEFICIT_FACTOR * deficit
 
 
 class RandomDisplacementBounds(object):
@@ -188,7 +196,7 @@ def rc_rqs(var, add_arg):
 
     # define penalty1, if ULS is not fulfilled
     penalty1 = max(member.qk - member.qk_zul_gzt, 0)
-    if penalty1 > 1e-6:
+    if criterion in ("ULS", "ENV") and penalty1 > 1e-6:
         return uls_infeasible_penalty(member, penalty1)
 
     # define penalty2, if SLS1 (deflections) are not fulfilled
@@ -209,7 +217,8 @@ def rc_rqs(var, add_arg):
     # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
     pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
     if member.f1 < member.requirements.f1:
-        penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
+        pen_f = member.requirements.f1 - member.f1
+        penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
     else:
         penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
 
@@ -347,7 +356,8 @@ def rc_rib_rqs(var, add_arg):
     # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
     pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
     if member.f1 < member.requirements.f1:
-        penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
+        pen_f = member.requirements.f1 - member.f1
+        penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
     else:
         penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
 
@@ -414,7 +424,7 @@ def wd_rqs_h(h, args):
     member = struct_analysis.Member1D(querschnitt, m.system, m.floorstruc, m.requirements, m.g2k, m.qk)
     member.calc_qk_zul_gzt()
     penalty1 = max(member.qk - member.qk_zul_gzt, 0)
-    if penalty1 > 1e-6:
+    if criterion in ("ULS", "ENV") and penalty1 > 1e-6:
         return uls_infeasible_penalty(member, penalty1)
     if criterion == "ULS":
         to_minimize = abs(member.qk - member.qk_zul_gzt)
@@ -430,7 +440,8 @@ def wd_rqs_h(h, args):
         # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
         pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
         if member.f1 < member.requirements.f1:
-            penalty2 = max(pen_a*1e2, pen_w*1e5, pen_v*1e3, 0)
+            pen_f = member.requirements.f1 - member.f1
+            penalty2 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a*1e2, pen_w*1e5, pen_v*1e3, 0)
         else:
             penalty2 = max(pen_w*1e5, pen_v*1e3, 0)
         to_minimize = member.section.h*(1+penalty2)
@@ -449,7 +460,8 @@ def wd_rqs_h(h, args):
         penalty2 = 1e5 * max(d1, d2, d3, 0)
         
         if member.f1 < member.requirements.f1:
-            penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
+            pen_f = member.requirements.f1 - member.f1
+            penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
         else:
             penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
         member.get_fire_resistance()
@@ -529,7 +541,7 @@ def wd_rib_rqs(var, add_arg):
     member.calc_qk_zul_gzt()  # calculate admissible live load
     # define penalty1, if ULS is not fulfilled
     penalty1 = max(member.qk - member.qk_zul_gzt, 0)
-    if penalty1 > 1e-6:
+    if criterion in ("ULS", "ENV") and penalty1 > 1e-6:
         return uls_infeasible_penalty(member, penalty1)
 
     # define penalty2, if SLS1 (deflections) are not fulfilled
@@ -543,7 +555,8 @@ def wd_rib_rqs(var, add_arg):
     # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
     pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
     if member.f1 < member.requirements.f1:
-        penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
+        pen_f = member.requirements.f1 - member.f1
+        penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
     else:
         penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
 
@@ -600,7 +613,8 @@ def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.08, hw_min=
     var0 = [hc0, hw0]
     #Bounds for optimization variables
     bhc = (hc_min, 0.5)  
-    bhw = (hw_min, 1.0)
+    h_w_max = getattr(m.section, "h_w_max", 1.0) or 1.0
+    bhw = (hw_min, h_w_max)
     bounds = [bhc, bhw]
     #Definition of fixed values for optimization
     conc, reb, wood, conn = m.section.concrete_type, m.section.rebar_type, m.section.wood_type, m.section.connector_type
@@ -612,6 +626,7 @@ def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.08, hw_min=
     opt = basinhopping(tcc_rqs, var0, niter=max_iter, T=1, minimizer_kwargs={"args": (add_arg,), "bounds": bounds, "method": "Powell"}, take_step=bounded_step)
     hc_opt, hw_opt = opt.x
     optimized_section = struct_analysis.TCC(conc, reb, wood, conn, s, a_ribs, hc_opt, hw_opt, bw, d, l0)
+    optimized_section.h_w_max = h_w_max
 
     #TCC debugging line
     #print(f"Optimized TCC section: hc = {hc_opt:.3f} m, hw = {hw_opt:.3f} m, l0 = {l0:.3f} m, GWP = {optimized_section.co2:.2f} kg CO2e, height = {optimized_section.h:.3f} m")
@@ -641,7 +656,7 @@ def tcc_rqs(var, add_arg):
     member.calc_qk_zul_gzt()
     # ULS penalty 
     penalty1 = max(member.qk - member.qk_zul_gzt, 0) 
-    if penalty1 > 1e-6:
+    if criterion in ("ULS", "ENV") and penalty1 > 1e-6:
         return uls_infeasible_penalty(member, penalty1)
 
     # SLS1 penalty (deflection)
@@ -653,7 +668,10 @@ def tcc_rqs(var, add_arg):
     pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1  
     pen_v = member.ve_ed - member.ve_cd
     if member.f1 < member.requirements.f1: #low frequency vibration limit not fulfilled
-        penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
+        pen_f = member.requirements.f1 - member.f1
+        penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
+        if criterion in ("SLS2", "ENV"):
+            return sls2_frequency_infeasible_penalty(member)
     else:
         penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
     # Fire resistance penalty

@@ -1,6 +1,6 @@
 from scipy.optimize import direct
 import struct_analysis
-from scipy.optimize import basinhopping, Bounds  # import Minimierungsfunktion aus dem SyiPy-Paket
+from scipy.optimize import basinhopping, Bounds, OptimizeResult  # import Minimierungsfunktion aus dem SyiPy-Paket
 from scipy.optimize import minimize  # import Minimierungsfunktion aus dem SyiPy-Paket
 import numpy as np
 
@@ -8,6 +8,7 @@ ULS_INFEASIBLE_BASE_PENALTY = 1e9
 ULS_INFEASIBLE_DEFICIT_FACTOR = 1e6
 ULS_PENALTY_WEIGHT = 1.0
 SLS1_DEFLECTION_PENALTY_WEIGHT = 1e5
+SLS2_FREQUENCY_PENALTY_WEIGHT = 25.0
 SLS2_ACCELERATION_PENALTY_WEIGHT = 1e2
 SLS2_WALKING_DEFLECTION_PENALTY_WEIGHT = 1e5
 SLS2_VELOCITY_PENALTY_WEIGHT = 1e3
@@ -44,6 +45,125 @@ def invalid_rectangular_geometry(h, c_nom, di_xu, di_xo, di_bw):
     return d <= 0 or ds <= 0
 
 
+def unique_start_points(points, bounds):
+    starts = []
+    seen = set()
+    lower = np.array([bnd[0] for bnd in bounds], dtype=float)
+    upper = np.array([bnd[1] for bnd in bounds], dtype=float)
+    for point in points:
+        clipped = np.clip(np.asarray(point, dtype=float), lower, upper)
+        key = tuple(np.round(clipped, 6))
+        if key not in seen:
+            seen.add(key)
+            starts.append(clipped)
+    return starts
+
+
+def best_basinhopping(func, var0, bounds, max_iter, minimizer_kwargs):
+    system = minimizer_kwargs["args"][0][0]
+    span = getattr(system, "l_tot", getattr(system, "li_max", 0.0))
+    start_points = unique_start_points(
+        [
+            var0,
+            [bounds[0][0], var0[1], var0[2], var0[3]],
+            [max(var0[0], 0.035 * span), 0.014, 0.014, var0[3]],
+            [max(var0[0], 0.045 * span), 0.020, 0.020, var0[3]],
+            [max(var0[0], 0.050 * span), 0.020, 0.028, 0.016],
+            [max(var0[0], 0.055 * span), 0.020, 0.028, 0.016],
+            [max(var0[0], 0.060 * span), 0.028, 0.028, var0[3]],
+        ],
+        bounds,
+    )
+    niter_each = max(1, int(np.ceil(max_iter / max(len(start_points), 1))))
+    bounded_step = RandomDisplacementBounds(np.array([bnd[0] for bnd in bounds]), np.array([bnd[1] for bnd in bounds]))
+    best = None
+    for start in start_points:
+        start_fun = func(np.asarray(start, dtype=float), *minimizer_kwargs.get("args", ()))
+        start_result = OptimizeResult(x=np.asarray(start, dtype=float), fun=start_fun, success=True)
+        if best is None or start_result.fun < best.fun:
+            best = start_result
+        opt = basinhopping(
+            func,
+            start,
+            niter=niter_each,
+            T=1,
+            minimizer_kwargs=minimizer_kwargs,
+            take_step=bounded_step,
+        )
+        if best is None or opt.fun < best.fun:
+            best = opt
+    return best
+
+
+def rectangular_feasible_start(var0, bounds, make_member):
+    lower = np.array([bnd[0] for bnd in bounds], dtype=float)
+    upper = np.array([bnd[1] for bnd in bounds], dtype=float)
+    base = np.asarray(var0, dtype=float)
+    best_feasible = None
+    best_fallback = None
+    best_fallback_qk_zul = -float("inf")
+
+    span = 0.0
+    try:
+        span = make_member(base).system.l_tot
+    except Exception:
+        pass
+
+    h_candidates = [
+        base[0],
+        lower[0],
+        0.035 * span,
+        0.045 * span,
+        0.050 * span,
+        0.055 * span,
+        0.060 * span,
+        0.075 * span,
+        0.090 * span,
+        upper[0],
+    ]
+    diameter_candidates = [
+        base[1],
+        base[2],
+        0.014,
+        0.020,
+        0.028,
+        0.036,
+        0.040,
+    ]
+    shear_diameter_candidates = [
+        base[3],
+        0.008,
+        0.012,
+        0.016,
+    ]
+
+    points = []
+    for h in h_candidates:
+        for di_u in diameter_candidates:
+            for di_o in diameter_candidates:
+                for di_bw in shear_diameter_candidates:
+                    points.append([h, di_u, di_o, di_bw])
+    for point in unique_start_points(points, bounds):
+        try:
+            member = make_member(point)
+            member.calc_qk_zul_gzt()
+        except Exception:
+            continue
+        qk_zul = getattr(member, "qk_zul_gzt", 0.0)
+        if qk_zul > best_fallback_qk_zul:
+            best_fallback_qk_zul = qk_zul
+            best_fallback = point
+        if qk_zul + 1e-6 >= member.qk:
+            if best_feasible is None or member.section.co2 < best_feasible[0]:
+                best_feasible = (member.section.co2, point)
+
+    if best_feasible is not None:
+        return best_feasible[1]
+    if best_fallback is not None:
+        return np.clip(best_fallback, lower, upper)
+    return np.clip(base, lower, upper)
+
+
 def calc_uls_penalty(member):
     deficit = max(member.qk - member.qk_zul_gzt, 0.0)
     return ULS_PENALTY_WEIGHT * deficit
@@ -69,11 +189,13 @@ def calc_sls1_penalty(member, use_cracked_deflection=True):
 
 
 def calc_sls2_penalty(member):
+    pen_f = member.requirements.f1 - member.f1
     pen_a = member.a_ed - member.requirements.a_cd
     pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1
     pen_v = member.ve_ed - member.ve_cd
     if member.f1 < member.requirements.f1:
         return max(
+            SLS2_FREQUENCY_PENALTY_WEIGHT * pen_f,
             SLS2_ACCELERATION_PENALTY_WEIGHT * pen_a,
             SLS2_WALKING_DEFLECTION_PENALTY_WEIGHT * pen_w,
             SLS2_VELOCITY_PENALTY_WEIGHT * pen_v,
@@ -96,6 +218,8 @@ def criterion_penalty(member, criterion, include_uls_guard=True, use_cracked_def
     penalty_uls = calc_uls_penalty(member)
     if criterion == "ULS":
         return penalty_uls
+    if include_uls_guard and penalty_uls > 1e-6:
+        return uls_infeasible_penalty(member, penalty_uls)
 
     guard = penalty_uls if include_uls_guard else 0.0
     if criterion == "SLS1":
@@ -133,7 +257,7 @@ def opt_rc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.16):
     bh = (h_min, 1.2)  # height between h_min and 1.2 m
     bdi_xu = (0.006, 0.04)  # diameter of rebars between 6 mm and 40 mm
     bdi_xo = (0.006, 0.04)  # diameter of rebars between 6 mm and 40 mm
-    bdi_bw = (0.0, 0.02)  # stirrup diameter for shear/punching checks
+    bdi_bw = (0.0, 0.016)  # stirrup diameter for shear/punching checks
     bounds = [bh, bdi_xu, bdi_xo, bdi_bw]
 
     # definition of fixed values of cross-section
@@ -144,16 +268,32 @@ def opt_rc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.16):
     phi, c_nom, xi, jnt_srch = m.section.phi, m.section.c_nom, m.section.xi, m.section.joint_surcharge
 
     co, st = m.section.concrete_type, m.section.rebar_type
-    if m.system.has_columns and n_bw == 0 and getattr(m, "check_punching", True):
-        n_bw = 2
+    if n_bw == 0:
+        n_bw = 10
     add_arg = [m.system, co, st, b, s_xu, s_xo, s_yu, s_yo, s_bw, n_bw,
                m.floorstruc, m.requirements, to_opt, criterion, m.g2k, m.qk, phi, c_nom, xi, jnt_srch,
                getattr(m, "check_punching", True)]
 
-    # optimize with basinhopping algorithm with bounds also implemented on both levels (inner and outer):
-    bounded_step = RandomDisplacementBounds(np.array([b[0] for b in bounds]), np.array([b[1] for b in bounds]))
-    opt = basinhopping(rc_rqs, var0, niter=max_iter, T=1, minimizer_kwargs={"args": (add_arg,), "bounds": bounds,
-                                                                            "method": "Powell"}, take_step=bounded_step)
+    def make_seed_member(point):
+        h, di_xu, di_xo, di_bw = point
+        section = struct_analysis.RectangularConcrete(
+            co, st, b, h, di_xu, s_xu, di_xo, s_xo, di_xu, s_yu, di_xo, s_yo,
+            di_bw, s_bw, n_bw, phi, c_nom, xi, jnt_srch
+        )
+        return struct_analysis.Member2D(
+            section, m.system, m.floorstruc, m.requirements, m.g2k, m.qk,
+            evaluate_service=False, check_punching=getattr(m, "check_punching", True)
+        )
+
+    var0 = rectangular_feasible_start(var0, bounds, make_seed_member)
+
+    opt = best_basinhopping(
+        rc_rqs,
+        var0,
+        bounds,
+        max_iter,
+        {"args": (add_arg,), "bounds": bounds, "method": "Powell"},
+    )
     h, di_xu, di_xo, di_bw = opt.x
     optimized_section = struct_analysis.RectangularConcrete(co, st, b, h, di_xu, s_xu, di_xo, s_xo, di_xu, s_yu, di_xo, s_yo, di_bw, s_bw, n_bw,
                                                             phi, c_nom, xi, jnt_srch)
@@ -193,7 +333,12 @@ def rc_rqs(var, add_arg):
                                       check_punching=check_punching)
     member.calc_qk_zul_gzt()  # calculate admissible live load
 
-    penalty = criterion_penalty(member, criterion, include_uls_guard=True, use_cracked_deflection=True)
+    penalty = criterion_penalty(
+        member,
+        criterion,
+        include_uls_guard=(criterion == "ENV"),
+        use_cracked_deflection=True,
+    )
     if to_opt == "GWP":
         return member.section.co2 * (1 + penalty)
     elif to_opt == "h":
@@ -210,14 +355,14 @@ def opt_pc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.18): #h_m
     di_bw0 = m.section.bw_bg[0]
     var0 = [h0, di_xu0, di_xo0, di_bw0]
 
-    bounds = [(h_min, 1.2), (0.006, 0.04), (0.006, 0.04), (0.0, 0.02)]
+    bounds = [(h_min, 1.2), (0.006, 0.04), (0.006, 0.04), (0.0, 0.016)]
 
     b = m.section.b
     s_xu, s_xo = m.section.bw[0][1], m.section.bw[1][1]
     s_yu, s_yo = m.section.bw[2][1], m.section.bw[3][1]
     di_bw, s_bw, n_bw = m.section.bw_bg[0], m.section.bw_bg[1], m.section.bw_bg[2]
-    if m.system.has_columns and n_bw == 0 and getattr(m, "check_punching", True):
-        n_bw = 2
+    if n_bw == 0:
+        n_bw = 10
     phi, c_nom, xi, jnt_srch = m.section.phi, m.section.c_nom, m.section.xi, m.section.joint_surcharge
     co, st, pt = m.section.concrete_type, m.section.rebar_type, m.section.pt_steel_type
 
@@ -227,6 +372,20 @@ def opt_pc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.18): #h_m
         phi, c_nom, xi, jnt_srch, m.section.layout, m.section.c_nom_pt, m.section.A_p,
         getattr(m, "check_punching", True)
     ]
+
+    def make_seed_member(point):
+        h, di_xu, di_xo, di_bw = point
+        section = struct_analysis.PostTensionedConcrete(
+            co, st, pt, m.system.lx, m.system.ly, b, h, di_xu, s_xu, di_xo, s_xo,
+            di_xu, s_yu, di_xo, s_yo, di_bw, s_bw, n_bw, phi, c_nom, xi, jnt_srch,
+            m.section.layout, m.section.c_nom_pt, m.section.A_p, compute_stiffness=False
+        )
+        return struct_analysis.Member2D(
+            section, m.system, m.floorstruc, m.requirements, m.g2k, m.qk,
+            evaluate_service=False, check_punching=getattr(m, "check_punching", True)
+        )
+
+    var0 = rectangular_feasible_start(var0, bounds, make_seed_member)
 
     evaluation_cache = {}
 
@@ -238,19 +397,17 @@ def opt_pc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.18): #h_m
             evaluation_cache[key] = pc_rqs(var, args)
         return evaluation_cache[key]
 
-    bounded_step = RandomDisplacementBounds(np.array([bnd[0] for bnd in bounds]), np.array([bnd[1] for bnd in bounds]))
-    opt = basinhopping(
+    opt = best_basinhopping(
         cached_pc_rqs,
         var0,
-        niter=max_iter,
-        T=1,
-        minimizer_kwargs={
+        bounds,
+        max_iter,
+        {
             "args": (add_arg,),
             "bounds": bounds,
             "method": "Powell",
             "options": {"maxfev": 250, "xtol": 1e-4, "ftol": 1e-4},
         },
-        take_step=bounded_step,
     )
     h, di_xu, di_xo, di_bw = opt.x
     return struct_analysis.PostTensionedConcrete(
@@ -285,7 +442,12 @@ def pc_rqs(var, add_arg):
     )
     member.calc_qk_zul_gzt()
 
-    penalty = criterion_penalty(member, criterion, include_uls_guard=True, use_cracked_deflection=False)
+    penalty = criterion_penalty(
+        member,
+        criterion,
+        include_uls_guard=(criterion == "ENV"),
+        use_cracked_deflection=False,
+    )
 
     if to_opt == "GWP":
         return member.section.co2 * (1 + penalty)
@@ -380,7 +542,8 @@ def rc_rib_rqs(var, add_arg):
     # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
     pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
     if member.f1 < member.requirements.f1:
-        penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
+        pen_f = member.requirements.f1 - member.f1
+        penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
     else:
         penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
 
@@ -446,7 +609,7 @@ def wd_rqs_h(h, args):
     member = struct_analysis.Member1D(querschnitt, m.system, m.floorstruc, m.requirements, m.g2k, m.qk)
     member.calc_qk_zul_gzt()
     penalty1 = max(member.qk - member.qk_zul_gzt, 0)
-    if penalty1 > 1e-6:
+    if criterion in ("ULS", "ENV") and penalty1 > 1e-6:
         return uls_infeasible_penalty(member, penalty1)
     if criterion == "ULS":
         to_minimize = abs(member.qk - member.qk_zul_gzt)
@@ -462,7 +625,8 @@ def wd_rqs_h(h, args):
         # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
         pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
         if member.f1 < member.requirements.f1:
-            penalty2 = max(pen_a*1e2, pen_w*1e5, pen_v*1e3, 0)
+            pen_f = member.requirements.f1 - member.f1
+            penalty2 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a*1e2, pen_w*1e5, pen_v*1e3, 0)
         else:
             penalty2 = max(pen_w*1e5, pen_v*1e3, 0)
         to_minimize = member.section.h*(1+penalty2)
@@ -480,7 +644,8 @@ def wd_rqs_h(h, args):
         pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
         penalty2 = 1e5 * max(d1, d2, d3, 0)
         if member.f1 < member.requirements.f1:
-            penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
+            pen_f = member.requirements.f1 - member.f1
+            penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
         else:
             penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
         member.get_fire_resistance()
@@ -557,7 +722,7 @@ def wd_rib_rqs(var, add_arg):
     member.calc_qk_zul_gzt()  # calculate admissible live load
     # define penalty1, if ULS is not fulfilled
     penalty1 = max(member.qk - member.qk_zul_gzt, 0)
-    if penalty1 > 1e-6:
+    if criterion in ("ULS", "ENV") and penalty1 > 1e-6:
         return uls_infeasible_penalty(member, penalty1)
 
     # define penalty2, if SLS1 (deflections) are not fulfilled
@@ -571,7 +736,8 @@ def wd_rib_rqs(var, add_arg):
     # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
     pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
     if member.f1 < member.requirements.f1:
-        penalty3 = max(pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
+        pen_f = member.requirements.f1 - member.f1
+        penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
     else:
         penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
 
@@ -629,7 +795,7 @@ def get_optimized_section(member, criterion, to_opt, max_iter, h_min=0.16):
     elif member.section.section_type == "pc_rec":
         # available to_opt arguments: "GWP", "h"
         # available criterion arguments: "ULS", "SLS1", "SLS2"
-        return opt_pc_rec(member, to_opt, criterion, max_iter, h_min)
+        return opt_pc_rec(member, to_opt, criterion, max_iter, max(h_min, 0.18))
     elif member.section.section_type == "wd_rec":
         # available criterion arguments: "ULS", "SLS1", "SLS2"
         return opt_gzt_wd_rqs(member, criterion=criterion)

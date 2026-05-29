@@ -17,8 +17,8 @@ OUTPUT_DIR = "plots"
 DESIGN_CRITERIA = ["ULS", "SLS1", "SLS2", "FIRE"]
 ENV_CRITERIA = ["ENV"]
 OPTIMA = ["GWP"]
-MAX_ITER = int(os.environ.get("SDSD_MAX_ITER", 75))
-HIGH_ITER = int(os.environ.get("SDSD_HIGH_ITER", 150))
+MAX_ITER = int(os.environ.get("SDSD_MAX_ITER", 5))
+HIGH_ITER = int(os.environ.get("SDSD_HIGH_ITER", 10))
 HIGH_ITER_SECTION_TYPES = {"rc_rec", "pc_rec", "rc_rib", "tcc"}
 G2K = 0.75e3
 VERIFICATION_INDEX = 1
@@ -49,16 +49,18 @@ TCC_FLAT_KERVE = {
     "a_ribs": 1.00,
     "h_c": 0.08,
     "h_w": 0.12,
+    "h_w_max": 1.00,
     "b_w": 1.00,
     "d": 0.0,
     "l0": 2.0,
 }
 
 TCC_RIBS_DBS = {
-    "s": 0.15,
+    "s": 0.06,
     "a_ribs": 0.625,
     "h_c": 0.08,
     "h_w": 0.12,
+    "h_w_max": 1.00,
     "b_w": 0.18,
     "d": 0.0,
     "l0": 2.0,
@@ -66,7 +68,15 @@ TCC_RIBS_DBS = {
 
 TCC_RIBS_DBS_OFFICE = {
     **TCC_RIBS_DBS,
+    "s": 0.04,
     "b_w": 0.24,
+    "h_w_max": 1.50,
+    "h_by_span": {
+        8: {"h_c": 0.12, "h_w": 0.30},
+        10: {"h_c": 0.16, "h_w": 0.35},
+        12: {"h_c": 0.20, "h_w": 0.40},
+        16: {"h_c": 0.25, "h_w": 0.70},
+    },
 }
 
 SCENARIOS = {
@@ -126,7 +136,7 @@ SCENARIOS = {
                 "dimension": "1D",
                 "crsec_type": "tcc",
                 "materials": "tcc_dbs",
-                "description": "Ribs, connection: DBS_10, s=0.15 m, a_ribs=0.625 m, b_w=0.18 m",
+                "description": "Ribs, connection: DBS_10, s=0.06 m, a_ribs=0.625 m, b_w=0.18 m",
                 "structural_system": "Simple span",
                 "system_type": "simple_span",
                 "fire_array": FIRE_BOTTOM_AND_SIDES,
@@ -160,6 +170,7 @@ SCENARIOS = {
                 "description": "conventionally reinforced",
                 "structural_system": "2-way, full continuity, columns",
                 "slab_support": "PL-eingespannt",
+                "start_h_by_span": {8: 0.25, 10: 0.35, 12: 0.45, 16: 0.60},
             },
             {
                 "id": "off_pt_flat_columns_dist",
@@ -171,6 +182,7 @@ SCENARIOS = {
                 "pt_layout": [0, 1, 0, 1],
                 "structural_system": "2-way, full continuity, columns",
                 "slab_support": "PL-eingespannt",
+                "start_h_by_span": {8: 0.20, 10: 0.25, 12: 0.30, 16: 0.40},
             },
             {
                 "id": "off_pt_flat_columns_band",
@@ -182,6 +194,7 @@ SCENARIOS = {
                 "pt_layout": [1, 0, 1, 0],
                 "structural_system": "2-way, full continuity, columns",
                 "slab_support": "PL-eingespannt",
+                "start_h_by_span": {8: 0.20, 10: 0.25, 12: 0.30, 16: 0.40},
             },
             {
                 "id": "off_ribbed_concrete_continuous",
@@ -193,6 +206,7 @@ SCENARIOS = {
                 "structural_system": "Continuous beam",
                 "system_type": "continuous_elastic",
                 "fire_array": FIRE_BOTTOM_AND_SIDES,
+                "section_params": {"b_w": 0.25},
             },
             {
                 "id": "off_tcc_ribs_dbs",
@@ -200,7 +214,7 @@ SCENARIOS = {
                 "dimension": "1D",
                 "crsec_type": "tcc",
                 "materials": "tcc_dbs",
-                "description": "Ribs, connection: DBS_10, s=0.15 m, a_ribs=0.625 m, b_w=0.24 m",
+                "description": "Ribs, connection: DBS_10, s=0.04 m, a_ribs=0.625 m, b_w=0.24 m",
                 "structural_system": "Simple span",
                 "system_type": "simple_span",
                 "fire_array": FIRE_BOTTOM_AND_SIDES,

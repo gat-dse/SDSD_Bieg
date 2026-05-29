@@ -31,6 +31,7 @@
 import copy
 import math
 import sqlite3  # import modul for SQLite
+from pathlib import Path
 import numpy as np
 from scipy.optimize import minimize, root_scalar
 from scipy.optimize import least_squares
@@ -2132,6 +2133,7 @@ class Slab:
 
     _property_cache = {}
     _available_entries = None
+    _database_path = Path(__file__).resolve().with_name("slab_properties.db")
 
     @staticmethod
     def calc_alpha_w_f_cd(alpha_w):
@@ -2154,7 +2156,7 @@ class Slab:
         self.column_tributary_area = column_tributary_area if column_tributary_area is not None else length_x * length_y
         property_key = (self.raender, self.lx, self.ly)
         if property_key not in self._property_cache:
-            conn = sqlite3.connect("slab_properties.db")
+            conn = sqlite3.connect(self._database_path)
             cursor = conn.cursor()
             result = cursor.execute(
                         """
@@ -2356,6 +2358,12 @@ class Member1D:
         qs_class_erf = self.system.qs_cl_erf  # z.B. [0, 2]
         qs_class_vorh = [self.section.qs_class_n, self.section.qs_class_p]
 
+        def finalize(qu_bend, qu_shear):
+            self.qu_bending = qu_bend
+            self.qu_shear = qu_shear
+            self.uls_governing_mode = "bending" if qu_bend <= qu_shear else "shear"
+            return min(qu_bend, qu_shear)
+
         if self.section.section_type == "rc_rib":
             v_pos = getattr(self.section, "vu_PB_p", self.section.vu_p)
             v_neg = abs(getattr(self.section, "vu_PB_n", self.section.vu_n))
@@ -2417,20 +2425,39 @@ class Member1D:
                 else:
                     # for all other cross-sections bending strength = 0
                     qu_bend = 0
-        return min(qu_bend, qu_shear)
+        return finalize(qu_bend, qu_shear)
 
     def calc_qk_zul_gzt(self):
         self.qk_zul_gzt = 0
         if self.section.section_type == "tcc":
+            def component_qk_zul(qu_0_component, qu_inf_component):
+                if np.isnan(qu_0_component) or np.isnan(qu_inf_component):
+                    return float("nan")
+                if not np.isfinite(qu_0_component) and not np.isfinite(qu_inf_component):
+                    return float("inf")
+                if qu_0_component <= 0 or qu_inf_component <= 0:
+                    return 0.0
+                deg_util_gd_component = 1.25 * self.gk * self.gamma_g / qu_inf_component
+                deg_util_qd_inf_component = 1.25 * (1 - self.psi[0]) * self.gamma_q / qu_inf_component
+                deg_util_qd_0_component = self.psi[0] * self.gamma_q / qu_0_component
+                denominator = deg_util_qd_inf_component + deg_util_qd_0_component
+                if denominator <= 0:
+                    return float("inf")
+                return max((1 - deg_util_gd_component) / denominator, 0.0)
+
             # Capacity at t=0
             self.section.mu_max = self.section.Mu[0]
             self.section.vu_p = self.section.Vu[0]
             qu_0 = self.calc_qu()  # Entspricht der reinen Tragfähigkeit bei t=0
+            qu_0_bending = getattr(self, "qu_bending", float("nan"))
+            qu_0_shear = getattr(self, "qu_shear", float("nan"))
             
             # Capacity at t=inf
             self.section.mu_max = self.section.Mu[1]
             self.section.vu_p = self.section.Vu[1]
             qu_inf = self.calc_qu() # Entspricht der reinen Tragfähigkeit bei t=inf
+            qu_inf_bending = getattr(self, "qu_bending", float("nan"))
+            qu_inf_shear = getattr(self, "qu_shear", float("nan"))
 
             #Set dummy value again for mu_max and vu_p
             self.section.mu_max = 1
@@ -2444,11 +2471,29 @@ class Member1D:
             
             # Negative values are wanted for optimization 
             self.qk_zul_gzt = (1 - deg_util_gd) / (deg_util_qd_inf + deg_util_qd_0)
+            self.qk_zul_bending_gzt = component_qk_zul(qu_0_bending, qu_inf_bending)
+            self.qk_zul_shear_gzt = component_qk_zul(qu_0_shear, qu_inf_shear)
+            if self.qk_zul_bending_gzt <= self.qk_zul_shear_gzt:
+                self.uls_governing_mode = "bending"
+            else:
+                self.uls_governing_mode = "shear"
 
         else:
             # Standard calc. (Concrete, Wood, etc.)
             self.qu = self.calc_qu()
             self.qk_zul_gzt = max((self.qu - self.gamma_g * self.gk) / self.gamma_q, 0)
+            qu_bending = getattr(self, "qu_bending", float("nan"))
+            qu_shear = getattr(self, "qu_shear", float("nan"))
+            self.qk_zul_bending_gzt = (
+                max((qu_bending - self.gamma_g * self.gk) / self.gamma_q, 0)
+                if np.isfinite(qu_bending)
+                else float("inf")
+            )
+            self.qk_zul_shear_gzt = (
+                max((qu_shear - self.gamma_g * self.gk) / self.gamma_q, 0)
+                if np.isfinite(qu_shear)
+                else float("inf")
+            )
 
         return self.qk_zul_gzt
 
@@ -2473,6 +2518,8 @@ class Member1D:
     def calc_vib1(self, f0=700):
         # calculates a_Ed according to HBT, Seite 47
         f1 = self.f1
+        if f1 <= 1e-9:
+            return float("inf")
         m_gen = self.m * self.system.li_max / 2 * self.bm_rech
         xi = self.section.xi
         if f1 <= 5.1:
@@ -2719,31 +2766,65 @@ class Member2D:
         alpha_v = self.system.alpha_v
         qs_class_erf = self.system.qs_cl_erf  # z.B. [0, 2]
         qs_class_vorh = [self.section.qs_class_n, self.section.qs_class_p]
-        if self.section.section_type == "pc_rec":
-            if not (qs_class_vorh[0] <= qs_class_erf[0] and qs_class_vorh[1] <= qs_class_erf[1]):
-                qu_bend = 0.0
-                if self.should_check_punching():
-                    qu_shear = self.calc_punching_qu()
-                else:
-                    qu_shear = self.calc_shear_qu()
-                return min(qu_bend, qu_shear)
 
+        def finalize(qu_bend, qu_shear):
+            self.qu_bending = qu_bend
+            self.qu_shear = qu_shear
+            if qu_bend <= qu_shear:
+                self.uls_governing_mode = "bending"
+            else:
+                self.uls_governing_mode = "punching" if self.should_check_punching() else "shear"
+            return min(qu_bend, qu_shear)
+
+        if self.section.section_type == "pc_rec":
             m_sec_x, _, _ = self.section.get_secondaryInternalForces(self.system)
             q_bend_candidates = []
+            self.pt_uls_m_rd_pos = self.section.mu_max
+            self.pt_uls_m_rd_neg = self.section.mu_min
+            self.pt_uls_m_sec_pos = m_sec_x[0]
+            self.pt_uls_m_sec_neg = m_sec_x[1]
+            self.pt_uls_q_bend_pos = float("nan")
+            self.pt_uls_q_bend_neg = float("nan")
+
+            def pt_ductility_factor(qs_class, x_d, m_rd, m_r):
+                if qs_class <= 1:
+                    shift = 0.35
+                else:
+                    shift = 0.50
+                epsilon = 1.0e-3
+                resistance_factor = 0.5 * (
+                    1 + 2 / np.pi * np.arctan((abs(m_rd) - abs(m_r)) / epsilon)
+                )
+                ductility_factor = 1 - 0.5 * (
+                    1 + 2 / np.pi * np.arctan((x_d - shift) / epsilon)
+                )
+                return min(resistance_factor, ductility_factor)
+
             for alpha_i, m_sec_i, m_rd_i in (
                 (alpha_m[0], m_sec_x[0], self.section.mu_max),
                 (alpha_m[1], m_sec_x[1], self.section.mu_min),
             ):
                 if abs(alpha_i) <= 1e-12:
                     continue
-                q_cap = (m_rd_i - m_sec_i) / (alpha_i * self.system.l_tot ** 2)
+                if alpha_i >= 0:
+                    qs_class_i = self.section.qs_class_p
+                    x_d_i = self.section.x_p / self.section.d
+                else:
+                    qs_class_i = self.section.qs_class_n
+                    x_d_i = self.section.x_n / self.section.ds
+                factor_i = pt_ductility_factor(qs_class_i, x_d_i, m_rd_i, self.section.m_r)
+                q_cap = (factor_i * m_rd_i - m_sec_i) / (alpha_i * self.system.l_tot ** 2)
                 q_bend_candidates.append(q_cap)
+                if alpha_i >= 0:
+                    self.pt_uls_q_bend_pos = q_cap
+                else:
+                    self.pt_uls_q_bend_neg = q_cap
             qu_bend = max(min(q_bend_candidates), 0.0) if q_bend_candidates else float("inf")
             if self.should_check_punching():
                 qu_shear = self.calc_punching_qu()
             else:
                 qu_shear = self.calc_shear_qu()
-            return min(qu_bend, qu_shear)
+            return finalize(qu_bend, qu_shear)
 
         if min(alpha_m) == 0:
             if qs_class_vorh[1] <= qs_class_erf[1]:
@@ -2784,7 +2865,7 @@ class Member2D:
                 qu_shear = self.calc_punching_qu()
             else:
                 qu_shear = self.calc_shear_qu()
-        return min(qu_bend, qu_shear)
+        return finalize(qu_bend, qu_shear)
 
     def calc_shear_qu(self):
         candidates = []
@@ -2935,6 +3016,18 @@ class Member2D:
     def calc_qk_zul_gzt(self, gamma_g=1.35, gamma_q=1.5):
         self.qu = self.calc_qu()
         self.qk_zul_gzt = max((self.qu - gamma_g * self.gk) / gamma_q, 0)
+        qu_bending = getattr(self, "qu_bending", float("nan"))
+        qu_shear = getattr(self, "qu_shear", float("nan"))
+        self.qk_zul_bending_gzt = (
+            max((qu_bending - gamma_g * self.gk) / gamma_q, 0)
+            if np.isfinite(qu_bending)
+            else float("inf")
+        )
+        self.qk_zul_shear_gzt = (
+            max((qu_shear - gamma_g * self.gk) / gamma_q, 0)
+            if np.isfinite(qu_shear)
+            else float("inf")
+        )
 
     def calc_f1(self):
         # calculates first frequency of system according to HBT, Seite 46
@@ -2957,6 +3050,8 @@ class Member2D:
     def calc_vib1(self, f0=700):
         # calculates a_Ed according to HBT, Seite 47
         f1 = self.f1
+        if f1 <= 1e-9:
+            return float("inf")
         m_gen = self.m * self.system.li_max / 2 * self.bm_rech
         xi = self.section.xi
         if f1 <= 5.1:
