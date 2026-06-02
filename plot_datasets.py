@@ -144,7 +144,11 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
         def section_height(section):
             return float(getattr(section, "h", 0.0) or 0.0)
         def section_weight(section):
-            return float(getattr(section, "g0k", 0.0) or getattr(section, "w", 0.0) or 0.0)
+            # Prefer w because ribbed/periodic 1D sections store it per m2,
+            # while g0k can still refer to the full strip between ribs.
+            return float(getattr(section, "w", 0.0) or getattr(section, "g0k", 0.0) or 0.0)
+        def internal_floor_buildup_weight(section):
+            return float(getattr(section, "hollow_core_insulation_gk", 0.0) or 0.0)
 
         return {
             "legend": legend_entry,
@@ -155,9 +159,21 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             "gwp_struct": [mem.section.co2 for mem in members],
             "gwp_total": [mem.section.co2 + floor_value(mem, "co2") for mem in members],
             "m_struct": [section_weight(mem.section) / 1000 for mem in members],
-            "m_total": [(section_weight(mem.section) + floor_value(mem, "gk_area")) / 1000 for mem in members],
+            "m_total": [
+                (
+                    section_weight(mem.section)
+                    + floor_value(mem, "gk_area")
+                    + internal_floor_buildup_weight(mem.section)
+                ) / 1000
+                for mem in members
+            ],
             "cost_struct": [getattr(mem.section, "cost", 0.0) for mem in members],
             "cost_total": [getattr(mem.section, "cost", 0.0) + floor_value(mem, "cost") for mem in members],
+            "time_struct": [getattr(mem.section, "construction_time", 0.0) for mem in members],
+            "time_total": [
+                getattr(mem.section, "construction_time", 0.0) + floor_value(mem, "construction_time")
+                for mem in members
+            ],
             "floor_buildup": [getattr(mem.floorstruc, "description", "") for mem in members],
         }
 

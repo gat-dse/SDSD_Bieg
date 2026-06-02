@@ -33,7 +33,7 @@ TARGETS = [
 ]
 
 CS_WIDTH = 1.00
-COLUMN_SPACING = 1.90
+COLUMN_SPACING = 2.45
 
 
 plt.rcParams.update({
@@ -129,11 +129,38 @@ def parse_rebar_layers(text):
     return layers
 
 
+def parse_rib_bottom_rebar(text):
+    match = re.search(r"rib bottom:\s*d=([0-9.]+)\s*mm,\s*n=([0-9]+)", str(text))
+    if not match:
+        return None
+    return {"diameter": float(match.group(1)) / 1000.0, "n": int(match.group(2))}
+
+
+def parse_rib_shear_rebar(text):
+    match = re.search(r"rib shear:\s*d=([0-9.]+)\s*mm,\s*s=([0-9.]+)\s*mm,\s*n=([0-9]+)", str(text))
+    if not match:
+        match = re.search(r"shear:\s*d=([0-9.]+)\s*mm,\s*s=([0-9.]+)\s*mm,\s*n=([0-9]+)", str(text))
+    if not match:
+        return {"diameter": 0.0, "spacing": 0.150, "n": 0}
+    return {
+        "diameter": float(match.group(1)) / 1000.0,
+        "spacing": float(match.group(2)) / 1000.0,
+        "n": int(match.group(3)),
+    }
+
+
 def rebar_description(row):
     section_type = str(row.get("section_type", ""))
     geom = parse_geometry(row.get("geometry", ""))
     if section_type in ("wd_rec", "wd_rib"):
         return ""
+    if section_type == "rc_rib":
+        layers = parse_rebar_layers(row.get("geometry", ""))
+        rib_rebar = parse_rib_bottom_rebar(row.get("geometry", ""))
+        d_slab_bottom = layers.get("x,u", {}).get("diameter", 0.010) * 1000
+        d_rib = (rib_rebar or {}).get("diameter", layers.get("x,u", {}).get("diameter", 0.010)) * 1000
+        d_slab_top = layers.get("x,o", {}).get("diameter", 0.012) * 1000
+        return f"Rebar slab bottom / rib bottom / slab top: {d_slab_bottom:.0f} / {d_rib:.0f} / {d_slab_top:.0f} mm"
     if section_type == "tcc":
         diameter = geom.get("rebar_d", 0.010) * 1000
         layers = int(round(geom.get("rebar_layers", 2)))
@@ -254,6 +281,38 @@ def draw_rebar_points(ax, x0, y, width, diameter):
     positions = [0.16, 0.32, 0.48, 0.64, 0.80]
     for frac in positions:
         ax.add_patch(Circle((x0 + width * frac, y), radius, facecolor=COLORS["rebar"], edgecolor=COLORS["rebar"], lw=0.3))
+
+
+def draw_rebar_points_between(ax, x_left, x_right, y, diameter, max_points=3):
+    radius = max(diameter / 2, 0.003)
+    available_width = max(x_right - x_left, 1e-9)
+    n_points = max(1, min(max_points, int(available_width / max(3.5 * radius, 1e-9)) + 1))
+    if n_points == 1:
+        positions = [(x_left + x_right) / 2]
+    else:
+        edge = min(max(2.5 * radius, 0.012), available_width * 0.25)
+        positions = [
+            x_left + edge + idx * (available_width - 2 * edge) / (n_points - 1)
+            for idx in range(n_points)
+        ]
+    for x in positions:
+        ax.add_patch(Circle((x, y), radius, facecolor=COLORS["rebar"], edgecolor=COLORS["rebar"], lw=0.3))
+
+
+def draw_rebar_points_with_spacing(ax, x_left, x_right, y, diameter, spacing):
+    radius = max(diameter / 2, 0.003)
+    available_width = max(x_right - x_left, 1e-9)
+    if spacing <= 0:
+        draw_rebar_points_between(ax, x_left, x_right, y, diameter, max_points=5)
+        return
+    n_spaces = max(1, int(available_width / spacing))
+    n_points = n_spaces + 1
+    actual_span = (n_points - 1) * spacing
+    start = (x_left + x_right) / 2 - actual_span / 2
+    for idx in range(n_points):
+        x = start + idx * spacing
+        if x_left + radius <= x <= x_right - radius:
+            ax.add_patch(Circle((x, y), radius, facecolor=COLORS["rebar"], edgecolor=COLORS["rebar"], lw=0.3))
 
 
 def draw_rebar_line(ax, x0, y, width, diameter):
@@ -417,12 +476,47 @@ def draw_solid(ax, x0, y0, width, height, facecolor):
 
 
 def draw_ribbed(ax, row, geom, x0, y0, width, height, facecolor):
-    h_f = min(max(geom.get("h_f", geom.get("h_c", 0.08)), 0.035), height * 0.75)
+    geom_h = max(geom.get("h", height), 1e-9)
+    local_scale = height / geom_h
+    h_f = min(max(geom.get("h_f", geom.get("h_c", 0.08)) * local_scale, 0.035), height * 0.75)
     h_w = height - h_f
-    b_w = min(max(geom.get("b_w", width * 0.22), 0.06), width * 0.55)
+    b_w = min(max(geom.get("b_w", width * 0.22) * local_scale, 0.06), width * 0.55)
+    rib_x0 = x0 + width / 2 - b_w / 2
     ax.add_patch(Rectangle((x0, y0 + h_w), width, h_f, facecolor=facecolor, edgecolor="#222222", lw=0.9))
-    ax.add_patch(Rectangle((x0 + width / 2 - b_w / 2, y0), b_w, h_w, facecolor=facecolor, edgecolor="#222222", lw=0.9))
-    draw_rebar(ax, row, geom, x0, y0 + h_w, width, h_f)
+    ax.add_patch(Rectangle((rib_x0, y0), b_w, h_w, facecolor=facecolor, edgecolor="#222222", lw=0.9))
+    draw_ribbed_concrete_rebar(ax, row, geom, x0, width, rib_x0, y0, b_w, h_w, h_f, local_scale)
+
+
+def draw_ribbed_concrete_rebar(ax, row, geom, flange_x0, flange_width, rib_x0, y0, rib_width, rib_height, flange_height, local_scale):
+    layers = parse_rebar_layers(row.get("geometry", ""))
+    rib_rebar = parse_rib_bottom_rebar(row.get("geometry", ""))
+    rib_shear = parse_rib_shear_rebar(row.get("geometry", ""))
+    # Ribbed concrete is drawn with the detailing assumption used for this
+    # study: c_nom = 20 mm. Rib bottom bars sit inside the stirrup cage, so the
+    # stirrup diameter is added to the cover.
+    c_nom = min(0.020 * local_scale, (rib_height + flange_height) * 0.18)
+    d_slab_bot = layers.get("x,u", {}).get("diameter", 0.010) * local_scale
+    d_slab_bot_transverse = layers.get("y,u", {}).get("diameter", layers.get("x,u", {}).get("diameter", 0.010)) * local_scale
+    d_rib_bot = (rib_rebar or {}).get("diameter", layers.get("x,u", {}).get("diameter", 0.010)) * local_scale
+    d_top = layers.get("x,o", {}).get("diameter", 0.012) * local_scale
+    d_top_transverse = layers.get("y,o", {}).get("diameter", layers.get("x,o", {}).get("diameter", 0.012)) * local_scale
+    s_slab_bot = layers.get("x,u", {}).get("spacing", 0.150) * local_scale
+    s_top = layers.get("x,o", {}).get("spacing", 0.150) * local_scale
+    d_stirrup = rib_shear.get("diameter", 0.0) * local_scale
+    n_rib = (rib_rebar or {}).get("n", 3)
+
+    y_slab_bot = y0 + rib_height + c_nom + d_slab_bot / 2
+    y_slab_bot_transverse = y_slab_bot + d_slab_bot / 2 + d_slab_bot_transverse / 2
+    y_rib_bot = y0 + c_nom + d_stirrup + d_rib_bot / 2
+    y_top = y0 + rib_height + flange_height - c_nom - d_top / 2
+    draw_rebar_points_with_spacing(ax, flange_x0, flange_x0 + flange_width, y_slab_bot, d_slab_bot, s_slab_bot)
+    draw_rebar_line(ax, flange_x0, y_slab_bot_transverse, flange_width, d_slab_bot_transverse)
+    draw_rebar_points_between(ax, rib_x0, rib_x0 + rib_width, y_rib_bot, d_rib_bot, max_points=n_rib)
+    # For negative bending in a continuous ribbed beam the slab flange is in
+    # tension. The effective flange width, not only the rib width, contributes.
+    draw_rebar_points_with_spacing(ax, flange_x0, flange_x0 + flange_width, y_top, d_top, s_top)
+    y_top_transverse = y_top - d_top / 2 - d_top_transverse / 2
+    draw_rebar_line(ax, flange_x0, y_top_transverse, flange_width, d_top_transverse)
 
 
 def draw_ribbed_timber_hollow(ax, geom, x0, y0, width, height):
@@ -538,7 +632,10 @@ def draw_cross_section(ax, row, x_center, total_top, name_y, text_y, scale):
         below_lines.append(f"Punching: req. V$_{{Rd,s}}$={float(punching_vrds):.0f} kN")
     below_lines.extend([material_text, f"Floor build-up: {floor_text}"])
     below = "\n".join(line for line in below_lines if line)
-    ax.text(x0 - 0.02, text_y, wrap_text(below, 28), ha="left", va="top", fontsize=8.4)
+    text_x = dim_x_total
+    text_width = dim_x_struct - dim_x_total
+    wrap_width = max(36, int(text_width / 1.24 * 40))
+    ax.text(text_x, text_y, wrap_text(below, wrap_width), ha="left", va="top", fontsize=8.4)
     return floor_top
 
 
@@ -556,24 +653,34 @@ def plot_case(df, case_name, span):
         h_floor = sum(height for _, height in parse_floor_layers(row.get("floor_buildup", "")))
         h_total = h_struct + h_floor if h_floor > 0 else float(row.get("h_total [m]", h_struct))
         max_total_height = max(max_total_height, h_total)
-    scale = 0.62 / max(max_total_height, 0.1)
+    # Plot in true geometric scale: one data unit in width equals one metre in
+    # height. This avoids visually compressing deep ribbed sections.
+    scale = CS_WIDTH
     n = len(rows)
     x_positions = [1.35 + idx * COLUMN_SPACING for idx in range(n)]
     x_max = x_positions[-1] + CS_WIDTH
-    total_top = 1.02
-    name_y = 1.24
-    text_y = 0.18
+    total_top = max_total_height * scale + 0.78
+    name_y = total_top + 0.54
+    text_y = 0.10
+    y_min = -0.86
+    y_max = name_y + 0.24
 
-    fig, ax = plt.subplots(figsize=(max(15.0, 2.15 * n), 6.8))
-    ax.set_xlim(0.18, x_max + 0.44)
-    ax.set_ylim(-0.06, 1.48)
+    x_min = 0.18
+    x_lim_max = x_max + 0.78
+    data_ratio = (x_lim_max - x_min) / (y_max - y_min)
+    fig_width = max(17.0, 2.85 * n)
+    fig_height = max(7.4, fig_width / data_ratio)
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    ax.set_xlim(x_min, x_lim_max)
+    ax.set_ylim(y_min, y_max)
+    ax.set_aspect("equal", adjustable="box")
     ax.axis("off")
 
     qk = float(rows.iloc[0].get("qk_kN_m2", 0.0))
     fig.suptitle(
         f"{case_name}, q$_k$={qk:.1f} kN/m$^2$, l={span:g} m - best total GWP cross-sections",
         x=0.5,
-        y=0.98,
+        y=0.965,
         ha="center",
     )
 
@@ -591,7 +698,7 @@ def plot_case(df, case_name, span):
     ]
     handles = [Rectangle((0, 0), 1, 1, facecolor=color, edgecolor="#222222", lw=0.4) for _, color in legend_items]
     labels = [label for label, _ in legend_items]
-    ax.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.965), ncol=7, frameon=False, fontsize=8.8)
+    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.905), ncol=7, frameon=False, fontsize=8.8)
 
     safe_case = case_name.lower().replace(" ", "_")
     path = OUTPUT_DIR / f"final_cross_sections_{safe_case}_{int(span)}m.png"

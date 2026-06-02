@@ -80,7 +80,48 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
         def section_height(section):
             return float(getattr(section, "h", 0.0) or 0.0)
         def section_weight(section):
-            return float(getattr(section, "g0k", 0.0) or getattr(section, "w", 0.0) or 0.0)
+            # Prefer w because it is normalized to the comparison width/area;
+            # g0k can be a strip quantity for ribbed 1D sections.
+            return float(getattr(section, "w", 0.0) or getattr(section, "g0k", 0.0) or 0.0)
+        def internal_floor_buildup_weight(section):
+            return float(getattr(section, "hollow_core_insulation_gk", 0.0) or 0.0)
+        def punching_steel_addon(mem):
+            section = mem.section
+            if (
+                getattr(section, "section_type", "") not in ("rc_rec", "pc_rec")
+                or not getattr(mem.system, "has_columns", False)
+            ):
+                mem.punching_a_ds_req_m2 = 0.0
+                mem.punching_steel_volume_m3_m2 = 0.0
+                mem.punching_steel_co2_kgCO2eq_m2 = 0.0
+                mem.punching_steel_cost_CHF_m2 = 0.0
+                mem.punching_steel_time_h_m2 = 0.0
+                mem.punching_V_Rd_s_required_N = 0.0
+                return 0.0, 0.0, 0.0, 0.0
+            try:
+                v_rd_s_req = mem.calc_required_punching_shear_reinforcement_resistance()
+                a_ds_req = max(v_rd_s_req, 0.0) / max(section.rebar_type.fsd, 1e-9)
+                tributary_area = max(mem.system.lx * mem.system.ly, 1e-9)
+                volume = a_ds_req / tributary_area
+                co2 = volume * section.rebar_type.GWP * section.rebar_type.density
+                cost = volume * section.rebar_type.cost
+                construction_time = volume * section.rebar_type.construction_time
+            except Exception:
+                volume, co2, cost, construction_time = 0.0, 0.0, 0.0, 0.0
+                a_ds_req = 0.0
+                v_rd_s_req = 0.0
+            mem.punching_a_ds_req_m2 = a_ds_req
+            mem.punching_steel_volume_m3_m2 = volume
+            mem.punching_steel_co2_kgCO2eq_m2 = co2
+            mem.punching_steel_cost_CHF_m2 = cost
+            mem.punching_steel_time_h_m2 = construction_time
+            mem.punching_V_Rd_s_required_N = v_rd_s_req
+            return volume, co2, cost, construction_time
+
+        punching_addons = [punching_steel_addon(mem) for mem in members]
+        punching_co2 = [addon[1] for addon in punching_addons]
+        punching_cost = [addon[2] for addon in punching_addons]
+        punching_time = [addon[3] for addon in punching_addons]
 
         return {
             "legend": legend_entry,
@@ -88,12 +129,29 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             "members": members,
             "h_struct": [section_height(mem.section) for mem in members],
             "h_total": [section_height(mem.section) + floor_value(mem, "h") for mem in members],
-            "gwp_struct": [mem.section.co2 for mem in members],
-            "gwp_total": [mem.section.co2 + floor_value(mem, "co2") for mem in members],
+            "gwp_struct": [mem.section.co2 + punching_co2[idx] for idx, mem in enumerate(members)],
+            "gwp_total": [mem.section.co2 + punching_co2[idx] + floor_value(mem, "co2") for idx, mem in enumerate(members)],
             "m_struct": [section_weight(mem.section) / 1000 for mem in members],
-            "m_total": [(section_weight(mem.section) + floor_value(mem, "gk_area")) / 1000 for mem in members],
-            "cost_struct": [getattr(mem.section, "cost", 0.0) for mem in members],
-            "cost_total": [getattr(mem.section, "cost", 0.0) + floor_value(mem, "cost") for mem in members],
+            "m_total": [
+                (
+                    section_weight(mem.section)
+                    + floor_value(mem, "gk_area")
+                    + internal_floor_buildup_weight(mem.section)
+                ) / 1000
+                for mem in members
+            ],
+            "cost_struct": [getattr(mem.section, "cost", 0.0) + punching_cost[idx] for idx, mem in enumerate(members)],
+            "cost_total": [getattr(mem.section, "cost", 0.0) + punching_cost[idx] + floor_value(mem, "cost") for idx, mem in enumerate(members)],
+            "time_struct": [
+                getattr(mem.section, "construction_time", 0.0) + punching_time[idx]
+                for idx, mem in enumerate(members)
+            ],
+            "time_total": [
+                getattr(mem.section, "construction_time", 0.0)
+                + punching_time[idx]
+                + floor_value(mem, "construction_time")
+                for idx, mem in enumerate(members)
+            ],
             "floor_buildup": [getattr(mem.floorstruc, "description", "") for mem in members],
         }
 

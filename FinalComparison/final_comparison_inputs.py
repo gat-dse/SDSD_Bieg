@@ -66,19 +66,6 @@ TCC_RIBS_DBS = {
     "l0": 2.0,
 }
 
-TCC_RIBS_DBS_OFFICE = {
-    **TCC_RIBS_DBS,
-    "s": 0.04,
-    "b_w": 0.24,
-    "h_w_max": 1.50,
-    "h_by_span": {
-        8: {"h_c": 0.12, "h_w": 0.30},
-        10: {"h_c": 0.16, "h_w": 0.35},
-        12: {"h_c": 0.20, "h_w": 0.40},
-        16: {"h_c": 0.25, "h_w": 0.70},
-    },
-}
-
 SCENARIOS = {
     "residential": {
         "label": "Residential",
@@ -207,18 +194,6 @@ SCENARIOS = {
                 "system_type": "continuous_elastic",
                 "fire_array": FIRE_BOTTOM_AND_SIDES,
                 "section_params": {"b_w": 0.25},
-            },
-            {
-                "id": "off_tcc_ribs_dbs",
-                "label": "TCC ribs, DBS",
-                "dimension": "1D",
-                "crsec_type": "tcc",
-                "materials": "tcc_dbs",
-                "description": "Ribs, connection: DBS_10, s=0.04 m, a_ribs=0.625 m, b_w=0.24 m",
-                "structural_system": "Simple span",
-                "system_type": "simple_span",
-                "fire_array": FIRE_BOTTOM_AND_SIDES,
-                "section_params": TCC_RIBS_DBS_OFFICE,
             },
         ],
     },

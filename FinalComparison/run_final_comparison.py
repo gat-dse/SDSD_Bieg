@@ -88,6 +88,8 @@ SUMMARY_METRICS = [
     ("m_total", "m_total [kN/m2]"),
     ("cost_struct", "cost_struct [CHF/m2]"),
     ("cost_total", "cost_total [CHF/m2]"),
+    ("time_struct", "time_struct [h/m2]"),
+    ("time_total", "time_total [h/m2]"),
 ]
 
 
@@ -149,6 +151,11 @@ def finite_values(values):
     return clean
 
 
+def governing_key(values):
+    finite = {key: value for key, value in values.items() if pd.notna(safe_float(value))}
+    return max(finite, key=finite.get) if finite else ""
+
+
 def set_readable_ylim(ax, values, zero_based=True):
     values = finite_values(values)
     if not values:
@@ -208,6 +215,18 @@ def reinforcement_description(section):
     if shear:
         try:
             parts.append(f"shear: d={float(shear[0]) * 1000:.0f} mm, s={float(shear[1]) * 1000:.0f} mm, n={int(shear[2])}")
+        except (TypeError, ValueError, IndexError):
+            pass
+    rib_rebar = getattr(section, "bw_r", None)
+    if rib_rebar:
+        try:
+            parts.append(f"rib bottom: d={float(rib_rebar[0]) * 1000:.0f} mm, n={int(rib_rebar[1])}")
+        except (TypeError, ValueError, IndexError):
+            pass
+    rib_shear = getattr(section, "bw_bg_r", None)
+    if rib_shear:
+        try:
+            parts.append(f"rib shear: d={float(rib_shear[0]) * 1000:.0f} mm, s={float(rib_shear[1]) * 1000:.0f} mm, n={int(rib_shear[2])}")
         except (TypeError, ValueError, IndexError):
             pass
     return " | ".join(parts)
@@ -340,6 +359,7 @@ def utilization_row(member):
             sls1_basis = "cracked"
             sls1_active_components = sls1_ger_components
     sls1_util = max(finite_values(sls1_active_components.values()) or [float("nan")])
+    sls1_governing_component = governing_key(sls1_active_components)
 
     requirements = getattr(member, "requirements", None)
     f1_req = getattr(requirements, "f1", float("nan"))
@@ -352,6 +372,7 @@ def utilization_row(member):
         "sls2_velocity_util": safe_ratio(getattr(member, "ve_ed", float("nan")), getattr(member, "ve_cd", float("nan"))),
     }
     sls2_util = max(finite_values(sls2_components.values()) or [float("nan")])
+    sls2_governing_component = governing_key(sls2_components)
 
     fire_resistance = getattr(member, "fire_resistance", float("nan"))
     if not isinstance(fire_resistance, (int, float)):
@@ -371,19 +392,140 @@ def utilization_row(member):
     finite_checks = {key: value for key, value in checks.items() if pd.notna(value)}
     governing_check = max(finite_checks, key=finite_checks.get) if finite_checks else ""
     governing_util = finite_checks.get(governing_check, float("nan")) if governing_check else float("nan")
+    finite_checks_no_fire = {key: value for key, value in finite_checks.items() if key != "FIRE"}
+    governing_check_no_fire = (
+        max(finite_checks_no_fire, key=finite_checks_no_fire.get)
+        if finite_checks_no_fire
+        else ""
+    )
+    governing_util_no_fire = (
+        finite_checks_no_fire.get(governing_check_no_fire, float("nan"))
+        if governing_check_no_fire
+        else float("nan")
+    )
+    fire_ok = bool(pd.notna(fire_util) and fire_util <= 1.0)
 
     result = {
         "governing_check": governing_check,
         "governing_utilization": number_or_empty(governing_util),
+        "governing_check_no_fire": governing_check_no_fire,
+        "governing_utilization_no_fire": number_or_empty(governing_util_no_fire),
         "uls_utilization": number_or_empty(uls_util),
         "sls1_utilization": number_or_empty(sls1_util),
         "sls1_basis": sls1_basis,
+        "sls1_governing_component": sls1_governing_component,
         "sls2_utilization": number_or_empty(sls2_util),
+        "sls2_governing_component": sls2_governing_component,
         "fire_utilization": number_or_empty(fire_util),
+        "fire_ok": fire_ok if pd.notna(fire_util) else "",
+        "fire_resistance_min": number_or_empty(fire_resistance),
     }
     for key, value in {**sls1_components, **sls1_ger_components, **sls2_components}.items():
         result[key] = number_or_empty(value)
     return result
+
+
+def pt_min_reinforcement_diagnostics(section):
+    if getattr(section, "section_type", "") != "pc_rec":
+        return {}
+
+    m_cr_pt = abs(safe_float(getattr(section, "m_r", float("nan"))))
+    m_cr_min_reinf = abs(safe_float(getattr(section, "m_r_min_reinf", m_cr_pt)))
+    m_rd_pos = abs(safe_float(getattr(section, "mu_max", float("nan"))))
+    m_rd_neg = abs(safe_float(getattr(section, "mu_min", float("nan"))))
+    eta_pos = safe_ratio(m_cr_min_reinf, m_rd_pos)
+    eta_neg = safe_ratio(m_cr_min_reinf, m_rd_neg)
+    eta_values = finite_values([eta_pos, eta_neg])
+    eta = max(eta_values) if eta_values else float("nan")
+    x_d_pos = safe_ratio(getattr(section, "x_p", float("nan")), getattr(section, "d", float("nan")))
+    x_d_neg = safe_ratio(getattr(section, "x_n", float("nan")), getattr(section, "ds", float("nan")))
+
+    return {
+        "pt_eta_Mcr_MRd": number_or_empty(eta),
+        "pt_eta_Mcr_MRd_pos": number_or_empty(eta_pos),
+        "pt_eta_Mcr_MRd_neg": number_or_empty(eta_neg),
+        "pt_Mcr_kNm_m": number_or_empty(m_cr_pt, scale=1 / 1000),
+        "pt_Mcr_min_reinf_kNm_m": number_or_empty(m_cr_min_reinf, scale=1 / 1000),
+        "pt_MRd_pos_kNm_m": number_or_empty(m_rd_pos, scale=1 / 1000),
+        "pt_MRd_neg_kNm_m": number_or_empty(m_rd_neg, scale=1 / 1000),
+        "pt_x_d_pos": number_or_empty(x_d_pos),
+        "pt_x_d_neg": number_or_empty(x_d_neg),
+        "pt_qs_class_pos": getattr(section, "qs_class_p", ""),
+        "pt_qs_class_neg": getattr(section, "qs_class_n", ""),
+        "pt_minimal_reinforcement_ok": getattr(section, "minimal_reinforcement_ok", ""),
+    }
+
+
+def material_quantity_diagnostics(section):
+    return {
+        "volume_concrete_m3_m2": number_or_empty(getattr(section, "volume_concrete", "")),
+        "volume_reinforcement_m3_m2": number_or_empty(getattr(section, "volume_reinforcement", "")),
+        "volume_pt_steel_m3_m2": number_or_empty(getattr(section, "volume_pt_steel", "")),
+        "volume_wood_m3_m2": number_or_empty(getattr(section, "volume_wood", "")),
+        "volume_hollow_core_insulation_m3_m2": number_or_empty(getattr(section, "volume_hollow_core_insulation", "")),
+        "co2_concrete_kgCO2eq_m2": number_or_empty(getattr(section, "co2_concrete", "")),
+        "co2_rebar_kgCO2eq_m2": number_or_empty(getattr(section, "co2_rebar", "")),
+        "co2_pt_steel_kgCO2eq_m2": number_or_empty(getattr(section, "co2_pt_steel", "")),
+        "co2_wood_kgCO2eq_m2": number_or_empty(getattr(section, "co2_wood", "")),
+        "co2_hollow_core_insulation_kgCO2eq_m2": number_or_empty(getattr(section, "co2_hollow_core_insulation", "")),
+        "co2_connector_kgCO2eq_m2": number_or_empty(getattr(section, "co2_connector", "")),
+        "cost_concrete_CHF_m2": number_or_empty(getattr(section, "cost_concrete", "")),
+        "cost_rebar_CHF_m2": number_or_empty(getattr(section, "cost_rebar", "")),
+        "cost_pt_steel_CHF_m2": number_or_empty(getattr(section, "cost_pt_steel", "")),
+        "cost_wood_CHF_m2": number_or_empty(getattr(section, "cost_wood", "")),
+        "cost_hollow_core_insulation_CHF_m2": number_or_empty(getattr(section, "cost_hollow_core_insulation", "")),
+        "cost_connector_CHF_m2": number_or_empty(getattr(section, "cost_connector", "")),
+    }
+
+
+def floor_quantity_diagnostics(member):
+    floorstruc = getattr(member, "floorstruc", None)
+    section = getattr(member, "section", None)
+    floor_h = safe_float(getattr(floorstruc, "h", float("nan")))
+    floor_gk = safe_float(getattr(floorstruc, "gk_area", float("nan")))
+    internal_floor_gk = safe_float(getattr(section, "hollow_core_insulation_gk", 0.0))
+    floor_gk_total = floor_gk + internal_floor_gk
+    floor_co2 = safe_float(getattr(floorstruc, "co2", float("nan")))
+    floor_cost = safe_float(getattr(floorstruc, "cost", float("nan")))
+    floor_time = safe_float(getattr(floorstruc, "construction_time", float("nan")))
+    section_h = safe_float(getattr(section, "h", float("nan")))
+    section_gk = safe_float(getattr(section, "w", float("nan")))
+    section_co2 = safe_float(getattr(section, "co2", float("nan")))
+    section_cost = safe_float(getattr(section, "cost", float("nan")))
+    section_time = safe_float(getattr(section, "construction_time", float("nan")))
+    return {
+        "floor_h_m": number_or_empty(floor_h),
+        "floor_gk_kN_m2": number_or_empty(floor_gk_total, scale=1 / 1000),
+        "floor_mass_kg_m2": number_or_empty(floor_gk_total, scale=1 / 10),
+        "internal_floor_gk_kN_m2": number_or_empty(internal_floor_gk, scale=1 / 1000),
+        "floor_GWP_kgCO2eq_m2": number_or_empty(floor_co2),
+        "floor_cost_CHF_m2": number_or_empty(floor_cost),
+        "floor_construction_time_h_m2": number_or_empty(floor_time),
+        "floor_h_share": number_or_empty(safe_ratio(floor_h, floor_h + section_h)),
+        "floor_mass_share": number_or_empty(safe_ratio(floor_gk_total, floor_gk_total + section_gk)),
+        "floor_GWP_share": number_or_empty(safe_ratio(floor_co2, floor_co2 + section_co2)),
+        "floor_cost_share": number_or_empty(safe_ratio(floor_cost, floor_cost + section_cost)),
+        "floor_construction_time_share": number_or_empty(safe_ratio(floor_time, floor_time + section_time)),
+    }
+
+
+def reinforcement_quantity_diagnostics(section):
+    layers = getattr(section, "bw", [])
+    diameters = []
+    spacings = []
+    for layer in layers:
+        try:
+            diameters.append(float(layer[0]))
+            spacings.append(float(layer[1]))
+        except (TypeError, ValueError, IndexError):
+            continue
+    return {
+        "rebar_min_d_mm": number_or_empty(min(diameters) if diameters else "", scale=1000),
+        "rebar_max_d_mm": number_or_empty(max(diameters) if diameters else "", scale=1000),
+        "rebar_mean_d_mm": number_or_empty(sum(diameters) / len(diameters) if diameters else "", scale=1000),
+        "rebar_min_spacing_mm": number_or_empty(min(spacings) if spacings else "", scale=1000),
+        "rebar_max_spacing_mm": number_or_empty(max(spacings) if spacings else "", scale=1000),
+    }
 
 
 def feasible_series_at_length(series, idx, criterion="ULS"):
@@ -425,6 +567,8 @@ def member_summary_row(case_name, scenario, system, criterion, optimum, variant,
         "qk_zul_gzt_kN_m2": number_or_empty(qk_zul, scale=1 / 1000),
         "qk_zul_bending_gzt_kN_m2": number_or_empty(getattr(member, "qk_zul_bending_gzt", ""), scale=1 / 1000),
         "qk_zul_shear_gzt_kN_m2": number_or_empty(getattr(member, "qk_zul_shear_gzt", ""), scale=1 / 1000),
+        "uls_bending_utilization": number_or_empty(safe_ratio(qk, getattr(member, "qk_zul_bending_gzt", ""))),
+        "uls_shear_utilization": number_or_empty(safe_ratio(qk, getattr(member, "qk_zul_shear_gzt", ""))),
         "qu_bending_kN_m2": number_or_empty(getattr(member, "qu_bending", ""), scale=1 / 1000),
         "qu_shear_kN_m2": number_or_empty(getattr(member, "qu_shear", ""), scale=1 / 1000),
         "uls_governing_mode": getattr(member, "uls_governing_mode", ""),
@@ -437,6 +581,11 @@ def member_summary_row(case_name, scenario, system, criterion, optimum, variant,
         "uls_feasible": member_is_uls_feasible(member),
         "qk_deficit_kN_m2": number_or_empty(qk_deficit, scale=1 / 1000),
         "punching_V_Rd_s_required_kN": punching_vrds_required,
+        "punching_A_ds_req_m2_per_column": number_or_empty(getattr(member, "punching_a_ds_req_m2", "")),
+        "punching_steel_volume_m3_m2": number_or_empty(getattr(member, "punching_steel_volume_m3_m2", "")),
+        "punching_steel_GWP_kgCO2eq_m2": number_or_empty(getattr(member, "punching_steel_co2_kgCO2eq_m2", "")),
+        "punching_steel_cost_CHF_m2": number_or_empty(getattr(member, "punching_steel_cost_CHF_m2", "")),
+        "punching_steel_time_h_m2": number_or_empty(getattr(member, "punching_steel_time_h_m2", "")),
         "w_app_mm": number_or_empty(getattr(member, "w_app", ""), scale=1000),
         "w_install_util": "",
         "w_use_util": "",
@@ -445,6 +594,10 @@ def member_summary_row(case_name, scenario, system, criterion, optimum, variant,
         "acoustic_verified": getattr(member, "acoustic_verified", ""),
     }
     row.update(utilization_row(member))
+    row.update(material_quantity_diagnostics(section))
+    row.update(floor_quantity_diagnostics(member))
+    row.update(reinforcement_quantity_diagnostics(section))
+    row.update(pt_min_reinforcement_diagnostics(section))
     row["w_install_util"] = row.get("sls1_install_util", "")
     row["w_use_util"] = row.get("sls1_use_util", "")
     row["w_app_util"] = row.get("sls1_app_util", "")
@@ -635,7 +788,18 @@ def select_best_by_length(series, selection_key="gwp_total"):
         raise ValueError("No result series available.")
     lengths = series[0]["lengths"]
     best = {"lengths": list(lengths), "members": []}
-    keys = ["h_struct", "h_total", "gwp_struct", "gwp_total", "m_struct", "m_total", "cost_struct", "cost_total"]
+    keys = [
+        "h_struct",
+        "h_total",
+        "gwp_struct",
+        "gwp_total",
+        "m_struct",
+        "m_total",
+        "cost_struct",
+        "cost_total",
+        "time_struct",
+        "time_total",
+    ]
     for key in keys:
         best[key] = []
 
@@ -712,9 +876,11 @@ def plot_env_comparison(case_name, scenario, env_results, output_dir):
         ("m_total", "m$_{tot}$ [kN/m$^2$]"),
         ("cost_struct", "cost$_{struct}$ [CHF/m$^2$]"),
         ("cost_total", "cost$_{tot}$ [CHF/m$^2$]"),
+        ("time_struct", "t$_{construct,struct}$ [h/m$^2$]"),
+        ("time_total", "t$_{construct,tot}$ [h/m$^2$]"),
     ]
 
-    fig, axes = plt.subplots(4, 2, figsize=(12.0, 14.0), sharex=True)
+    fig, axes = plt.subplots(5, 2, figsize=(12.0, 17.2), sharex=True)
     axes = axes.flatten()
     for ax, (key, ylabel) in zip(axes, metrics):
         y_values = []
@@ -763,7 +929,7 @@ def plot_env_comparison(case_name, scenario, env_results, output_dir):
         ncol=min(3, max(1, len(handles))),
         frameon=False,
     )
-    fig.tight_layout(rect=(0, 0, 1, 0.875))
+    fig.tight_layout(rect=(0, 0, 1, 0.895))
     path = output_dir / f"final_env_comparison_{case_name}.png"
     fig.savefig(path, dpi=400, bbox_inches="tight")
     plt.close(fig)
@@ -782,6 +948,11 @@ def export_excel_summary(output_dir, variant_rows, envelope_rows, best_rows):
         {"key": "acoustic_level", "value": inputs.ACOUSTIC_LEVEL},
         {"key": "auto_floor_buildup", "value": inputs.AUTO_FLOOR_BUILDUP},
         {"key": "diagnostics", "value": "Utilization columns are exported for ULS, SLS1 deflection, SLS2 vibration and FIRE; governing_check is the largest available utilization."},
+        {"key": "diagnostics_no_fire", "value": "governing_check_no_fire excludes the binary fire table check so overdesign from ULS/SLS can be identified separately from fire_ok."},
+        {"key": "diagnostics_subchecks", "value": "SLS1/SLS2 governing component columns identify the active deflection or vibration sub-check; ULS bending/shear utilization columns identify whether resistance is governed by bending or shear."},
+        {"key": "diagnostics_floor_buildup", "value": "Floor height, mass, GWP and cost contributions and shares are exported to separate structural and acoustic build-up effects."},
+        {"key": "diagnostics_reinforcement", "value": "Rebar diameter and spacing summary columns make the continuous optimizer choices visible, including the PT bonded reinforcement floor."},
+        {"key": "pt_min_reinforcement_diagnostics", "value": "For pc_rec rows, pt_eta_Mcr_MRd now uses the ordinary RC cracking moment without prestress as the bonded minimum-reinforcement target; pt_Mcr_kNm_m still reports Mcr,PT for serviceability cracking/stiffness."},
         {"key": "note", "value": "Envelope borders identify the member variant forming the lower or upper plot boundary at each span."},
     ]
     with pd.ExcelWriter(path, engine="openpyxl") as writer:

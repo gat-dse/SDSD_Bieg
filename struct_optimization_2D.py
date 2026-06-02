@@ -13,12 +13,25 @@ SLS2_ACCELERATION_PENALTY_WEIGHT = 1e2
 SLS2_WALKING_DEFLECTION_PENALTY_WEIGHT = 1e5
 SLS2_VELOCITY_PENALTY_WEIGHT = 1e3
 FIRE_PENALTY_WEIGHT = 1.0
+PT_MIN_REINFORCEMENT_PENALTY_WEIGHT = 1e3
 
 
 def uls_infeasible_penalty(member, deficit=None):
     if deficit is None:
         deficit = max(member.qk - member.qk_zul_gzt, 0)
     return ULS_INFEASIBLE_BASE_PENALTY + ULS_INFEASIBLE_DEFICIT_FACTOR * deficit
+
+
+def pt_min_reinforcement_penalty(section):
+    m_cr = abs(getattr(section, "m_r_min_reinf", getattr(section, "m_r", 0.0)))
+    m_rd_pos = abs(getattr(section, "mu_max", 0.0))
+    m_rd_neg = abs(getattr(section, "mu_min", 0.0))
+    if m_cr <= 0:
+        return 0.0
+    if m_rd_pos <= 0 or m_rd_neg <= 0:
+        return PT_MIN_REINFORCEMENT_PENALTY_WEIGHT * 1e3
+    eta = max(m_cr / m_rd_pos, m_cr / m_rd_neg)
+    return PT_MIN_REINFORCEMENT_PENALTY_WEIGHT * max(eta - 1.0, 0.0)
 
 
 class RandomDisplacementBounds(object):
@@ -434,8 +447,12 @@ def pc_rqs(var, add_arg):
         di_xu, s_yu, di_xo, s_yo, di_bw, s_bw, n_bw, phi, c_nom, xi, jnt_srch,
         layout, c_nom_pt, A_p, compute_stiffness=evaluate_service
     )
-    if not section.minimal_reinforcement_ok:
-        return 1e12
+    # The PT cracking/minimum-reinforcement check is not treated as a hard
+    # optimizer wall. A binary rejection made the search escape by increasing
+    # the slab height, although a more slender section can reduce Mcr,PT/MRd.
+    # Keeping it as a smooth penalty gives the optimizer a useful direction
+    # while still making deficient candidates unattractive.
+    min_reinf_penalty = pt_min_reinforcement_penalty(section)
     member = struct_analysis.Member2D(
         section, system, floorstruc, criteria, g2k, qk, evaluate_service=evaluate_service,
         check_punching=check_punching
@@ -448,6 +465,7 @@ def pc_rqs(var, add_arg):
         include_uls_guard=(criterion == "ENV"),
         use_cracked_deflection=False,
     )
+    penalty += min_reinf_penalty
 
     if to_opt == "GWP":
         return member.section.co2 * (1 + penalty)

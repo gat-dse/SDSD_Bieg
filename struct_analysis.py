@@ -294,6 +294,9 @@ class RectangularWood(SupStrucRectangular, Section):
         self.qs_class_n, self.qs_class_p = [3, 3]  # Required cross-section class: 1:PP, 2:EP, 3:EE
         self.g0k = self.calc_weight(wood_type.weight) # dead weight of cross section [N/m]
         self.ei1 = self.wood_type.Emmean * self.iy  # elastic stiffness [Nm^2]
+        self.volume_wood = self.a_brutt / self.b
+        self.co2_wood = self.volume_wood * self.wood_type.GWP * self.wood_type.density
+        self.cost_wood = self.volume_wood * self.wood_type.cost
         self.co2 = self.a_brutt * self.wood_type.GWP * self.wood_type.density/self.b  # [kg_CO2_eq/m]
         self.cost = self.a_brutt * self.wood_type.cost/self.b # [CHF/m]
         self.construction_time = self.a_brutt * self.wood_type.construction_time/self.b # [h/m]
@@ -356,11 +359,23 @@ class RectangularConcrete(SupStrucRectangular):
         self.roh, self.rohs = self.as_p / self.d, self.as_n / self.ds
         [self.vu_p, self.vu_n, self.as_bw] = self.calc_shear_resistance()
         self.g0k = self.calc_weight(concrete_type.weight)
-        a_s_stat = self.as_p + self.as_n + self.as_yu + self.as_yo + self.as_bw
+        # Stagger shear reinforcement for material quantities: the calculated
+        # resistance may be needed near supports, but the same amount is not
+        # assumed over the full slab area.
+        a_s_stat = self.as_p + self.as_n + self.as_yu + self.as_yo + 0.5 * self.as_bw
         self.joint_surcharge = jnt_srch  # surcharge for reinforcement joints, preset value is an assumption and has to be verified with literature
         a_s_tot = a_s_stat * (1 + self.joint_surcharge)  # rebar area without reinforcement joint surcharge
         co2_rebar = a_s_tot * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
         co2_concrete = (self.a_brutt - a_s_tot) * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
+        self.volume_reinforcement = a_s_tot / self.b
+        self.volume_concrete = (self.a_brutt - a_s_tot) / self.b
+        self.volume_pt_steel = 0.0
+        self.co2_rebar = co2_rebar / self.b
+        self.co2_concrete = co2_concrete / self.b
+        self.co2_pt_steel = 0.0
+        self.cost_rebar = a_s_tot * self.rebar_type.cost / self.b
+        self.cost_concrete = (self.a_brutt - a_s_tot) * self.concrete_type.cost / self.b + self.concrete_type.cost2
+        self.cost_pt_steel = 0.0
         self.ei1 = self.concrete_type.Ecm * self.iy  # elastic stiffness concrete (uncracked behaviour) [Nm^2]
         self.co2 = (co2_rebar + co2_concrete)/self.b
         self.cost = (a_s_tot * self.rebar_type.cost + (self.a_brutt - a_s_tot) * self.concrete_type.cost)/self.b + self.concrete_type.cost2# [CHF/m]
@@ -576,8 +591,14 @@ class PostTensionedConcrete(RectangularConcrete):
         self.i = self.h**3/12 # moment of inertia of the plate [m4/m]
         tendon_info = self.update_prestressing_system()
         self.m_r = self.calc_mr_pt(self.Px_total,self.l_x)
+        self.m_r_pt = self.m_r
+        # The PT cracking moment is used for serviceability cracking/stiffness.
+        # The minimum bonded reinforcement is only required to cover the ordinary
+        # RC cracking moment; otherwise the prestress-induced compression forces
+        # unrealistically drive very high passive reinforcement quantities.
+        self.m_r_min_reinf = self.calc_mr_without_pt()
         self.mr_p, self.mr_n = self.m_r, -self.m_r
-        bw = self.set_minimalReinforcement(self.m_r, use_pt=True)
+        bw = self.set_minimalReinforcement(self.m_r_min_reinf, use_pt=True)
         self.bw, self.d, self.ds = bw
         self.update_reinforcement_areas()
         # Cracked stiffness is only needed for serviceability checks. ULS optimisation
@@ -593,26 +614,37 @@ class PostTensionedConcrete(RectangularConcrete):
         [self.mu_max, self.x_p, self.as_p, self.qs_class_p] = self.calc_mu_pt(self.Px_total, self.l_x, 'pos')
         [self.mu_min, self.x_n, self.as_n, self.qs_class_n] = self.calc_mu_pt(self.Px_total, self.l_x, 'neg')
 
-        # Get the total area of post-tensioning steel per m2 of cross-section [m2/m2]
-        number_of_tendons = tendon_info['drop_beam_x']['n_tendons'] + tendon_info['distributed_x']['n_tendons'] + tendon_info['drop_beam_y']['n_tendons'] + tendon_info['distributed_y']['n_tendons']
-
         # C02, cost and construction time per m2 of cross-section
         self.joint_surcharge = jnt_srch  # joint surcharge
-        volume_reinforcement = (self.as_p+self.as_n+self.as_yu+self.as_yo+self.as_bw/self.b)*(1 + self.joint_surcharge) # volume of reinforcement per m2 of cross-section [m3/m2] with joint surcharge
-        volume_pt_steel = number_of_tendons*self.A_p/(self.l_x*self.l_y) # volume of post-tensioning steel per m2 of cross-section [m3/m2]
+        # Stagger shear reinforcement for material quantities; the resistance
+        # model keeps the full local shear reinforcement, while GWP/cost use an
+        # average amount over the slab area.
+        volume_reinforcement = (self.as_p+self.as_n+self.as_yu+self.as_yo+0.5*self.as_bw/self.b)*(1 + self.joint_surcharge) # volume of reinforcement per m2 of cross-section [m3/m2] with joint surcharge
+        volume_pt_steel = self.calc_pt_steel_volume_per_m2(tendon_info)
         volume_concrete = self.b*self.h - volume_reinforcement - volume_pt_steel # volume of concrete per m2 of cross-section [m3/m2]
         co2_rebar = volume_reinforcement * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
         co2_pt_steel = volume_pt_steel * self.pt_steel_type.GWP * self.pt_steel_type.density  # [kg_CO2_eq/m]
         co2_concrete = volume_concrete * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
+        self.volume_reinforcement = volume_reinforcement
+        self.volume_pt_steel = volume_pt_steel
+        self.volume_concrete = volume_concrete
+        self.co2_rebar = co2_rebar
+        self.co2_pt_steel = co2_pt_steel
+        self.co2_concrete = co2_concrete
+        self.cost_rebar = volume_reinforcement * self.rebar_type.cost
+        self.cost_concrete = volume_concrete * self.concrete_type.cost + self.concrete_type.cost2
+        self.cost_pt_steel = volume_pt_steel * self.pt_steel_type.cost
         self.co2 = co2_rebar + co2_concrete + co2_pt_steel # [kg_CO2_eq/m]
         self.cost = volume_reinforcement * self.rebar_type.cost + volume_concrete * self.concrete_type.cost + volume_pt_steel * self.pt_steel_type.cost + self.concrete_type.cost2# [CHF/m]
         self.construction_time = volume_reinforcement * self.rebar_type.construction_time + volume_concrete * self.concrete_type.construction_time + volume_pt_steel * self.pt_steel_type.construction_time  + self.concrete_type.construction_time_scaffold # [h/m]
         
     def set_initial_pt_reinforcement(self):
-        # Simplified PT layout assumption: use at least 12 mm bonded reinforcement
-        # in all slab directions before determining tendon eccentricity and force.
+        # Simplified PT layout assumption: use the same minimum bonded
+        # reinforcement diameter as ordinary RC before determining tendon
+        # eccentricity and force. The minimum-reinforcement check below may
+        # still increase the diameter if the cracking-moment target requires it.
         for layer in self.bw:
-            layer[0] = max(layer[0], 0.012)
+            layer[0] = max(layer[0], 0.006)
         self.d, self.ds = self.calc_d()
         self.update_reinforcement_areas()
 
@@ -622,6 +654,25 @@ class PostTensionedConcrete(RectangularConcrete):
         self.as_yu = (np.pi*self.bw[2][0]**2/4/self.bw[2][1]) # as for lower y reinforcement [m2/m]
         self.as_yo = (np.pi*self.bw[3][0]**2/4/self.bw[3][1]) # as for upper y reinforcement [m2/m]
         self.roh, self.rohs = self.as_p / self.d, self.as_n / self.ds
+
+    def calc_mr_without_pt(self):
+        return self.b * self.h ** 2 / 6 * 1.3 * self.concrete_type.fctm
+
+    def calc_pt_steel_volume_per_m2(self, tendon_info):
+        # Tendon quantities are stored as tendon counts per distributed metre
+        # or per support strip. For material quantities, the tendon length has to
+        # be included. Distributed tendons therefore contribute n*A_p per m2,
+        # while support-strip tendons contribute n*A_p/l_perpendicular.
+        n_drop_x = tendon_info['drop_beam_x']['n_tendons']
+        n_dist_x = tendon_info['distributed_x']['n_tendons']
+        n_drop_y = tendon_info['drop_beam_y']['n_tendons']
+        n_dist_y = tendon_info['distributed_y']['n_tendons']
+        return (
+            n_dist_x * self.A_p
+            + n_dist_y * self.A_p
+            + n_drop_x * self.A_p / max(self.l_y, 1e-9)
+            + n_drop_y * self.A_p / max(self.l_x, 1e-9)
+        )
 
     def update_prestressing_system(self):
         self.e_support, self.e_midspan, self.dp = self.calc_eccentricity()  # eccentricity of post-tensioning tendons [m]
@@ -653,7 +704,7 @@ class PostTensionedConcrete(RectangularConcrete):
         # reinforcement for robustness of unbonded PT slabs.
         self.minimal_reinforcement_ok = True
         for layer in self.bw:
-            layer[0] = max(layer[0], 0.012 if use_pt else 0.006)
+            layer[0] = max(layer[0], 0.006)
 
         self.d, self.ds = self.calc_d()
 
@@ -833,7 +884,8 @@ class PostTensionedConcrete(RectangularConcrete):
         else:
             [mu, x, a_s, qs_klasse] = [0, 0, 0, 0]
             print("sign of moment resistance has to be 'neg' or 'pos'")
-        if abs(mu) < abs(self.m_r):
+        min_reinf_mr = abs(getattr(self, "m_r_min_reinf", self.m_r))
+        if abs(mu) < min_reinf_mr:
             qs_klasse = 99
         return mu, x, a_s, qs_klasse
 
@@ -1074,14 +1126,26 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         [self.vu_PB_p, self.vu_PB_n, self.as_PB_bw] = self.calc_shear_resistance(
             'Plattenbalken')  #Rippe Plattenbalken "Längsrichtung"
         self.g0k = self.calc_weight(concrete_type.weight)
-        a_s_slab = self.as_p + self.as_n + self.as_bw
-        a_s_rib = self.as_PB_p + self.as_PB_n + self.as_PB_bw
+        # Slab reinforcement is counted over the full rib spacing. The negative
+        # PB resistance also uses the upper slab reinforcement, so it is not
+        # counted a second time as rib reinforcement.
+        a_s_slab = self.as_p + self.as_n + 0.5 * self.as_bw
+        a_s_rib = self.as_PB_p + 0.5 * self.as_PB_bw
         #TODO: Achtung - es fehlt die Spreizbewehrung
         self.joint_surcharge = jnt_srch
         a_s_tot = (a_s_slab * self.b + a_s_rib) * (1 + self.joint_surcharge)
         concrete_area = max(self.a_brutt - a_s_tot, 0.0)
         co2_rebar = a_s_tot * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
         co2_concrete = concrete_area * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
+        self.volume_reinforcement = a_s_tot / self.b
+        self.volume_concrete = concrete_area / self.b
+        self.volume_pt_steel = 0.0
+        self.co2_rebar = co2_rebar / self.b
+        self.co2_concrete = co2_concrete / self.b
+        self.co2_pt_steel = 0.0
+        self.cost_rebar = a_s_tot * self.rebar_type.cost / self.b
+        self.cost_concrete = concrete_area * self.concrete_type.cost / self.b + self.concrete_type.cost2*2
+        self.cost_pt_steel = 0.0
         self.ei1 = self.concrete_type.Ecm * self.iy  # elastic stiffness concrete (uncracked behaviour) [Nm^2]
         self.co2 = (co2_rebar + co2_concrete)/self.b
         self.cost = (a_s_tot * self.rebar_type.cost + concrete_area * self.concrete_type.cost)/self.b + self.concrete_type.cost2*2 # [CHF/m] 
@@ -1126,8 +1190,16 @@ class RibbedConcrete(SupStrucRibbedConcrete):
             [mu_PB, x, a_s, qs_klasse] = self.mu_unsigned_PB(self.bw_r[0], self.bw_r[1], self.d_PB, self.b_eff,
                                                              self.h_f, fsd, fcd, self.mr_pb_p)
         elif sign == 'neg':
-            [mus_PB, x, a_s, qs_klasse] = self.mu_unsigned(self.bw[1][0], self.bw[1][1], self.ds_PB, self.b_w, fsd, fcd,
-                                                           self.mr_pb_n)
+            [mus_PB, x, a_s, qs_klasse] = self.mu_unsigned_different_widths(
+                self.bw[1][0],
+                self.bw[1][1],
+                self.ds_PB,
+                self.b_eff,
+                self.b_w,
+                fsd,
+                fcd,
+                self.mr_pb_n,
+            )
             mu_PB = - mus_PB
         else:
             [mu_PB, x, a_s, qs_klasse] = [0, 0, 0, 0]
@@ -1148,6 +1220,22 @@ class RibbedConcrete(SupStrucRibbedConcrete):
             return mu, x, a_s, 2
         else:
             return mu, x, a_s, 99  # Querschnitt hat ungenügendes Verformungsvermögen
+
+    @staticmethod
+    def mu_unsigned_different_widths(di, s, d, b_as, b_comp, fsd, fcd, mr):
+        # Negative bending of ribbed concrete beams: the upper slab
+        # reinforcement is active over the effective flange width, while the
+        # compression zone is conservatively limited to the rib/web width.
+        a_s = np.pi * di ** 2 / (4 * s) * b_as  # [m2]
+        omega = a_s * fsd / (d * b_comp * fcd)
+        mu = a_s * fsd * d * (1 - omega / 2)
+        x = omega * d / 0.85
+        if x / d <= 0.35 and mu >= mr:
+            return mu, x, a_s, 1
+        elif x / d <= 0.5 and mu >= mr:
+            return mu, x, a_s, 2
+        else:
+            return mu, x, a_s, 99
 
     @staticmethod
     def mu_unsigned_PB(di, n, d, b, h_f, fsd, fcd, mr):
@@ -1379,13 +1467,39 @@ class RibWood(SupStrucRibWood):
         self.g0k = self.calc_weight(wood_type_1.weight)
         self.ei1 = self.wood_type_1.Emmean * self.iy  # elastic stiffness [Nm^2], Zeitpunkt t = 0
 
-        self.co2 = (self.b*self.h * self.wood_type_1.GWP * self.wood_type_1.density)/self.a +self.t2 * self.wood_type_2.GWP * self.wood_type_2.density + self.t3 * self.wood_type_3.GWP * self.wood_type_3.density # [kg_CO2_eq/m]
-        self.cost = self.b * self.h / self.a * self.wood_type_1.cost + (self.t2 + self.t3)  * self.wood_type_2.cost
-        self.construction_time = self.b * self.h / self.a * self.wood_type_1.construction_time + (self.t2 + self.t3)  * self.wood_type_2.construction_time
+        self.volume_wood = self.b * self.h / self.a + self.t2 + self.t3
+        # Hollow-core acoustic correction assumes glass wool between ribs.
+        # RibWood does not receive a database handle, so the material values are
+        # kept in sync with the current floor_struc_prop entry for "Glaswolle".
+        self.hollow_core_insulation_thickness = self.h
+        self.volume_hollow_core_insulation = max((self.a - self.b) * self.h / self.a, 0.0)
+        self.hollow_core_insulation_density = 80.0  # kg/m3, Glaswolle
+        self.hollow_core_insulation_weight = 800.0  # N/m3, Glaswolle
+        self.hollow_core_insulation_gwp = 1.1  # kg CO2-eq/kg, Glaswolle
+        self.hollow_core_insulation_cost = 335.0  # CHF/m3, Glaswolle
+        self.hollow_core_insulation_gk = (
+            self.volume_hollow_core_insulation
+            * self.hollow_core_insulation_weight
+        )
+        # The insulation is acoustic/non-structural. It is exported as an
+        # internal floor-build-up mass, but it must not affect structural
+        # self-weight, stiffness, or resistance.
+        self.co2_wood = ((self.b*self.h * self.wood_type_1.GWP * self.wood_type_1.density)/self.a
+                         + self.t2 * self.wood_type_2.GWP * self.wood_type_2.density
+                         + self.t3 * self.wood_type_3.GWP * self.wood_type_3.density)
+        self.co2_hollow_core_insulation = (
+            self.volume_hollow_core_insulation
+            * self.hollow_core_insulation_density
+            * self.hollow_core_insulation_gwp
+        )
+        self.cost_wood = self.b * self.h / self.a * self.wood_type_1.cost + self.t2 * self.wood_type_2.cost + self.t3 * self.wood_type_3.cost
+        self.cost_hollow_core_insulation = self.volume_hollow_core_insulation * self.hollow_core_insulation_cost
+        self.co2 = self.co2_wood + self.co2_hollow_core_insulation # [kg_CO2_eq/m]
+        self.cost = self.cost_wood + self.cost_hollow_core_insulation
+        self.construction_time = self.b * self.h / self.a * self.wood_type_1.construction_time + self.t2 * self.wood_type_2.construction_time + self.t3 * self.wood_type_3.construction_time
         self.ei_b = ei_b  # stiffness perpendicular to direction of span
         self.xi = xi  # damping factor, preset value see: HBT, Page 47 (higher value for some buildups possible)
         self.h_installation = self.h # height available for installation of services. In case of box beam floor, this is the web height. 
-        self.hollow_core_insulation_thickness = self.h #height for insulation for hollow - core system
     
 
     def calc_n(self):
@@ -1556,14 +1670,19 @@ class TCC(SupStrucTCC):
         wood_volume = self.d + self.A_w / self.a_ribs
         concrete_volume = max(self.h_c - self.as_rebar, 0.0)
         connector_gwp = getattr(self.connector_type, "GWP", 0.0) / (self.s * self.a_ribs)
-        self.co2 = (wood_volume * self.wood_type.GWP * self.wood_type.density
-                    + concrete_volume * self.concrete_type.GWP * self.concrete_type.density
-                    + self.as_rebar * self.rebar_type.GWP * self.rebar_type.density
-                    + connector_gwp)  # [kg_CO2_eq/m2]
-        self.cost = (self.connector_type.cost / (self.s * self.a_ribs)
-                     + wood_volume * self.wood_type.cost
-                     + concrete_volume * self.concrete_type.cost
-                     + self.as_rebar * self.rebar_type.cost)  # [CHF/m2]
+        self.volume_wood = wood_volume
+        self.volume_concrete = concrete_volume
+        self.volume_reinforcement = self.as_rebar
+        self.co2_wood = wood_volume * self.wood_type.GWP * self.wood_type.density
+        self.co2_concrete = concrete_volume * self.concrete_type.GWP * self.concrete_type.density
+        self.co2_rebar = self.as_rebar * self.rebar_type.GWP * self.rebar_type.density
+        self.co2_connector = connector_gwp
+        self.cost_wood = wood_volume * self.wood_type.cost
+        self.cost_concrete = concrete_volume * self.concrete_type.cost
+        self.cost_rebar = self.as_rebar * self.rebar_type.cost
+        self.cost_connector = self.connector_type.cost / (self.s * self.a_ribs)
+        self.co2 = self.co2_wood + self.co2_concrete + self.co2_rebar + self.co2_connector  # [kg_CO2_eq/m2]
+        self.cost = self.cost_connector + self.cost_wood + self.cost_concrete + self.cost_rebar  # [CHF/m2]
         self.construction_time = (self.connector_type.construction_time / (self.s * self.a_ribs)
                                   + wood_volume * self.wood_type.construction_time
                                   + concrete_volume * self.concrete_type.construction_time
@@ -1965,6 +2084,23 @@ class AcousticFloorGenerator:
         return max(float(density) * float(h_c), 0.0)
 
     @staticmethod
+    def effective_spring_stiffness(section, floorstruc, spring_stiffness):
+        """Return the dynamic stiffness of insulation layers acting in series."""
+        if not AcousticFloorGenerator.is_tcc(section):
+            return spring_stiffness
+
+        insulation_layers = [
+            layer for layer in floorstruc.layers
+            if layer.name == AcousticFloorGenerator.glass_wool
+        ]
+        if len(insulation_layers) <= 1:
+            return spring_stiffness
+
+        # The TCC acoustic build-up uses two glass-wool layers (see lignumdata HBV floor build-ups)
+        # For equal insulation mats in series: 1 / s_eff = sum(1 / s_i).
+        return 1 / sum(1 / spring_stiffness for _ in insulation_layers)
+
+    @staticmethod
     def floating_screed_improvement(m_base, m_screed, spring_stiffness, rw_mass, impact_band_max=5000):
         f0_airborne = 1 / (2 * np.pi) * np.sqrt(spring_stiffness * 1e6 * (1 / m_base + 1 / m_screed))
         delta_rw_floating = 74.4 - 20 * np.log10(f0_airborne) - rw_mass / 2
@@ -2016,12 +2152,15 @@ class AcousticFloorGenerator:
         screed_thickness = sum(layer.h for layer in screed_layers)
         if screed_thickness > 0:
             m_screed = sum(layer.density * layer.h for layer in screed_layers)
+            effective_spring_stiffness = AcousticFloorGenerator.effective_spring_stiffness(
+                section, floorstruc, spring_stiffness
+            )
             # HBV/TCC floors are governed by low-frequency impact behavior. Using only
             # the low-frequency part keeps the simplified model conservative.
             impact_band_max = 500 if AcousticFloorGenerator.is_tcc(section) else 5000
             delta_rw_floating, delta_lnw_floating, f0_airborne, f0_impact = (
                 AcousticFloorGenerator.floating_screed_improvement(
-                    m_base, m_screed, spring_stiffness, rw_mass, impact_band_max
+                    m_base, m_screed, effective_spring_stiffness, rw_mass, impact_band_max
                 )
             )
 
@@ -2043,12 +2182,18 @@ class AcousticFloorGenerator:
         requirements = requirements or AcousticRequirements()
         rw_target, lnw_target = AcousticFloorGenerator.target_values(section, requirements)
         base_layers = [[AcousticFloorGenerator.parquet, False, False]]
+        insulation_layers = [[AcousticFloorGenerator.glass_wool, False, False]]
+        if AcousticFloorGenerator.is_tcc(section):
+            # TCC floors receive two insulation layers. Their dynamic stiffness
+            # is evaluated as springs in series in evaluate_floorstruc().
+            insulation_layers = [
+                [AcousticFloorGenerator.glass_wool, False, False],
+                [AcousticFloorGenerator.glass_wool, False, False],
+            ]
         candidates = [
             (0.0, base_layers),
-            (0.06, base_layers + [[AcousticFloorGenerator.glass_wool, False, False],
-                                  [AcousticFloorGenerator.cement_screed, 0.06, False]]),
-            (0.085, base_layers + [[AcousticFloorGenerator.glass_wool, False, False],
-                                   [AcousticFloorGenerator.cement_screed, 0.085, False]]),
+            (0.06, base_layers + insulation_layers + [[AcousticFloorGenerator.cement_screed, 0.06, False]]),
+            (0.085, base_layers + insulation_layers + [[AcousticFloorGenerator.cement_screed, 0.085, False]]),
         ]
 
         for screed_thickness, layers in candidates:
@@ -2378,6 +2523,40 @@ class Member1D:
             v_rd = v_pos if alpha > 0 else v_neg
             shear_candidates.append(v_rd / (abs(alpha) * self.system.l_tot))
         qu_shear = max(min(shear_candidates), 0.0) if shear_candidates else float("inf")
+
+        if self.section.section_type == "rc_rib":
+            # Ribbed concrete has different resistance mechanisms in span and over supports:
+            # positive bending is governed by rib reinforcement, while negative bending is governed
+            # by the upper flange reinforcement. Therefore both moment signs are checked explicitly.
+            def rib_bending_capacity(alpha, mu_rd, mr, qs_class, x, d, qs_class_required):
+                if abs(alpha) <= 1e-12:
+                    return float("inf")
+                factor = 1.0
+                if qs_class > qs_class_required:
+                    epsilon = 1.0e-3
+                    shift = 0.35 if qs_class == 1 else 0.5
+                    x_d = x / d if d > 0 else float("inf")
+                    factor = min(
+                        0.5 * (1 + 2 / np.pi * np.arctan((abs(mu_rd) - abs(mr)) / epsilon)),
+                        1 - 0.5 * (1 + 2 / np.pi * np.arctan((x_d - shift) / epsilon)),
+                    )
+                q_cap = factor * mu_rd / (alpha * self.system.l_tot ** 2)
+                return max(q_cap, 0.0)
+
+            bending_candidates = [
+                rib_bending_capacity(
+                    alpha_m[0], self.section.mu_min, self.section.mr_pb_n,
+                    self.section.qs_class_n, self.section.x_PB_n, self.section.ds_PB,
+                    qs_class_erf[0],
+                ),
+                rib_bending_capacity(
+                    alpha_m[1], self.section.mu_max, self.section.mr_pb_p,
+                    self.section.qs_class_p, self.section.x_PB_p, self.section.d_PB,
+                    qs_class_erf[1],
+                ),
+            ]
+            qu_bend = min(bending_candidates)
+            return finalize(qu_bend, qu_shear)
 
         if min(alpha_m) >= 0 or abs(alpha_m[1]) >= abs(alpha_m[0]):
             if qs_class_vorh[1] <= qs_class_erf[1]:
@@ -2812,7 +2991,8 @@ class Member2D:
                 else:
                     qs_class_i = self.section.qs_class_n
                     x_d_i = self.section.x_n / self.section.ds
-                factor_i = pt_ductility_factor(qs_class_i, x_d_i, m_rd_i, self.section.m_r)
+                min_reinf_mr = getattr(self.section, "m_r_min_reinf", self.section.m_r)
+                factor_i = pt_ductility_factor(qs_class_i, x_d_i, m_rd_i, min_reinf_mr)
                 q_cap = (factor_i * m_rd_i - m_sec_i) / (alpha_i * self.system.l_tot ** 2)
                 q_bend_candidates.append(q_cap)
                 if alpha_i >= 0:
