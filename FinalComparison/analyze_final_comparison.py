@@ -2,6 +2,7 @@
 
 Plots:
 - GWP_total vs span
+- span vs total cost, coloured by GWP_total
 - GWP_total vs total cost
 - GWP_total vs total height
 - GWP_total vs total mass
@@ -264,6 +265,38 @@ def overview_plot(
     plt.close(fig)
 
 
+def span_cost_colored_by_gwp(df: pd.DataFrame, output_dir: Path) -> None:
+    fig, ax = plt.subplots(figsize=(7.2, 5.4))
+    scatter = None
+    gwp_values = df["GWP_total [kg-CO2-eq/m2]"]
+    norm = plt.Normalize(gwp_values.min(), gwp_values.max())
+    for system, group in df.groupby("system"):
+        scatter = ax.scatter(
+            group["span_l_m"],
+            group["cost_total [CHF/m2]"],
+            c=group["GWP_total [kg-CO2-eq/m2]"],
+            cmap="viridis",
+            norm=norm,
+            s=24,
+            alpha=0.58,
+            marker=SYSTEM_MARKERS.get(str(system), "o"),
+            edgecolors="white",
+            linewidths=0.20,
+            label=str(system),
+        )
+    ax.set_xlabel("l [m]")
+    ax.set_ylabel("cost$_{tot}$ [CHF/m$^2$]")
+    ax.set_title("Cost$_{tot}$ vs l, coloured by GWP$_{tot}$")
+    ax.grid(True, alpha=0.55)
+    if scatter is not None:
+        cbar = fig.colorbar(scatter, ax=ax)
+        cbar.set_label("GWP$_{tot}$ [kg-CO$_2$-eq/m$^2$]")
+    ax.legend(frameon=False, fontsize=8.5, loc="upper left", bbox_to_anchor=(1.18, 1.0))
+    fig.tight_layout()
+    fig.savefig(output_dir / "scatter_span_vs_cost_colored_by_gwp.png", dpi=350, bbox_inches="tight")
+    plt.close(fig)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Create GWP scatter plots from final comparison summary.")
     parser.add_argument("--input", default="plots/final_comparison_summary.xlsx")
@@ -278,6 +311,7 @@ def main() -> None:
 
     df = load_data(workbook, args.sheet)
     remove_single_scatter_outputs(output_dir)
+    span_cost_colored_by_gwp(df, output_dir)
     overview_plot(
         df,
         output_dir,

@@ -37,6 +37,7 @@ COLORS = {
     "rebar": "#151515",
     "pt": "#2F80ED",
     "timber": "#A66A3F",
+    "formwork": "#C49A6C",
     "screed": "#DADDE2",
     "insulation": "#8B6BBE",
     "gravel": "#626A73",
@@ -94,7 +95,7 @@ CATALOG = [
         "title": "Ribbed Concrete",
         "systems": {"Ribbed concrete"},
         "optimized": [
-            "$h_w$: rib height, $0.04$--$2.00\\,\\mathrm{m}$",
+            "$h_w$: rib height, $0.04$--$1.00\\,\\mathrm{m}$",
             "$h_f$: flange thickness, $0.12$--$0.50\\,\\mathrm{m}$",
             "$b_w$: rib width, $0.15$--$0.40\\,\\mathrm{m}$",
             "$b$: effective width, $0.40$--$2.50\\,\\mathrm{m}$",
@@ -108,7 +109,7 @@ CATALOG = [
         "title": "Rectangular Timber",
         "systems": {"Rectangular wood"},
         "optimized": [
-            "$h$: timber slab height, $0.02$--$10.00\\,\\mathrm{m}$",
+            "$h$: timber slab height, $0.08$--$1.20\\,\\mathrm{m}$",
         ],
         "geometry": "$b=1.00\\,\\mathrm{m}$, simple span, fire from bottom",
     },
@@ -119,7 +120,7 @@ CATALOG = [
         "systems": {"TCC flat, kerve"},
         "optimized": [
             "$h_c$: concrete topping, $0.08$--$0.50\\,\\mathrm{m}$",
-            "$h_w$: timber height, $0.08$--$1.00\\,\\mathrm{m}$",
+            "$h_w$: timber height, $0.05$--$1.00\\,\\mathrm{m}$",
         ],
         "geometry": "$b_w=1.00\\,\\mathrm{m}$, $a_{ribs}=1.00\\,\\mathrm{m}$, $s=0.50\\,\\mathrm{m}$, kerve connector",
     },
@@ -130,9 +131,9 @@ CATALOG = [
         "systems": {"TCC ribs, DBS"},
         "optimized": [
             "$h_c$: concrete topping, $0.08$--$0.50\\,\\mathrm{m}$",
-            "$h_w$: timber rib height, $0.08$--$1.00\\,\\mathrm{m}$",
+            "$h_w$: timber rib height, $0.05$--$1.00\\,\\mathrm{m}$",
         ],
-        "geometry": "$b_w=0.18\\,\\mathrm{m}$, $a_{ribs}=0.625\\,\\mathrm{m}$, $s=0.06\\,\\mathrm{m}$, DBS connector",
+        "geometry": "$b_w=0.18\\,\\mathrm{m}$, $a_{ribs}=0.625\\,\\mathrm{m}$, $s=0.06\\,\\mathrm{m}$, $d=0.02\\,\\mathrm{m}$ formwork, DBS connector",
     },
     {
         "key": "wd_rib",
@@ -141,7 +142,7 @@ CATALOG = [
         "systems": {"Ribbed timber hollow core"},
         "optimized": [
             "$b$: rib width, $0.10$--$0.52\\,\\mathrm{m}$",
-            "$h$: rib height, $0.22$--$2.00\\,\\mathrm{m}$",
+            "$h$: rib height, $0.40$--$2.00\\,\\mathrm{m}$",
             "$t_2$: top plate, $25$--$160\\,\\mathrm{mm}$",
             "$t_3$: bottom plate, $27$--$160\\,\\mathrm{mm}$",
         ],
@@ -280,14 +281,17 @@ def draw_section(ax, variant, x0=3.95, y0=2.0, width=3.1):
 
     if variant == "tcc_ribs":
         h_w = 0.78
+        h_d = 0.10
         h_c = 0.32
         rib_w = 0.48
         ax.add_patch(Rectangle((x0 + width / 2 - rib_w / 2, y0), rib_w, h_w, facecolor=COLORS["timber"], edgecolor=COLORS["line"], lw=0.8))
-        ax.add_patch(Rectangle((x0, y0 + h_w), width, h_c, facecolor=COLORS["concrete"], edgecolor=COLORS["line"], lw=0.8))
-        draw_rebar_line(ax, x0 + 0.25, x0 + width - 0.25, y0 + h_w + h_c / 2, 1.7)
-        draw_rebar_dots(ax, [x0 + 0.45 + i * 0.42 for i in range(6)], y0 + h_w + h_c / 2 + 0.06, 0.022)
-        floor_h = draw_floor(ax, x0, y0 + h_w + h_c, width, layers=("insulation", "insulation", "screed", "parquet"))
-        return h_w + h_c, h_w + h_c + floor_h
+        ax.add_patch(Rectangle((x0, y0 + h_w), width, h_d, facecolor=COLORS["formwork"], edgecolor=COLORS["line"], lw=0.8))
+        ax.text(x0 + width / 2, y0 + h_w + h_d / 2, "formwork", ha="center", va="center", fontsize=7.3)
+        ax.add_patch(Rectangle((x0, y0 + h_w + h_d), width, h_c, facecolor=COLORS["concrete"], edgecolor=COLORS["line"], lw=0.8))
+        draw_rebar_line(ax, x0 + 0.25, x0 + width - 0.25, y0 + h_w + h_d + h_c / 2, 1.7)
+        draw_rebar_dots(ax, [x0 + 0.45 + i * 0.42 for i in range(6)], y0 + h_w + h_d + h_c / 2 + 0.06, 0.022)
+        floor_h = draw_floor(ax, x0, y0 + h_w + h_d + h_c, width, layers=("insulation", "insulation", "screed", "parquet"))
+        return h_w + h_d + h_c, h_w + h_d + h_c + floor_h
 
     if variant == "hollow_core":
         h = 0.85
@@ -429,6 +433,7 @@ def plot_catalog_entry(entry):
         ("Rebar", COLORS["rebar"]),
         ("Post-tensioning", COLORS["pt"]),
         ("Timber", COLORS["timber"]),
+        ("Formwork", COLORS["formwork"]),
         ("Cement screed", COLORS["screed"]),
         ("Insulation", COLORS["insulation"]),
         ("Gravel", COLORS["gravel"]),

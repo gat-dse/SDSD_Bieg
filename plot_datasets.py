@@ -5,9 +5,20 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from shapely.geometry import Polygon
+try:
+    from shapely.geometry import Polygon
+except ImportError:
+    Polygon = None
 from scipy.interpolate import interp1d
 from scipy.spatial import ConvexHull
+
+
+def polygon_xy(coords):
+    if Polygon is not None:
+        polygon = Polygon(coords)
+        return polygon.exterior.xy
+    closed = coords + [coords[0]]
+    return [point[0] for point in closed], [point[1] for point in closed]
 
 
 def selected_epd_extreme_product_ids(cursor, material_like):
@@ -117,18 +128,24 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
 
     def section_for_length(section, length):
         if section.section_type == "tcc":
+            connector = section.connector_type
+            connector_by_span = section_params.get("connector_by_span", {})
+            connector_name = connector_by_span.get(length, connector_by_span.get(float(length), None))
+            if connector_name:
+                connector = struct_analysis.ConnectorTCC(connector_name, database_name)
+                connector.get_design_values()
             h_by_span = section_params.get("h_by_span", {})
             span_values = h_by_span.get(length, h_by_span.get(float(length), None))
-            if span_values:
+            if span_values or connector is not section.connector_type:
                 new_section = struct_analysis.TCC(
                     section.concrete_type,
                     section.rebar_type,
                     section.wood_type,
-                    section.connector_type,
+                    connector,
                     section.s,
                     section.a_ribs,
-                    span_values.get("h_c", section.h_c),
-                    span_values.get("h_w", section.h_w),
+                    span_values.get("h_c", section.h_c) if span_values else section.h_c,
+                    span_values.get("h_w", section.h_w) if span_values else section.h_w,
                     section.b_w,
                     section.d,
                     section.l0,
@@ -386,9 +403,9 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                 clt_high_em.get_design_values()
 
                 # create initial cross-sections
-                section_00 = struct_analysis.RibWood(timber1, clt_low_em, clt_low_em, 4, 0.12, 0.22, 0.625,
+                section_00 = struct_analysis.RibWood(timber1, clt_low_em, clt_low_em, 4, 0.12, 0.40, 0.625,
                                                      0.027, 0.027)
-                section_01 = struct_analysis.RibWood(timber1, clt_high_em, clt_high_em, 4, 0.12, 0.22, 0.625,
+                section_01 = struct_analysis.RibWood(timber1, clt_high_em, clt_high_em, 4, 0.12, 0.40, 0.625,
                                                     0.027, 0.027)
 
                 # add sections to content-definition of plot-line
@@ -545,8 +562,7 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             if plot:
                 plt.subplot(2, 2, idx + 1)
                 coords = list(zip(lengths, values_max[idx])) + list(zip(lengths[::-1], values_min[idx][::-1]))
-                polygon = Polygon(coords)
-                x, y = polygon.exterior.xy
+                x, y = polygon_xy(coords)
                 plt.fill(x, y, alpha=0.05, facecolor=color, edgecolor = color, linewidth = 1.5)
                 plt.plot(lengths, values_mean[idx], color=color, linestyle=linestyle, linewidth=1.5)
     if return_series:

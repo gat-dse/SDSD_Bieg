@@ -281,6 +281,10 @@ def geometry_description(section):
     reinforcement = reinforcement_description(section)
     if reinforcement:
         parts.append(reinforcement)
+    connector = getattr(section, "connector_type", None)
+    if connector is not None:
+        parts.append(f"connector_name={clean_text(getattr(connector, 'name', ''))}")
+        parts.append(f"connector_K_ser_N_m={number_or_empty(getattr(connector, 'K_ser', ''), ndigits=2)}")
     return " | ".join(parts)
 
 
@@ -528,6 +532,51 @@ def reinforcement_quantity_diagnostics(section):
     }
 
 
+def sls2_debug_diagnostics(member, scenario, system, length):
+    requirements = getattr(member, "requirements", None)
+    f1_req = safe_float(getattr(requirements, "f1", float("nan")))
+    f1 = safe_float(getattr(member, "f1", float("nan")))
+    a_ed = safe_float(getattr(member, "a_ed", float("nan")))
+    a_cd = safe_float(getattr(requirements, "a_cd", float("nan")))
+    wf_ed = safe_float(getattr(member, "wf_ed", float("nan")))
+    wf_cd = safe_float(getattr(requirements, "w_f_cdr1", float("nan")))
+    r1 = safe_float(getattr(member, "r1", 1.0))
+    wf_cd_effective = wf_cd * r1 if pd.notna(wf_cd) and pd.notna(r1) else float("nan")
+    ve_ed = safe_float(getattr(member, "ve_ed", float("nan")))
+    ve_cd = safe_float(getattr(member, "ve_cd", float("nan")))
+
+    diagnostics = utilization_row(member)
+    note = ""
+    if (
+        getattr(getattr(member, "section", None), "section_type", "") == "tcc"
+        and scenario.get("label") == "Residential"
+        and safe_float(length) >= 6.0
+        and diagnostics.get("sls2_governing_component") == "sls2_f1_util"
+    ):
+        note = (
+            "Residential TCC SLS2 is frequency-governed: f1 is close to or below "
+            "the required limit; inspect f1_Hz, sls2_f1_required_Hz and the "
+            "component margins before interpreting acceleration/velocity penalties."
+        )
+
+    return {
+        "sls2_f1_required_Hz": number_or_empty(f1_req),
+        "sls2_f1_margin_Hz": number_or_empty(f1 - f1_req),
+        "sls2_a_ed_m_s2": number_or_empty(a_ed),
+        "sls2_a_cd_m_s2": number_or_empty(a_cd),
+        "sls2_a_margin_m_s2": number_or_empty(a_cd - a_ed),
+        "sls2_wf_ed_mm": number_or_empty(wf_ed, scale=1000),
+        "sls2_wf_cd_mm": number_or_empty(wf_cd, scale=1000),
+        "sls2_r1": number_or_empty(r1),
+        "sls2_wf_cd_effective_mm": number_or_empty(wf_cd_effective, scale=1000),
+        "sls2_wf_margin_effective_mm": number_or_empty(wf_cd_effective - wf_ed, scale=1000),
+        "sls2_ve_ed_m_s": number_or_empty(ve_ed),
+        "sls2_ve_cd_m_s": number_or_empty(ve_cd),
+        "sls2_ve_margin_m_s": number_or_empty(ve_cd - ve_ed),
+        "sls2_debug_note": note,
+    }
+
+
 def feasible_series_at_length(series, idx, criterion="ULS"):
     return [item for item in series if member_is_feasible_for_criterion(item["members"][idx], criterion)]
 
@@ -598,6 +647,7 @@ def member_summary_row(case_name, scenario, system, criterion, optimum, variant,
     row.update(floor_quantity_diagnostics(member))
     row.update(reinforcement_quantity_diagnostics(section))
     row.update(pt_min_reinforcement_diagnostics(section))
+    row.update(sls2_debug_diagnostics(member, scenario, system, length))
     row["w_install_util"] = row.get("sls1_install_util", "")
     row["w_use_util"] = row.get("sls1_use_util", "")
     row["w_app_util"] = row.get("sls1_app_util", "")
@@ -950,6 +1000,7 @@ def export_excel_summary(output_dir, variant_rows, envelope_rows, best_rows):
         {"key": "diagnostics", "value": "Utilization columns are exported for ULS, SLS1 deflection, SLS2 vibration and FIRE; governing_check is the largest available utilization."},
         {"key": "diagnostics_no_fire", "value": "governing_check_no_fire excludes the binary fire table check so overdesign from ULS/SLS can be identified separately from fire_ok."},
         {"key": "diagnostics_subchecks", "value": "SLS1/SLS2 governing component columns identify the active deflection or vibration sub-check; ULS bending/shear utilization columns identify whether resistance is governed by bending or shear."},
+        {"key": "diagnostics_sls2_raw_values", "value": "SLS2 raw values, limits, margins and sls2_debug_note are exported so frequency-governed TCC rows can be debugged without rerunning the optimizer."},
         {"key": "diagnostics_floor_buildup", "value": "Floor height, mass, GWP and cost contributions and shares are exported to separate structural and acoustic build-up effects."},
         {"key": "diagnostics_reinforcement", "value": "Rebar diameter and spacing summary columns make the continuous optimizer choices visible, including the PT bonded reinforcement floor."},
         {"key": "pt_min_reinforcement_diagnostics", "value": "For pc_rec rows, pt_eta_Mcr_MRd now uses the ordinary RC cracking moment without prestress as the bonded minimum-reinforcement target; pt_Mcr_kNm_m still reports Mcr,PT for serviceability cracking/stiffness."},

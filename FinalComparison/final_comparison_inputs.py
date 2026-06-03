@@ -17,8 +17,8 @@ OUTPUT_DIR = "plots"
 DESIGN_CRITERIA = ["ULS", "SLS1", "SLS2", "FIRE"]
 ENV_CRITERIA = ["ENV"]
 OPTIMA = ["GWP"]
-MAX_ITER = int(os.environ.get("SDSD_MAX_ITER", 5))
-HIGH_ITER = int(os.environ.get("SDSD_HIGH_ITER", 10))
+MAX_ITER = int(os.environ.get("SDSD_MAX_ITER", 40))
+HIGH_ITER = int(os.environ.get("SDSD_HIGH_ITER", 60))
 HIGH_ITER_SECTION_TYPES = {"rc_rec", "pc_rec", "rc_rib", "tcc"}
 G2K = 0.75e3
 VERIFICATION_INDEX = 1
@@ -40,7 +40,7 @@ BASE_FLOOR_BUILDUP = [
 MATERIAL_GROUPS = {
     "concrete": ["'ready_mixed_concrete'"],
     "timber": ["'Glue_laminated_timber'", "'Solid_structural_timber'"],
-    "tcc_kerve": [("'ready_mixed_concrete'", "'Glue_laminated_timber'", "'kerve'")],
+    "tcc_kerve": [("'ready_mixed_concrete'", "'Glue_laminated_timber'", "'kerve_20'")],
     "tcc_dbs": [("'ready_mixed_concrete'", "'Glue_laminated_timber'", "'DBS_10'")],
 }
 
@@ -62,7 +62,7 @@ TCC_RIBS_DBS = {
     "h_w": 0.12,
     "h_w_max": 1.00,
     "b_w": 0.18,
-    "d": 0.0,
+    "d": 0.02,
     "l0": 2.0,
 }
 
@@ -111,11 +111,21 @@ SCENARIOS = {
                 "dimension": "1D",
                 "crsec_type": "tcc",
                 "materials": "tcc_kerve",
-                "description": "BSH, connection: kerve, s=0.5 m",
+                "description": "BSH, connection: kerve_20/kerve_30, s=0.5 m",
                 "structural_system": "Simple span",
                 "system_type": "simple_span",
                 "fire_array": FIRE_BOTTOM,
-                "section_params": TCC_FLAT_KERVE,
+                "section_params": {
+                    **TCC_FLAT_KERVE,
+                    "connector_by_span": {
+                        3: "'kerve_20'",
+                        5: "'kerve_20'",
+                        6: "'kerve_20'",
+                        7: "'kerve_30'",
+                        8: "'kerve_30'",
+                        10: "'kerve_30'",
+                    },
+                },
             },
             {
                 "id": "res_tcc_ribs_dbs",
@@ -123,7 +133,7 @@ SCENARIOS = {
                 "dimension": "1D",
                 "crsec_type": "tcc",
                 "materials": "tcc_dbs",
-                "description": "Ribs, connection: DBS_10, s=0.06 m, a_ribs=0.625 m, b_w=0.18 m",
+                "description": "Ribs, connection: DBS_10, s=0.06 m, a_ribs=0.625 m, b_w=0.18 m, d=0.02 m formwork",
                 "structural_system": "Simple span",
                 "system_type": "simple_span",
                 "fire_array": FIRE_BOTTOM_AND_SIDES,

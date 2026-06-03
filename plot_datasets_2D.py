@@ -5,9 +5,20 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from shapely.geometry import Polygon
+try:
+    from shapely.geometry import Polygon
+except ImportError:
+    Polygon = None
 from scipy.interpolate import interp1d
 from scipy.spatial import ConvexHull
+
+
+def polygon_xy(coords):
+    if Polygon is not None:
+        polygon = Polygon(coords)
+        return polygon.exterior.xy
+    closed = coords + [coords[0]]
+    return [point[0] for point in closed], [point[1] for point in closed]
 
 
 def selected_epd_extreme_product_ids(cursor, material_like):
@@ -495,8 +506,7 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             if plot:
                 plt.subplot(2, 2, idx + 1)
                 coords = list(zip(lengths, values_max[idx])) + list(zip(lengths[::-1], values_min[idx][::-1]))
-                polygon = Polygon(coords)
-                x, y = polygon.exterior.xy
+                x, y = polygon_xy(coords)
                 plt.fill(x, y, alpha=0.05, facecolor=color)
                 plt.plot(lengths, data, color=color, linestyle=linestyle, linewidth=linewidth, label=label, alpha=0.2)
 

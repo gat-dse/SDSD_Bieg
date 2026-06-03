@@ -52,6 +52,7 @@ COLORS = {
     "rebar": "#151515",
     "pt": "#2F80ED",
     "timber": "#A66A3F",
+    "formwork": "#C49A6C",
     "screed": "#DADDE2",
     "insulation": "#8B6BBE",
     "gravel": "#626A73",
@@ -186,10 +187,41 @@ def wrap_text(text, width=30):
     return "\n".join(wrapped_lines)
 
 
-def material_short(text):
+def cm_label(value):
+    if value is None:
+        return ""
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if value <= 0:
+        return ""
+    return f"{value * 100:.0f} cm"
+
+
+def with_dimension_labels(text, dimensions):
+    def latex_name(name):
+        if "_" not in name:
+            return f"${name}$"
+        base, subscript = name.split("_", 1)
+        if len(subscript) == 1:
+            return f"${base}_{subscript}$"
+        return f"${base}_{{{subscript}}}$"
+
+    labels = [f"{latex_name(name)}={cm_label(value)}" for name, value in dimensions if cm_label(value)]
+    if not labels:
+        return text
+    return f"{text} " + ", ".join(labels)
+
+
+def material_short(row):
+    text = row.get("materials", "")
     if pd.isna(text):
         return ""
+    geom = parse_geometry(row.get("geometry", ""))
+    section_type = str(row.get("section_type", ""))
     parts = []
+    timber_idx = 0
     for item in str(text).split("|"):
         item = item.strip()
         if not item:
@@ -200,6 +232,36 @@ def material_short(text):
         item = item.replace("ConnectorTCC:", "Connector:")
         item = item.replace("Wood:", "Timber:")
         item = re.sub(r",\s*[^|]+$", "", item)
+        if item.startswith("Concrete:"):
+            if section_type == "tcc":
+                b_c = geom.get("b_c", geom.get("a_ribs", geom.get("b", 1.0)))
+                item = with_dimension_labels(item, [("h_c", geom.get("h_c")), ("b_c", b_c)])
+            elif section_type == "rc_rib":
+                item = with_dimension_labels(
+                    item,
+                    [
+                        ("h_f", geom.get("h_f")),
+                        ("h_w", geom.get("h_w")),
+                        ("b_w", geom.get("b_w")),
+                        ("b_eff", geom.get("b")),
+                    ],
+                )
+            else:
+                item = with_dimension_labels(item, [("h", geom.get("h")), ("b", geom.get("b"))])
+        elif item.startswith("Timber:"):
+            if section_type == "tcc":
+                item = with_dimension_labels(item, [("h_w", geom.get("h_w")), ("b_w", geom.get("b_w"))])
+            elif section_type == "wd_rec":
+                item = with_dimension_labels(item, [("h", geom.get("h")), ("b", geom.get("b"))])
+            elif section_type == "wd_rib":
+                web_height = max(geom.get("h", 0.0) - geom.get("t2", 0.0) - geom.get("t3", 0.0), 0.0)
+                if timber_idx == 0:
+                    item = with_dimension_labels(item, [("t_top", geom.get("t2")), ("b", geom.get("a"))])
+                elif timber_idx == 1:
+                    item = with_dimension_labels(item, [("h_w", web_height), ("b_w", geom.get("b"))])
+                else:
+                    item = with_dimension_labels(item, [("t_bot", geom.get("t3")), ("b", geom.get("a"))])
+                timber_idx += 1
         parts.append(item)
     return " | ".join(parts)
 
@@ -527,12 +589,33 @@ def draw_ribbed_timber_hollow(ax, geom, x0, y0, width, height):
     web_h = max(height - top_t - bottom_t, height * 0.20)
     spacing = max(geom.get("a", 0.625), 1e-9)
     web_width = min(max(geom.get("b", 0.10) / spacing * width, width * 0.08), width * 0.28)
+    web_x0 = x0 + width / 2 - web_width / 2
 
     ax.add_patch(Rectangle((x0, y0 + bottom_t + web_h), width, top_t, facecolor=COLORS["timber"], edgecolor="#222222", lw=0.9))
     ax.add_patch(Rectangle((x0, y0), width, bottom_t, facecolor=COLORS["timber"], edgecolor="#222222", lw=0.9))
+    cavity_pad = min(0.035, width * 0.04)
+    cavity_y = y0 + bottom_t
+    cavity_height = web_h
+    cavities = [
+        (x0 + cavity_pad, web_x0 - x0 - 2 * cavity_pad),
+        (web_x0 + web_width + cavity_pad, x0 + width - web_x0 - web_width - 2 * cavity_pad),
+    ]
+    for cavity_x, cavity_width in cavities:
+        if cavity_width > 0.02 and cavity_height > 0.02:
+            ax.add_patch(
+                Rectangle(
+                    (cavity_x, cavity_y),
+                    cavity_width,
+                    cavity_height,
+                    facecolor=COLORS["insulation"],
+                    edgecolor="#222222",
+                    lw=0.45,
+                    alpha=0.72,
+                )
+            )
     ax.add_patch(
         Rectangle(
-            (x0 + width / 2 - web_width / 2, y0 + bottom_t),
+            (web_x0, y0 + bottom_t),
             web_width,
             web_h,
             facecolor=COLORS["timber"],
@@ -543,12 +626,19 @@ def draw_ribbed_timber_hollow(ax, geom, x0, y0, width, height):
 
 
 def draw_tcc(ax, row, geom, x0, y0, width, height):
-    h_c = min(max(geom.get("h_c", 0.08), 0.035), height * 0.75)
-    h_w = height - h_c
+    geom_h = max(geom.get("h", geom.get("h_c", 0.08) + geom.get("h_w", 0.12) + geom.get("d", 0.0)), 1e-9)
+    local_scale = height / geom_h
+    d_formwork = max(geom.get("d", 0.0) * local_scale, 0.0)
+    h_c = min(max(geom.get("h_c", 0.08) * local_scale, 0.035), height * 0.75)
+    h_w = max(height - h_c - d_formwork, height * 0.05)
     b_w = min(max(geom.get("b_w", width * 0.25), 0.06), width)
-    ax.add_patch(Rectangle((x0, y0 + h_w), width, h_c, facecolor=COLORS["concrete"], edgecolor="#222222", lw=0.9))
+    if h_w + d_formwork + h_c > height:
+        h_c = max(height - h_w - d_formwork, 0.0)
     ax.add_patch(Rectangle((x0 + width / 2 - b_w / 2, y0), b_w, h_w, facecolor=COLORS["timber"], edgecolor="#222222", lw=0.9))
-    draw_tcc_rebar(ax, row, geom, x0, y0 + h_w, width, h_c)
+    if d_formwork > 0:
+        ax.add_patch(Rectangle((x0, y0 + h_w), width, d_formwork, facecolor=COLORS["formwork"], edgecolor="#222222", lw=0.65))
+    ax.add_patch(Rectangle((x0, y0 + h_w + d_formwork), width, h_c, facecolor=COLORS["concrete"], edgecolor="#222222", lw=0.9))
+    draw_tcc_rebar(ax, row, geom, x0, y0 + h_w + d_formwork, width, h_c)
 
 
 def draw_floor(ax, x0, y0, width, layers):
@@ -617,7 +707,7 @@ def draw_cross_section(ax, row, x_center, total_top, name_y, text_y, scale):
     system = str(row.get("system", ""))
     ax.text(x_center, name_y, wrap_text(system, 18), ha="center", va="top", fontsize=11, fontweight="bold")
 
-    material_text = material_short(row.get("materials", ""))
+    material_text = material_short(row)
     floor_text = " | ".join(f"{floor_label(name)}: {height * 1000:.0f} mm" for name, height in floor_layers)
     static_system = static_system_text(row)
     below_lines = [
@@ -657,18 +747,37 @@ def plot_case(df, case_name, span):
     # height. This avoids visually compressing deep ribbed sections.
     scale = CS_WIDTH
     n = len(rows)
-    x_positions = [1.35 + idx * COLUMN_SPACING for idx in range(n)]
-    x_max = x_positions[-1] + CS_WIDTH
-    total_top = max_total_height * scale + 0.78
-    name_y = total_top + 0.54
-    text_y = 0.10
-    y_min = -0.86
-    y_max = name_y + 0.24
+    if case_name == "Residential" and n > 3:
+        n_cols = 3
+        n_rows = (n + n_cols - 1) // n_cols
+        column_spacing = 3.05
+        row_height = max(3.05, max_total_height * scale + 2.25)
+        x_positions = [1.35 + (idx % n_cols) * column_spacing for idx in range(n)]
+        row_bases = [(n_rows - 1 - idx // n_cols) * row_height for idx in range(n)]
+        total_tops = [base + max_total_height * scale + 1.18 for base in row_bases]
+        name_ys = [top + 0.44 for top in total_tops]
+        text_ys = [base + 0.78 for base in row_bases]
+        x_min = 0.18
+        x_lim_max = 1.35 + (n_cols - 1) * column_spacing + CS_WIDTH + 0.78
+        y_min = -0.72
+        y_max = max(name_ys) + 0.28
+        fig_width = 12.2
+    else:
+        x_positions = [1.35 + idx * COLUMN_SPACING for idx in range(n)]
+        x_max = x_positions[-1] + CS_WIDTH
+        total_top = max_total_height * scale + 0.78
+        name_y = total_top + 0.54
+        text_y = 0.10
+        total_tops = [total_top] * n
+        name_ys = [name_y] * n
+        text_ys = [text_y] * n
+        x_min = 0.18
+        x_lim_max = x_max + 0.78
+        y_min = -0.86
+        y_max = name_y + 0.24
+        fig_width = max(17.0, 2.85 * n)
 
-    x_min = 0.18
-    x_lim_max = x_max + 0.78
     data_ratio = (x_lim_max - x_min) / (y_max - y_min)
-    fig_width = max(17.0, 2.85 * n)
     fig_height = max(7.4, fig_width / data_ratio)
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     ax.set_xlim(x_min, x_lim_max)
@@ -684,14 +793,15 @@ def plot_case(df, case_name, span):
         ha="center",
     )
 
-    for x_center, (_, row) in zip(x_positions, rows.iterrows()):
-        draw_cross_section(ax, row, x_center, total_top, name_y, text_y, scale)
+    for idx, (x_center, (_, row)) in enumerate(zip(x_positions, rows.iterrows())):
+        draw_cross_section(ax, row, x_center, total_tops[idx], name_ys[idx], text_ys[idx], scale)
 
     legend_items = [
         ("Concrete", COLORS["concrete"]),
         ("Rebar", COLORS["rebar"]),
         ("Post-tensioning", COLORS["pt"]),
         ("Timber", COLORS["timber"]),
+        ("Formwork", COLORS["formwork"]),
         ("Cement screed", COLORS["screed"]),
         ("Insulation", COLORS["insulation"]),
         ("Gravel", COLORS["gravel"]),

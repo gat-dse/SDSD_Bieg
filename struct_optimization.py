@@ -284,7 +284,7 @@ def opt_rc_rib(m, to_opt="GWP", criterion="ULS", max_iter=100):
 
     # define bounds of variables
     bh_f = (0.08, 0.5)  # height between 12 cm and 50 cm
-    bh_w = (0.04, 2)  # height between 10 cm and 2.0 m
+    bh_w = (0.04, 1.0)  # rib web height between 4 cm and 1.0 m
     bdi_x_w = (0.008, 0.04)  # diameter of rebars between 8 mm and 40 mm
     bdi_xo = (0.008, 0.04)  # upper reinforcement over supports
     bb_w = (0.15, 0.4)  # rib width between 15 and 40 cm
@@ -411,7 +411,7 @@ def rc_rib_rqs(var, add_arg):
 # outer function for finding optimal wooden rectangular cross-section
 def opt_gzt_wd_rqs(member, criterion="ULS"):
     h_0 = member.section.h
-    bnds = [(0.1, 1.2)]
+    bnds = [(0.08, 1.2)]
     minimal_h = minimize(wd_rqs_h, h_0, args=[member, criterion], bounds=bnds, method='Powell')
     h_opt = minimal_h.x[0]
     section = struct_analysis.RectangularWood(member.section.wood_type, member.section.b, h_opt)
@@ -484,8 +484,7 @@ def opt_wd_rib(m, to_opt="GWP", criterion="ULS", max_iter=100):
     # define bounds of variables
     # TODO: Stimmen die Randbedingungen der Schichtdicken so gemäss Lignum? Ist zu verifizieren!
     # TODO: Ev. Fallunterscheidung -> Falls unten GFP vorhanden, gem. aktuellem Stand, falls nicht, dann 2. Fall definieren.
-    bh = (0.22, 2.0)  # height of rib between 22 cm (minimal requirement b x h = 100 x 220 for R60 according to Lignum 4.1, Table 433-2,
-    # Column G) and 200 cm
+    bh = (0.40, 2.0)  # height of rib between 40 cm and 200 cm
     bb = (0.1, 0.52)  # width of rib between 10 cm (minimal requirement b x h = 100 x 220 for R60 according to Lignum 4.1, Table 433-2,
     # Column G) and 52 cm
     bt2 = (0.025, 0.16)  # hight of lower sheating between 2.5 cm (minimal requirement for R60 according to Lignum 4.1, Table 433-2,
@@ -606,7 +605,7 @@ def wd_rib_rqs(var, add_arg):
 
 # TCC cross-section
 # Outer function to find optimal TCC cross-section
-def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.08, hw_min=0.08):
+def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.08, hw_min=0.05):
     #Initial values for optimization variables
     hc0 = m.section.h_c
     hw0 = m.section.h_w

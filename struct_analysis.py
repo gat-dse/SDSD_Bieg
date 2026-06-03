@@ -37,6 +37,13 @@ from scipy.optimize import minimize, root_scalar
 from scipy.optimize import least_squares
 
 
+GRAVITY_SIMPLIFIED = 10.0
+
+
+def product_specific_weight(material):
+    return float(material.density) * GRAVITY_SIMPLIFIED
+
+
 
 #DEFINITONS OF MATERIAL PROPERTIES--------------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------
@@ -292,7 +299,7 @@ class RectangularWood(SupStrucRectangular, Section):
         # directions for wood too
         self.vu_p, self.vu_n = vu_el, vu_el
         self.qs_class_n, self.qs_class_p = [3, 3]  # Required cross-section class: 1:PP, 2:EP, 3:EE
-        self.g0k = self.calc_weight(wood_type.weight) # dead weight of cross section [N/m]
+        self.g0k = self.calc_weight(product_specific_weight(wood_type)) # dead weight of cross section [N/m]
         self.ei1 = self.wood_type.Emmean * self.iy  # elastic stiffness [Nm^2]
         self.volume_wood = self.a_brutt / self.b
         self.co2_wood = self.volume_wood * self.wood_type.GWP * self.wood_type.density
@@ -303,7 +310,7 @@ class RectangularWood(SupStrucRectangular, Section):
         self.ei_b = ei_b  # stiffness perpendicular to direction of span [Nm^2]
         self.xi = xi  # damping factor, preset value see: HBT, Page 47 (higher value for some buildups possible)
         self.h_installation = 0 # no room for installation of services
-        self.w = self.calc_weight(5000)/self.b # weight of cross section per m length [N/m]
+        self.w = self.g0k / self.b # weight of cross section per m2 [N/m2]
 
     @staticmethod
     def fire_resistance(member):
@@ -358,13 +365,16 @@ class RectangularConcrete(SupStrucRectangular):
         self.as_yo = np.pi * self.bw[3][0] ** 2 / (4 * self.bw[3][1]) * self.b
         self.roh, self.rohs = self.as_p / self.d, self.as_n / self.ds
         [self.vu_p, self.vu_n, self.as_bw] = self.calc_shear_resistance()
-        self.g0k = self.calc_weight(concrete_type.weight)
         # Stagger shear reinforcement for material quantities: the calculated
         # resistance may be needed near supports, but the same amount is not
         # assumed over the full slab area.
         a_s_stat = self.as_p + self.as_n + self.as_yu + self.as_yo + 0.5 * self.as_bw
         self.joint_surcharge = jnt_srch  # surcharge for reinforcement joints, preset value is an assumption and has to be verified with literature
         a_s_tot = a_s_stat * (1 + self.joint_surcharge)  # rebar area without reinforcement joint surcharge
+        self.g0k = (
+            product_specific_weight(self.concrete_type) * (self.a_brutt - a_s_tot)
+            + product_specific_weight(self.rebar_type) * a_s_tot
+        )
         co2_rebar = a_s_tot * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
         co2_concrete = (self.a_brutt - a_s_tot) * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.volume_reinforcement = a_s_tot / self.b
@@ -384,7 +394,7 @@ class RectangularConcrete(SupStrucRectangular):
         self.xi = xi  # XXXXXXX preset value is an assumption. Has to be verified with literature. XXXXXXX
         self.ei2 = self.ei1 / self.f_w_ger(self.roh, self.rohs, 0, self.h, self.d)
         self.h_installation = self.h - 2*self.c_nom - self.bw[0][0] - self.bw[1][0] - self.bw[2][0] - self.bw[3][0]  # height available for installation of services
-        self.w = self.calc_weight(25000)/self.b # weight of cross section per m length [N/m]
+        self.w = self.g0k / self.b # weight of cross section per m2 [N/m2]
 
     def calc_d(self):
         # Simplification: Static height is height avg height between two layers of reinforcement
@@ -628,6 +638,12 @@ class PostTensionedConcrete(RectangularConcrete):
         self.volume_reinforcement = volume_reinforcement
         self.volume_pt_steel = volume_pt_steel
         self.volume_concrete = volume_concrete
+        self.g0k = (
+            product_specific_weight(self.concrete_type) * volume_concrete
+            + product_specific_weight(self.rebar_type) * volume_reinforcement
+            + product_specific_weight(self.pt_steel_type) * volume_pt_steel
+        )
+        self.w = self.g0k
         self.co2_rebar = co2_rebar
         self.co2_pt_steel = co2_pt_steel
         self.co2_concrete = co2_concrete
@@ -1106,6 +1122,7 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         super().__init__(section_type, b, b_w, h, h_f, l0, phi)
         self.concrete_type = concrete_type
         self.rebar_type = rebar_type
+        self.w = self.calc_weight(product_specific_weight(concrete_type)) / self.b
         self.c_nom = c_nom
         self.bw = [[di_xu, s_xu], [di_xo, s_xo]]  # Slab reinforcement
         self.bw_bg = [0, 0.15, 0]  # Allow for no slab shear reinforcement
@@ -1125,7 +1142,6 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         [self.vu_p, self.vu_n, self.as_bw] = self.calc_shear_resistance('Platte')  #Platte "Querrichtung"
         [self.vu_PB_p, self.vu_PB_n, self.as_PB_bw] = self.calc_shear_resistance(
             'Plattenbalken')  #Rippe Plattenbalken "Längsrichtung"
-        self.g0k = self.calc_weight(concrete_type.weight)
         # Slab reinforcement is counted over the full rib spacing. The negative
         # PB resistance also uses the upper slab reinforcement, so it is not
         # counted a second time as rib reinforcement.
@@ -1135,6 +1151,11 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         self.joint_surcharge = jnt_srch
         a_s_tot = (a_s_slab * self.b + a_s_rib) * (1 + self.joint_surcharge)
         concrete_area = max(self.a_brutt - a_s_tot, 0.0)
+        self.g0k = (
+            product_specific_weight(self.concrete_type) * concrete_area
+            + product_specific_weight(self.rebar_type) * a_s_tot
+        )
+        self.w = self.g0k / self.b
         co2_rebar = a_s_tot * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
         co2_concrete = concrete_area * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.volume_reinforcement = a_s_tot / self.b
@@ -1464,7 +1485,12 @@ class RibWood(SupStrucRibWood):
         self.vu_p, self.vu_n = vu_el, vu_el
 
         self.qs_class_n, self.qs_class_p = [3, 3]  # Required cross-section class: 1:=PP, 2:EP, 3:EE
-        self.g0k = self.calc_weight(wood_type_1.weight)
+        self.g0k = (
+            self.b * self.h / self.a * product_specific_weight(wood_type_1)
+            + self.t2 * product_specific_weight(wood_type_2)
+            + self.t3 * product_specific_weight(wood_type_3)
+        )
+        self.w = self.g0k
         self.ei1 = self.wood_type_1.Emmean * self.iy  # elastic stiffness [Nm^2], Zeitpunkt t = 0
 
         self.volume_wood = self.b * self.h / self.a + self.t2 + self.t3
@@ -1472,7 +1498,7 @@ class RibWood(SupStrucRibWood):
         # RibWood does not receive a database handle, so the material values are
         # kept in sync with the current floor_struc_prop entry for "Glaswolle".
         self.hollow_core_insulation_thickness = self.h
-        self.volume_hollow_core_insulation = max((self.a - self.b) * self.h / self.a, 0.0)
+        self.volume_hollow_core_insulation = max((self.a - self.b) * self.hollow_core_insulation_thickness / self.a, 0.0)
         self.hollow_core_insulation_density = 80.0  # kg/m3, Glaswolle
         self.hollow_core_insulation_weight = 800.0  # N/m3, Glaswolle
         self.hollow_core_insulation_gwp = 1.1  # kg CO2-eq/kg, Glaswolle
@@ -1687,7 +1713,12 @@ class TCC(SupStrucTCC):
                                   + wood_volume * self.wood_type.construction_time
                                   + concrete_volume * self.concrete_type.construction_time
                                   + self.as_rebar * self.rebar_type.construction_time)  # [h/m2]
-        self.g0k = self.calc_weight() 
+        self.g0k = (
+            product_specific_weight(self.wood_type) * wood_volume
+            + product_specific_weight(self.concrete_type) * concrete_volume
+            + product_specific_weight(self.rebar_type) * self.as_rebar
+        )
+        self.w = self.g0k
         self.ei1 = self.EI_SLS[0]  # elastic stiffness at t=0 for SLS checks
         self.xi = xi
         self.ei_b = self.concrete_type.Ecm * self.h_c**3 / 12  # stiffness perpendicular to direction of span per m witdh
