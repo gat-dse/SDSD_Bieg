@@ -85,6 +85,12 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             section, database_name, requirements.acoustic
         ).floorstruc
 
+    def floor_signature(current_floorstruc):
+        return tuple(
+            round(float(getattr(current_floorstruc, attr, 0.0) or 0.0), 8)
+            for attr in ("h", "gk_area", "co2", "cost", "construction_time")
+        )
+
     def member_series(members, legend_entry):
         def floor_value(mem, attr):
             return getattr(mem.floorstruc, attr, 0.0)
@@ -409,7 +415,20 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                     member0 = struct_analysis.Member2D(section0, sys, floorstruc, requirements, g2k, qk,
                                                        check_punching=check_punching)
                     opt_section = struct_optimization_2D.get_optimized_section(member0, criterion, optimum, max_iter)
-                    floorstruc = floor_for_section(opt_section, floorstruc)
+                    optimized_floorstruc = floor_for_section(opt_section, floorstruc)
+                    if auto_floor_buildup and floor_signature(optimized_floorstruc) != floor_signature(floorstruc):
+                        # The acoustic build-up can become substantially heavier
+                        # after the first optimization. Refine the section with
+                        # the floor load that will actually be exported.
+                        refined_member = struct_analysis.Member2D(
+                            opt_section, sys, optimized_floorstruc, requirements, g2k, qk,
+                            check_punching=check_punching
+                        )
+                        opt_section = struct_optimization_2D.get_optimized_section(
+                            refined_member, criterion, optimum, max_iter
+                        )
+                        optimized_floorstruc = floor_for_section(opt_section, optimized_floorstruc)
+                    floorstruc = optimized_floorstruc
                     opt_member = struct_analysis.Member2D(opt_section, sys, floorstruc, requirements, g2k, qk,
                                                           check_punching=check_punching)
                     members.append(opt_member)

@@ -19,8 +19,8 @@ export MKL_NUM_THREADS=1
 unset SDSD_SCENARIOS
 unset SDSD_SYSTEMS
 unset SDSD_LENGTHS
-export SDSD_MAX_ITER=75
-export SDSD_HIGH_ITER=150
+export SDSD_MAX_ITER=20
+export SDSD_HIGH_ITER=50
 
 REPO_ROOT="/cluster/home/jobieg/SDSD_Bieg"
 SCRIPT_DIR="$REPO_ROOT/FinalComparison"
@@ -32,6 +32,13 @@ echo "REPO_ROOT: $REPO_ROOT"
 echo "SCRIPT_DIR: $SCRIPT_DIR"
 
 mkdir -p "$REPO_ROOT/euler_outputs" "$REPO_ROOT/plots" "$REPO_ROOT/outputs/matplotlib"
+echo "Creating product/material database..."
+python "$REPO_ROOT/Database/Convert_Excel_to_DB.py"
+echo "Creating slab properties database..."
+python "$REPO_ROOT/create_slab_properties_new.py"
+echo "Running final comparison..."
 python "$SCRIPT_DIR/run_final_comparison.py"
+echo "Creating final cross-section plots..."
 python "$SCRIPT_DIR/plot_final_comparison_cross_sections.py"
+echo "Creating final comparison analysis plots..."
 python "$SCRIPT_DIR/analyze_final_comparison.py"

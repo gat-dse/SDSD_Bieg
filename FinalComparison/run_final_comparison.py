@@ -479,6 +479,10 @@ def material_quantity_diagnostics(section):
         "cost_wood_CHF_m2": number_or_empty(getattr(section, "cost_wood", "")),
         "cost_hollow_core_insulation_CHF_m2": number_or_empty(getattr(section, "cost_hollow_core_insulation", "")),
         "cost_connector_CHF_m2": number_or_empty(getattr(section, "cost_connector", "")),
+        "time_wood_h_m2": number_or_empty(getattr(section, "construction_time_wood", "")),
+        "time_hollow_core_insulation_h_m2": number_or_empty(
+            getattr(section, "construction_time_hollow_core_insulation", "")
+        ),
     }
 
 

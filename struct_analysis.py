@@ -1503,6 +1503,7 @@ class RibWood(SupStrucRibWood):
         self.hollow_core_insulation_weight = 800.0  # N/m3, Glaswolle
         self.hollow_core_insulation_gwp = 1.1  # kg CO2-eq/kg, Glaswolle
         self.hollow_core_insulation_cost = 335.0  # CHF/m3, Glaswolle
+        self.hollow_core_insulation_construction_time = 0.1  # h/m2, Glaswolle
         self.hollow_core_insulation_gk = (
             self.volume_hollow_core_insulation
             * self.hollow_core_insulation_weight
@@ -1522,7 +1523,13 @@ class RibWood(SupStrucRibWood):
         self.cost_hollow_core_insulation = self.volume_hollow_core_insulation * self.hollow_core_insulation_cost
         self.co2 = self.co2_wood + self.co2_hollow_core_insulation # [kg_CO2_eq/m]
         self.cost = self.cost_wood + self.cost_hollow_core_insulation
-        self.construction_time = self.b * self.h / self.a * self.wood_type_1.construction_time + self.t2 * self.wood_type_2.construction_time + self.t3 * self.wood_type_3.construction_time
+        self.construction_time_wood = (
+            self.b * self.h / self.a * self.wood_type_1.construction_time
+            + self.t2 * self.wood_type_2.construction_time
+            + self.t3 * self.wood_type_3.construction_time
+        )
+        self.construction_time_hollow_core_insulation = self.hollow_core_insulation_construction_time
+        self.construction_time = self.construction_time_wood + self.construction_time_hollow_core_insulation
         self.ei_b = ei_b  # stiffness perpendicular to direction of span
         self.xi = xi  # damping factor, preset value see: HBT, Page 47 (higher value for some buildups possible)
         self.h_installation = self.h # height available for installation of services. In case of box beam floor, this is the web height. 

@@ -1,6 +1,12 @@
 import sqlite3
+from pathlib import Path
 
 import pandas as pd
+
+
+REPO_ROOT = Path(__file__).resolve().parent
+DEFAULT_DATABASE_FILE = REPO_ROOT / "slab_properties.db"
+DEFAULT_EXCEL_FILE = REPO_ROOT / "Database" / "260507_CEDRUS-Platten-Resultate.xlsx"
 
 
 def create_database_slab_from_excel(database_name: str, excel_path: str, sheet_name: str | int = 0):
@@ -93,18 +99,16 @@ def show_database_contents(database_name):
 
 
 if __name__ == "__main__":
-    database_name = "slab_properties.db"
-    excel_path = "/Users/jonathanbieg/Documents/Master Thesis/1_Code/Python Repository/SDSD_Bieg/Database/260507_CEDRUS-Platten-Resultate.xlsx"
+    database_name = DEFAULT_DATABASE_FILE
+    excel_path = DEFAULT_EXCEL_FILE
     sheet_name = 0
 
     create_database_slab_from_excel(database_name, excel_path, sheet_name=sheet_name)
-    show_database_contents(database_name)
-    # show what datatypes are in the database
     connection = sqlite3.connect(database_name)
     cursor = connection.cursor()
+    cursor.execute("SELECT COUNT(*) FROM slab_properties;")
+    row_count = cursor.fetchone()[0]
     cursor.execute("PRAGMA table_info(slab_properties);")
-    print("\nDatabase table schema:")
-    for row in cursor.fetchall():
-        print(row)
+    column_count = len(cursor.fetchall())
     connection.close()
-
+    print(f"Slab properties database created: {database_name} ({row_count} rows, {column_count} columns)")
