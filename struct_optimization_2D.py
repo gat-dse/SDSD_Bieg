@@ -107,6 +107,18 @@ def best_basinhopping(func, var0, bounds, max_iter, minimizer_kwargs):
         )
         if best is None or opt.fun < best.fun:
             best = opt
+    try:
+        polish_kwargs = dict(minimizer_kwargs)
+        polish_options = dict(polish_kwargs.get("options", {}))
+        polish_options.setdefault("maxfev", max(300, 40 * len(bounds)))
+        polish_options.setdefault("xtol", 5e-5)
+        polish_options.setdefault("ftol", 5e-5)
+        polish_kwargs["options"] = polish_options
+        polished = minimize(func, best.x, **polish_kwargs)
+        if polished.fun < best.fun:
+            best = polished
+    except Exception:
+        pass
     return best
 
 

@@ -8,25 +8,28 @@
 # - Verbindung für Holz-Beton-Verbund (Jonathan Bieg)
 #
 # Abgebildete Querschnitte 1D:
-# - Betonrechteck-QS
+# - Betonrechteck-QS (Optimierung obere Bewehrungslage, Durchstanzen - Jonathan Bieg)
 # - Holzrechteck-QS
 # - Beton-Rippen-QS
 # - Holz-Hohlkasten-QS
 # - Holz-Beton-Verbund-QS (Jonathan Bieg)
+# - Betonrechteck-QS vorgespannt (Jonathan Bieg)
 #
 # Abgebildete Statische Systeme 1D:
 # - Einfacher Balken
-# - Durchlaufträger (in Bearbeitung)
+# - Durchlaufträger
 #
-#Statische Systeme 2D:
-# - Platte 4-seitig gelagert für vordefinierte Spannweiten
+#Statische Systeme 2D: Rechteckiger Grundriss
+# - Linienlager 4-seitig gelagert (eingespannt oder gelenkig) (Jonathan Bieg)
+# - Punktlager 4-seitig gelagert (eingespannt) (Jonathan Bieg)
 #
 # Weitere Klassen:
 # - Bauteil 1D
+# - Bauteil 2D (Jonathan Bieg)
 # - Bodenaufbauschicht
-# - Bodenaufbau
+# - Automatische generierung Bodenaufbau (Jonathan Bieg)
 # - Rechteckquerschnitte
-# - Anforderungen
+# - Anforderungen 
 
 import copy
 import math
@@ -37,12 +40,9 @@ from scipy.optimize import minimize, root_scalar
 from scipy.optimize import least_squares
 
 
-GRAVITY_SIMPLIFIED = 10.0
-
-
-def product_specific_weight(material):
-    return float(material.density) * GRAVITY_SIMPLIFIED
-
+#CONSTANTS--------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------
+g = 10.0 #simplified gravitational acceleration [m/s^2]
 
 
 #DEFINITONS OF MATERIAL PROPERTIES--------------------------------------------------------------------------------------
@@ -70,6 +70,7 @@ class Wood:
         self.prod_id, density, GWP, cost, construction_time = result[0]
         self.GWP = GWP/1e3  # transform unit from [kg-Co2-eq/t] to [kg-Co2-eq/kg]
         self.density = float(density)
+        self.specific_weight = self.density * g
         self.cost = cost #CHF/m3
         self.construction_time = construction_time #h/m3
         self.cost2 = 0 
@@ -115,6 +116,7 @@ class ReadyMixedConcrete:
         self.prod_id, density, GWP, cost, construction_time = result[0]
         self.GWP = GWP/1e3  # transform unit from [kg-Co2-eq/t] to [kg-Co2-eq/kg]
         self.density = float(density)
+        self.specific_weight = self.density * g
         self.cost = cost #CHF/m3
         self.cost2 = 75 #CHF/m2 additional cost for formwork (flat slabs)
         self.construction_time = construction_time #h/m3
@@ -153,6 +155,7 @@ class SteelReinforcingBar:
         self.prod_id, density, GWP, cost, construction_time = result[0]
         self.GWP = GWP/1e3  # transform unit from [kg-Co2-eq/t] to [kg-Co2-eq/kg]
         self.density = float(density)
+        self.specific_weight = self.density * g
         self.cost = cost #CHF/m3
         self.construction_time = construction_time #h/m3
         self.fsd = self.get_design_values()
@@ -183,6 +186,7 @@ class PrestressingSteel:
         self.prod_id, density, GWP, cost, construction_time = result[0]
         self.GWP = GWP/1e3  # transform unit from [kg-Co2-eq/t] to [kg-Co2-eq/kg]
         self.density = 7850.0 if density is None else float(density)
+        self.specific_weight = self.density * g
         self.cost = cost    #CHF/m3
         self.construction_time = construction_time #h/m3
         self.fp01k, self.fpd = self.get_design_values()
@@ -280,10 +284,9 @@ class SupStrucRectangular(Section):
         vu_pl = self.b * self.h * ty
         return mu_pl, vu_pl
 
-    def calc_weight(self, spec_weight):
-        #  in: specific weight [N/m^3]
-        #  out: weight of cross section per m length [N/m]
-        w = spec_weight * self.a_brutt # w: spec_weight
+    def calc_weight(self, material):
+        #  out: product-specific weight of cross section per m length [N/m]
+        w = material.specific_weight * self.a_brutt
         return w
 
 #........................................................................
@@ -299,7 +302,7 @@ class RectangularWood(SupStrucRectangular, Section):
         # directions for wood too
         self.vu_p, self.vu_n = vu_el, vu_el
         self.qs_class_n, self.qs_class_p = [3, 3]  # Required cross-section class: 1:PP, 2:EP, 3:EE
-        self.g0k = self.calc_weight(product_specific_weight(wood_type)) # dead weight of cross section [N/m]
+        self.g0k = self.calc_weight(wood_type) # dead weight of cross section [N/m]
         self.ei1 = self.wood_type.Emmean * self.iy  # elastic stiffness [Nm^2]
         self.volume_wood = self.a_brutt / self.b
         self.co2_wood = self.volume_wood * self.wood_type.GWP * self.wood_type.density
@@ -371,10 +374,7 @@ class RectangularConcrete(SupStrucRectangular):
         a_s_stat = self.as_p + self.as_n + self.as_yu + self.as_yo + 0.5 * self.as_bw
         self.joint_surcharge = jnt_srch  # surcharge for reinforcement joints, preset value is an assumption and has to be verified with literature
         a_s_tot = a_s_stat * (1 + self.joint_surcharge)  # rebar area without reinforcement joint surcharge
-        self.g0k = (
-            product_specific_weight(self.concrete_type) * (self.a_brutt - a_s_tot)
-            + product_specific_weight(self.rebar_type) * a_s_tot
-        )
+        self.g0k = self.calc_weight(self.a_brutt - a_s_tot, a_s_tot)
         co2_rebar = a_s_tot * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
         co2_concrete = (self.a_brutt - a_s_tot) * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
         self.volume_reinforcement = a_s_tot / self.b
@@ -395,6 +395,15 @@ class RectangularConcrete(SupStrucRectangular):
         self.ei2 = self.ei1 / self.f_w_ger(self.roh, self.rohs, 0, self.h, self.d)
         self.h_installation = self.h - 2*self.c_nom - self.bw[0][0] - self.bw[1][0] - self.bw[2][0] - self.bw[3][0]  # height available for installation of services
         self.w = self.g0k / self.b # weight of cross section per m2 [N/m2]
+
+    def calc_weight(self, concrete_area=None, reinforcement_area=0.0, pt_steel_area=0.0):
+        #  out: product-specific weight of reinforced cross section per m length [N/m]
+        concrete_area = self.a_brutt if concrete_area is None else max(concrete_area, 0.0)
+        return (
+            self.concrete_type.specific_weight * concrete_area
+            + self.rebar_type.specific_weight * max(reinforcement_area, 0.0)
+            + getattr(self, "pt_steel_type", self.rebar_type).specific_weight * max(pt_steel_area, 0.0)
+        )
 
     def calc_d(self):
         # Simplification: Static height is height avg height between two layers of reinforcement
@@ -638,11 +647,7 @@ class PostTensionedConcrete(RectangularConcrete):
         self.volume_reinforcement = volume_reinforcement
         self.volume_pt_steel = volume_pt_steel
         self.volume_concrete = volume_concrete
-        self.g0k = (
-            product_specific_weight(self.concrete_type) * volume_concrete
-            + product_specific_weight(self.rebar_type) * volume_reinforcement
-            + product_specific_weight(self.pt_steel_type) * volume_pt_steel
-        )
+        self.g0k = self.calc_weight(volume_concrete, volume_reinforcement, volume_pt_steel)
         self.w = self.g0k
         self.co2_rebar = co2_rebar
         self.co2_pt_steel = co2_pt_steel
@@ -1058,7 +1063,7 @@ class SupStrucRibbedConcrete(Section):
         self.a_brutt = self.calc_area()             #Bruttoquerschnittsfläche [m2]
         self.z_s = self.calc_center_of_gravity()    #center of gravity [m]
         self.iy = self.calc_moment_of_inertia()     #moment of inertia [m4]
-        self.w = self.calc_weight()/self.b          #Eigengewicht [N/m]
+        self.w = 0.0
         self.phi = phi                              #Kriechzahl
 
     def calc_area(self):
@@ -1103,12 +1108,9 @@ class SupStrucRibbedConcrete(Section):
     #def calc_strength_elast(self, fy, ty):
     #def calc_strength_plast(self, fy, ty):
 
-    def calc_weight(self,
-                    spec_weight=25000):  #README: Spec-Weight muss automatisch aus Tabelle eingelesen werden können! Ergänzen!
-        #  in: specific weight [N/m^3]
-        #  out: weight of cross section per m length [N/m]
-        w = spec_weight * self.a_brutt 
-        return w
+    def calc_weight(self, material):
+        #  out: product-specific concrete weight per m length before reinforcement correction [N/m]
+        return material.specific_weight * self.a_brutt
 
 
 #.....................................................................................
@@ -1122,7 +1124,7 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         super().__init__(section_type, b, b_w, h, h_f, l0, phi)
         self.concrete_type = concrete_type
         self.rebar_type = rebar_type
-        self.w = self.calc_weight(product_specific_weight(concrete_type)) / self.b
+        self.w = 0.0
         self.c_nom = c_nom
         self.bw = [[di_xu, s_xu], [di_xo, s_xo]]  # Slab reinforcement
         self.bw_bg = [0, 0.15, 0]  # Allow for no slab shear reinforcement
@@ -1151,10 +1153,7 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         self.joint_surcharge = jnt_srch
         a_s_tot = (a_s_slab * self.b + a_s_rib) * (1 + self.joint_surcharge)
         concrete_area = max(self.a_brutt - a_s_tot, 0.0)
-        self.g0k = (
-            product_specific_weight(self.concrete_type) * concrete_area
-            + product_specific_weight(self.rebar_type) * a_s_tot
-        )
+        self.g0k = self.calc_weight(concrete_area, a_s_tot)
         self.w = self.g0k / self.b
         co2_rebar = a_s_tot * self.rebar_type.GWP * self.rebar_type.density  # [kg_CO2_eq/m]
         co2_concrete = concrete_area * self.concrete_type.GWP * self.concrete_type.density  # [kg_CO2_eq/m]
@@ -1175,6 +1174,14 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         self.xi = xi  # XXXXXXX preset value is an assumption. Has to be verified with literature. XXXXXXX
         self.ei2 = self.ei1 / self.f_w_ger(self.roh, self.rohs, 0, self.h, self.d_PB)  #!!!!!ANPASSEN AUF PB
         self.h_installation = self.h_w # height available for installation of services. 
+
+    def calc_weight(self, concrete_area=None, reinforcement_area=0.0):
+        #  out: product-specific ribbed RC weight per rib spacing [N/m]
+        concrete_area = self.a_brutt if concrete_area is None else max(concrete_area, 0.0)
+        return (
+            self.concrete_type.specific_weight * concrete_area
+            + self.rebar_type.specific_weight * max(reinforcement_area, 0.0)
+        )
 
     def calc_d(self):
         d = self.h_f - self.c_nom - self.bw[0][0] / 2  # Statische Höhe 1. Lage Platte
@@ -1391,7 +1398,7 @@ class SupStrucRibWood(Section):
         self.n_inf = n_inf
         self.z_s = self.calc_center_of_gravity()
         self.iy, self.iy_inf = self.calc_moment_of_inertia()
-        self.w = self.calc_weight()/self.a
+        self.w = 0.0
 
     def calc_area(self):
         # in: width b and bw [m], height h and h_f[m]
@@ -1451,11 +1458,13 @@ class SupStrucRibWood(Section):
     #     #def calc_strength_elast(self, fy, ty):
     #     #def calc_strength_plast(self, fy, ty):
 
-    def calc_weight(self, spec_weight=5000):
-        #  in: specific weight [N/m^3]
-        #  out: weight of cross section per m length [N/m]
-        w = spec_weight * self.a_brutt 
-        return w
+    def calc_weight(self, rib_material, bottom_material, top_material):
+        #  out: product-specific timber hollow-core weight per floor area [N/m2]
+        return (
+            self.b * self.h / self.a * rib_material.specific_weight
+            + self.t2 * bottom_material.specific_weight
+            + self.t3 * top_material.specific_weight
+        )
 
 #................................................................
 class RibWood(SupStrucRibWood):
@@ -1485,11 +1494,7 @@ class RibWood(SupStrucRibWood):
         self.vu_p, self.vu_n = vu_el, vu_el
 
         self.qs_class_n, self.qs_class_p = [3, 3]  # Required cross-section class: 1:=PP, 2:EP, 3:EE
-        self.g0k = (
-            self.b * self.h / self.a * product_specific_weight(wood_type_1)
-            + self.t2 * product_specific_weight(wood_type_2)
-            + self.t3 * product_specific_weight(wood_type_3)
-        )
+        self.g0k = self.calc_weight(wood_type_1, wood_type_2, wood_type_3)
         self.w = self.g0k
         self.ei1 = self.wood_type_1.Emmean * self.iy  # elastic stiffness [Nm^2], Zeitpunkt t = 0
 
@@ -1653,7 +1658,7 @@ class SupStrucTCC(Section): #takes the geometric parameters of the TCC cross-sec
         self.A_c = self.calc_area(h_c, self.b_ceff)  # area of concrete layer according to effective width [m^2]
         self.I_yw = self.calc_moment_of_inertia(h_w, b_w)  # moment of inertia of timber beam [m^4]
         self.I_yc = self.calc_moment_of_inertia(h_c, self.b_ceff)  # moment of inertia of concrete layer according to effective width [m^4]
-        self.w = self.calc_weight()  # weight of cross section per m length [N/m]
+        self.w = 0.0
 
     def calc_beff(self, a_ribs, b_w, l0):
         # in: spacing of timber beams [m], width of timber beams [m]
@@ -1674,11 +1679,19 @@ class SupStrucTCC(Section): #takes the geometric parameters of the TCC cross-sec
         I_y = b * h**3 / 12
         return I_y
     
-    def calc_weight(self, spec_weight_w=5000, spec_weight_c=25000):
-        # in: specific weight of timber [N/m^3], specific weight of concrete [N/m^3]
-        # out: weight of cross section per m length [N/m]
-        w = (spec_weight_w * self.A_w + spec_weight_c * self.h_c * self.a_ribs) / self.a_ribs
-        return w
+    def calc_weight(self, wood_material, concrete_material, rebar_material=None, wood_volume=None,
+                    concrete_volume=None, reinforcement_volume=0.0):
+        # out: product-specific TCC weight per floor area [N/m2]
+        wood_volume = self.A_w / self.a_ribs if wood_volume is None else max(wood_volume, 0.0)
+        concrete_volume = self.h_c if concrete_volume is None else max(concrete_volume, 0.0)
+        rebar_weight = 0.0
+        if rebar_material is not None:
+            rebar_weight = rebar_material.specific_weight * max(reinforcement_volume, 0.0)
+        return (
+            wood_material.specific_weight * wood_volume
+            + concrete_material.specific_weight * concrete_volume
+            + rebar_weight
+        )
     
 class TCC(SupStrucTCC):
     def __init__(self, concrete_type, rebar_type, wood_type, connector_type, s, a_ribs, h_c, h_w, b_w, d, l0, xi=0.02, ):
@@ -1720,10 +1733,13 @@ class TCC(SupStrucTCC):
                                   + wood_volume * self.wood_type.construction_time
                                   + concrete_volume * self.concrete_type.construction_time
                                   + self.as_rebar * self.rebar_type.construction_time)  # [h/m2]
-        self.g0k = (
-            product_specific_weight(self.wood_type) * wood_volume
-            + product_specific_weight(self.concrete_type) * concrete_volume
-            + product_specific_weight(self.rebar_type) * self.as_rebar
+        self.g0k = self.calc_weight(
+            self.wood_type,
+            self.concrete_type,
+            self.rebar_type,
+            wood_volume,
+            concrete_volume,
+            self.as_rebar,
         )
         self.w = self.g0k
         self.ei1 = self.EI_SLS[0]  # elastic stiffness at t=0 for SLS checks
@@ -3228,7 +3244,10 @@ class Member2D:
         finally:
             if original_bw_bg is not None:
                 self.section.bw_bg = original_bw_bg
-        self.punching_vrds_required = max(v_ed - v_rd_without_s, 0.0)
+        punching_deficit = max(v_ed - v_rd_without_s, 0.0)
+        # SIA 262 punching reinforcement: once punching reinforcement is
+        # required, use at least Vd/2 as minimum reinforcement resistance.
+        self.punching_vrds_required = max(punching_deficit, 0.5 * v_ed) if punching_deficit > 0.0 else 0.0
         return self.punching_vrds_required
 
     def calc_qk_zul_gzt(self, gamma_g=1.35, gamma_q=1.5):

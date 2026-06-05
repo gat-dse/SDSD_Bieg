@@ -617,6 +617,7 @@ def member_summary_row(case_name, scenario, system, criterion, optimum, variant,
         "geometry": geometry_description(section),
         "materials": material_description(section),
         "floor_buildup": floor_description(member),
+        "I_y_m4_m": number_or_empty(getattr(section, "iy", getattr(section, "I_yw", ""))),
         "qk_zul_gzt_kN_m2": number_or_empty(qk_zul, scale=1 / 1000),
         "qk_zul_bending_gzt_kN_m2": number_or_empty(getattr(member, "qk_zul_bending_gzt", ""), scale=1 / 1000),
         "qk_zul_shear_gzt_kN_m2": number_or_empty(getattr(member, "qk_zul_shear_gzt", ""), scale=1 / 1000),
@@ -636,6 +637,8 @@ def member_summary_row(case_name, scenario, system, criterion, optimum, variant,
         "punching_V_Rd_s_required_kN": punching_vrds_required,
         "punching_A_ds_req_m2_per_column": number_or_empty(getattr(member, "punching_a_ds_req_m2", "")),
         "punching_steel_volume_m3_m2": number_or_empty(getattr(member, "punching_steel_volume_m3_m2", "")),
+        "shear_reinforcement_volume_m3_m2": number_or_empty(getattr(member, "shear_reinforcement_volume_m3_m2", "")),
+        "punching_steel_additional_volume_m3_m2": number_or_empty(getattr(member, "punching_steel_additional_volume_m3_m2", "")),
         "punching_steel_GWP_kgCO2eq_m2": number_or_empty(getattr(member, "punching_steel_co2_kgCO2eq_m2", "")),
         "punching_steel_cost_CHF_m2": number_or_empty(getattr(member, "punching_steel_cost_CHF_m2", "")),
         "punching_steel_time_h_m2": number_or_empty(getattr(member, "punching_steel_time_h_m2", "")),
@@ -1007,6 +1010,7 @@ def export_excel_summary(output_dir, variant_rows, envelope_rows, best_rows):
         {"key": "diagnostics_sls2_raw_values", "value": "SLS2 raw values, limits, margins and sls2_debug_note are exported so frequency-governed TCC rows can be debugged without rerunning the optimizer."},
         {"key": "diagnostics_floor_buildup", "value": "Floor height, mass, GWP and cost contributions and shares are exported to separate structural and acoustic build-up effects."},
         {"key": "diagnostics_reinforcement", "value": "Rebar diameter and spacing summary columns make the continuous optimizer choices visible, including the PT bonded reinforcement floor."},
+        {"key": "punching_reinforcement_accounting", "value": "For point-supported rc_rec and pc_rec slabs, GWP, cost and construction time count max(averaged shear reinforcement, required punching reinforcement). The exported punching add-on is therefore max(punching - already counted shear, 0)."},
         {"key": "pt_min_reinforcement_diagnostics", "value": "For pc_rec rows, pt_eta_Mcr_MRd now uses the ordinary RC cracking moment without prestress as the bonded minimum-reinforcement target; pt_Mcr_kNm_m still reports Mcr,PT for serviceability cracking/stiffness."},
         {"key": "note", "value": "Envelope borders identify the member variant forming the lower or upper plot boundary at each span."},
     ]
@@ -1074,7 +1078,7 @@ def main():
                 SUMMARY_METRICS,
                 "ENV_comparison",
             ))
-            env_best = select_best_by_length(env_series, "gwp_total")
+            env_best = select_best_by_length(design_series + env_series, "gwp_total")
             for idx, length in enumerate(env_best["lengths"]):
                 if env_best["members"][idx] is None:
                     best_rows.append({
