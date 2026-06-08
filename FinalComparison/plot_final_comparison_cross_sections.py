@@ -297,6 +297,91 @@ def floor_label(name):
     return name.split(",", 1)[0].strip()
 
 
+def safe_float(value, default=0.0):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return default
+    if pd.isna(value):
+        return default
+    return value
+
+
+def contribution_text(row, total_column, total_label, total_unit, components):
+    total = safe_float(row.get(total_column, 0.0))
+    if total <= 0:
+        return ""
+    parts = []
+    for label, column in components:
+        value = safe_float(row.get(column, 0.0))
+        if abs(value) <= 1e-6:
+            continue
+        parts.append(f"{label} {100 * value / total:.0f}%")
+    if not parts:
+        return ""
+    return f"{total_label}: {total:.1f} {total_unit} " + " | ".join(parts)
+
+
+def gwp_contribution_text(row):
+    return contribution_text(
+        row,
+        "GWP_total [kg-CO2-eq/m2]",
+        "GWP$_{total}$",
+        "kgCO$_2$-eq/m$^2$",
+        [
+            ("Concrete", "co2_concrete_kgCO2eq_m2"),
+            ("Rebar", "co2_rebar_kgCO2eq_m2"),
+            ("PT steel", "co2_pt_steel_kgCO2eq_m2"),
+            ("Timber", "co2_wood_kgCO2eq_m2"),
+            ("Hollow-core insulation", "co2_hollow_core_insulation_kgCO2eq_m2"),
+            ("Connector", "co2_connector_kgCO2eq_m2"),
+            ("Punching steel", "punching_steel_GWP_kgCO2eq_m2"),
+            ("Floor build-up", "floor_GWP_kgCO2eq_m2"),
+        ],
+    )
+
+
+def cost_contribution_text(row):
+    return contribution_text(
+        row,
+        "cost_total [CHF/m2]",
+        "Cost$_{total}$",
+        "CHF/m$^2$",
+        [
+            ("Concrete", "cost_concrete_CHF_m2"),
+            ("Rebar", "cost_rebar_CHF_m2"),
+            ("PT steel", "cost_pt_steel_CHF_m2"),
+            ("Timber", "cost_wood_CHF_m2"),
+            ("Hollow-core insulation", "cost_hollow_core_insulation_CHF_m2"),
+            ("Connector", "cost_connector_CHF_m2"),
+            ("Punching steel", "punching_steel_cost_CHF_m2"),
+            ("Floor build-up", "floor_cost_CHF_m2"),
+        ],
+    )
+
+
+def time_contribution_text(row):
+    total = safe_float(row.get("time_total [h/m2]", 0.0))
+    floor = safe_float(row.get("floor_construction_time_h_m2", 0.0))
+    hollow_core = safe_float(row.get("time_hollow_core_insulation_h_m2", 0.0))
+    punching = safe_float(row.get("punching_steel_time_h_m2", 0.0))
+    detailed = floor + hollow_core + punching
+    structural = max(total - detailed, 0.0)
+    parts = []
+    for label, value in (
+        ("Structural", structural),
+        ("Hollow-core insulation", hollow_core),
+        ("Punching steel", punching),
+        ("Floor build-up", floor),
+    ):
+        if abs(value) <= 1e-6:
+            continue
+        parts.append(f"{label} {100 * value / total:.0f}%")
+    if total <= 0 or not parts:
+        return ""
+    return f"Time$_{{total}}$: {total:.2f} h/m$^2$ " + " | ".join(parts)
+
+
 def layer_color(name):
     lower = name.lower()
     if "kies" in lower or "gravel" in lower:
@@ -710,18 +795,25 @@ def draw_cross_section(ax, row, x_center, total_top, name_y, text_y, scale):
     material_text = material_short(row)
     floor_text = " | ".join(f"{floor_label(name)}: {height * 1000:.0f} mm" for name, height in floor_layers)
     static_system = static_system_text(row)
-    below_lines = [
-        f"{row.get('description', '')}",
-        f"Static system: {static_system}",
-    ]
+    below_lines = [f"Static system: {static_system}"]
     rebar_text = rebar_description(row)
     if rebar_text:
         below_lines.append(rebar_text)
     punching_vrds = row.get("punching_V_Rd_s_required_kN", "")
     if str(row.get("section_type", "")) in ("rc_rec", "pc_rec") and not pd.isna(punching_vrds) and str(punching_vrds).strip():
         below_lines.append(f"Punching: req. V$_{{Rd,s}}$={float(punching_vrds):.0f} kN")
-    below_lines.extend([material_text, f"Floor build-up: {floor_text}"])
-    below = "\n".join(line for line in below_lines if line)
+    below_lines.extend(["", material_text, "", f"Floor build-up: {floor_text}"])
+    metric_lines = [
+        text for text in (
+            gwp_contribution_text(row),
+            cost_contribution_text(row),
+            time_contribution_text(row),
+        )
+        if text
+    ]
+    if metric_lines:
+        below_lines.extend(["", *metric_lines])
+    below = "\n".join(below_lines).strip()
     text_x = dim_x_total
     text_width = dim_x_struct - dim_x_total
     wrap_width = max(36, int(text_width / 1.24 * 40))
@@ -751,7 +843,7 @@ def plot_case(df, case_name, span):
         n_cols = 3
         n_rows = (n + n_cols - 1) // n_cols
         column_spacing = 3.05
-        row_height = max(3.05, max_total_height * scale + 2.25)
+        row_height = max(4.65, max_total_height * scale + 3.85)
         x_positions = [1.35 + (idx % n_cols) * column_spacing for idx in range(n)]
         row_bases = [(n_rows - 1 - idx // n_cols) * row_height for idx in range(n)]
         total_tops = [base + max_total_height * scale + 1.18 for base in row_bases]

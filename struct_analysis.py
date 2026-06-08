@@ -1709,7 +1709,7 @@ class TCC(SupStrucTCC):
         self.Mu = self.calc_mu() #Nm/m'
         self.Vu = self.calc_vu() #N/m'
 
-        self.rebar_d = 0.010
+        self.rebar_d = 0.006
         self.rebar_s = 0.150
         self.rebar_layers = 4 if self.h_c > 0.12 else 2
         self.as_rebar = self.calc_tcc_rebar_area(self.rebar_d, self.rebar_s, self.rebar_layers)

@@ -5,8 +5,8 @@ Inputs are defined in final_comparison_inputs.py.
 Generated plots:
 - one 1x1 single-system plot per case/system:
   GWP_struct over span for ULS, SLS1, SLS2 and FIRE
-- one 4x2 ENV comparison plot per case:
-  structural and total values for GWP, height, mass and cost
+- one 5x2 ENV comparison plot per case:
+  structural and total values for GWP, height, mass, cost and time
 """
 
 import os
@@ -78,6 +78,8 @@ CRITERION_LINE_STYLES = {
 
 BAND_ALPHA_SINGLE = 0.72
 BAND_ALPHA_COMPARISON = 0.45
+COST_TIME_UNCERTAINTY_LOW = 0.80
+COST_TIME_UNCERTAINTY_HIGH = 1.20
 
 SUMMARY_METRICS = [
     ("gwp_struct", "GWP_struct [kg-CO2-eq/m2]"),
@@ -712,9 +714,29 @@ def envelope_by_length(series, key, require_uls_feasible=False, criterion="ULS")
 
 
 def draw_envelope_lines(ax, envelope, color):
-    ax.plot(envelope["lengths"], envelope["median"], color=color, linewidth=1.55, alpha=0.95, zorder=3)
+    ax.plot(
+        envelope["lengths"],
+        envelope["median"],
+        color=color,
+        linewidth=1.55,
+        alpha=0.95,
+        marker="o",
+        markersize=3.8,
+        markerfacecolor="white",
+        markeredgecolor=color,
+        markeredgewidth=0.75,
+        zorder=4,
+    )
     ax.plot(envelope["lengths"], envelope["min"], color=color, linewidth=0.55, alpha=0.62, zorder=2)
     ax.plot(envelope["lengths"], envelope["max"], color=color, linewidth=0.55, alpha=0.62, zorder=2)
+
+
+def is_cost_or_time_metric(key):
+    return key.startswith("cost_") or key.startswith("time_")
+
+
+def uncertainty_scaled(values, factor):
+    return [float("nan") if pd.isna(value) else value * factor for value in values]
 
 
 def draw_single_criterion_envelope(ax, envelope, color, criterion):
@@ -944,8 +966,24 @@ def plot_env_comparison(case_name, scenario, env_results, output_dir):
         for item in env_results:
             color = item["color"]
             envelope = envelope_by_length(item["series"], key, require_uls_feasible=True, criterion="ENV")
-            y_values.extend(envelope["min"])
-            y_values.extend(envelope["max"])
+            if is_cost_or_time_metric(key):
+                uncertainty_min = uncertainty_scaled(envelope["min"], COST_TIME_UNCERTAINTY_LOW)
+                uncertainty_max = uncertainty_scaled(envelope["max"], COST_TIME_UNCERTAINTY_HIGH)
+                y_values.extend(uncertainty_min)
+                y_values.extend(uncertainty_max)
+                ax.fill_between(
+                    envelope["lengths"],
+                    uncertainty_min,
+                    uncertainty_max,
+                    facecolor=color,
+                    edgecolor="none",
+                    linewidth=0.0,
+                    alpha=0.12,
+                    zorder=1,
+                )
+            else:
+                y_values.extend(envelope["min"])
+                y_values.extend(envelope["max"])
             ax.fill_between(
                 envelope["lengths"],
                 envelope["min"],
@@ -973,10 +1011,16 @@ def plot_env_comparison(case_name, scenario, env_results, output_dir):
         )
         for item in env_results
     ]
+    handles.append(Patch(
+        facecolor="#777777",
+        edgecolor="none",
+        alpha=0.12,
+        label="cost/time: Tri(0.8, 1.0, 1.2) range",
+    ))
     fig.suptitle(
         f"{scenario['label']}, q$_k$={scenario['qk'] / 1000:.1f} kN/m$^2$ - ENV comparison\n"
         f"n$_{{iter}}$={inputs.MAX_ITER}/{inputs.HIGH_ITER}, "
-        f"envelopes of geometry and material/product variants",
+        f"envelopes of geometry and material/product variants; cost/time show early-design +/-20% range",
         y=0.992,
     )
     fig.legend(

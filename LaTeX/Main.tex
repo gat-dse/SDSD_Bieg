@@ -1,0 +1,144 @@
+\input{Laborbericht_header}
+%Master thesis Jonathan Bieg 2026
+
+
+\begin{document}
+
+% Anfang der Titelseite________________________________________________________________________________
+\begin{titlepage}
+\newcommand{\HRule}{\rule{\linewidth}{0.6mm}}
+
+%\begin{center}
+
+% --- Logo ---
+\vspace*{-1cm}
+\begin{flushleft}
+\begin{minipage}{0.6\textwidth}
+    \includegraphics[width=0.5\linewidth]{IMAGES/eth-logo-pos.png}
+\end{minipage}
+\begin{minipage}{0.35\textwidth}
+    \raggedleft
+    \includegraphics[width=0.4\linewidth]{IMAGES/IBK_Logo.jpg}
+\end{minipage}
+\end{flushleft}
+
+\vspace{1cm}
+
+% --- Title ---
+%\HRule \\[0.8cm]
+    \begin{tcolorbox}[
+        colback=ETHgreen!80,   % ETH Blue at 20% opacity
+        colframe=ETHgreen!80,  % same colour as background to hide the frame
+        width=1\textwidth,  % adjust width as desired
+        boxrule=0pt,          % no border
+        arc=0pt,              % rounded corners
+        left=2em,             % left padding
+        right=2em,            % right padding
+        top=1.2em,            % top padding
+        bottom=1.2em          % bottom padding
+    ]
+    \vspace{1.5cm}
+    \raggedright
+    \color{white}
+    {\Large\textbf{Multi-criteria sustainability optimisation of floor slabs}\\ %floor systems?
+    
+    \large Beyond structural performance in early-stage design\\[1ex]
+    \vspace{8mm}
+     \large Master Thesis, 29 June 2026\\[1ex]}
+     \vspace{0.8cm}
+    \end{tcolorbox}
+    \vspace{-0.3cm}
+
+%\HRule \\[2.0cm]
+
+% --- Project Information ---
+{\Large \textbf{}}\\[0.0cm]
+
+% --- Author Information ---
+{\large \textbf{Author}}\\[0.15cm]
+{\large Jonathan Bieg}\\ [0cm]
+{\large 20-950-374}\\ [0cm]
+{\large jobieg@ethz.ch}\\[0.6cm]
+
+
+% --- Institution ---
+{\large \textbf{ETH Zürich}}\\[0.15cm]
+{\large Department of Civil, Environmental and Geomatic Engineering}\\[0cm]
+{\large Institute of Structural Engineering}\\[0cm]
+{\large Chair of Concrete Structures and Bridge Design}\\[0.6cm]
+
+% --- Supervisors ---
+{\large \textbf{Supervisors}}\\[0cm]
+{\large Prof. Dr. Walter Kaufmann}\\[0cm]
+{\large Dr. Tena Galkovski}\\[0cm]
+{\large Anna Hodel}
+
+
+% --- Optional footer (e.g., date/location) ---
+%{\large Zürich, October 2025}
+
+%\end{center}
+\end{titlepage}
+
+
+\pagenumbering{Roman}
+\makeatletter \renewcommand*{\chapterheadstartvskip}{\vspace{\dimexpr\@tempskipa-3\baselineskip}}
+
+%\include{Acknowledgement}
+\chapter*{Abstract}
+...
+
+ \tableofcontents
+ \clearpage
+
+% Chapters______________________________________________________________________
+\setlength{\parskip}{1em} 
+\pagenumbering{arabic}				% Begin arabic page numbering (1,2,...)
+
+\include{Introduction}
+
+\newpage
+\include{LiteratureReview}
+
+\newpage
+\include{MaterialsAndMethods}
+
+\newpage
+\include{ResultsAndAnalysis}
+
+\newpage
+\include{Conclusion}
+
+
+
+
+% Bibliography__________________________________________________________________
+% Literature (Additional references can be added to the .bib-file manually, or by using, for example, the free application JabRef). 
+% \makeatletter \renewcommand*{\chapterheadstartvskip}{\vspace{\dimexpr\@tempskipa-10\baselineskip}} %letzte quelle noch quetschen
+%%%%%
+{\scriptsize
+\bibliographystyle{unsrtnat}
+\bibliography{bibliography}
+}
+\makeatletter \renewcommand*{\chapterheadstartvskip}{\vspace{\dimexpr\@tempskipa-3\baselineskip}}
+% Temporarily prevent page breaks
+\begingroup
+  \let\cleardoublepage\relax
+  \let\clearpage\relax
+
+  % Center the lists vertically
+  \vspace*{\fill}
+
+  \listoffigures
+  \vspace{1em} % small space between lists
+  \listoftables
+
+  \vspace*{\fill} % fill space below so lists appear nicely in the middle
+\endgroup
+
+
+% Anhang______________________________________________________________________
+\appendix
+\input{Appendix} %für umfangreiche Rohdaten oder Prozedurenbeschreibungen
+
+\end{document}

@@ -485,8 +485,8 @@ def opt_wd_rib(m, to_opt="GWP", criterion="ULS", max_iter=100):
     # TODO: Stimmen die Randbedingungen der Schichtdicken so gemäss Lignum? Ist zu verifizieren!
     # TODO: Ev. Fallunterscheidung -> Falls unten GFP vorhanden, gem. aktuellem Stand, falls nicht, dann 2. Fall definieren.
     bh = (0.40, 2.0)  # height of rib between 40 cm and 200 cm
-    bb = (0.1, 0.52)  # width of rib between 10 cm (minimal requirement b x h = 100 x 220 for R60 according to Lignum 4.1, Table 433-2,
-    # Column G) and 52 cm
+    bb = (0.1, 0.24)  # width of rib between 10 cm (minimal requirement b x h = 100 x 220 for R60 according to Lignum 4.1, Table 433-2,
+    # Column G) and 24 cm
     bt2 = (0.025, 0.16)  # hight of lower sheating between 2.5 cm (minimal requirement for R60 according to Lignum 4.1, Table 433-2,
     # Column G) and 16 cm
     bt3 = (0.027, 0.16)  # hight of lower sheating between 2.7 cm (minimal requirement for R60 according to Lignum 4.1, Table 433-2,

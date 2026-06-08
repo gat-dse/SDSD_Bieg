@@ -144,7 +144,7 @@ CATALOG = [
         "title": "Ribbed Timber Hollow Core",
         "systems": {"Ribbed timber hollow core"},
         "optimized": [
-            "$b$: rib width, $0.10$--$0.52\\,\\mathrm{m}$",
+            "$b$: rib width, $0.10$--$0.24\\,\\mathrm{m}$",
             "$h$: rib height, $0.40$--$2.00\\,\\mathrm{m}$",
             "$t_2$: top plate, $25$--$160\\,\\mathrm{mm}$",
             "$t_3$: bottom plate, $27$--$160\\,\\mathrm{mm}$",
