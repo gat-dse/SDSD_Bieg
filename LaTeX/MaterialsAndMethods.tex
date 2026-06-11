@@ -125,9 +125,11 @@ It is noted that the slab configurator is used as a comparative design tool. It 
 
 
 \subsection{Material database}
-The material database was selected by the Sustainability in Structural Design Team of \textit{kfmResearch} \cite{kfmResearch2026}. It contains mechanical material properties and product-specific environmental data. Environmental Product Declarations (EPDs) are stored on product level and are linked to the mechanical property classes used by the structural models. The database therefore allows a distinction between mechanical performance and producer-specific environmental impact. For concrete, reinforcing steel, prestressing steel, and timber products, the database stores product density, material class and total GWP values. These properties enable the assessment of producer-specific GWP, mass, and structural height, including product-specific variations. As identified in the literature review, GWP, mass, and height are key indicators for the sustainability assessment of floor systems.
+The material database was compiled by the Sustainability in Structural Design Team of \textit{kfmResearch} \cite{kfmResearch2026}. It separates mechanical material classes from product-specific environmental data. Mechanical properties are assigned through the material class used by the structural model, whereas density and total global warming potential (GWP) are stored for individual Environmental Product Declarations (EPDs). This structure allows products with the same structural performance to be compared without assigning their producer-specific environmental values to a different strength class.
 
-The range of product-specific GWP values stored in the database is summarised in Table~\ref{tab:product_specific_gwp_values}. Negative values occur for timber products where biogenic carbon storage is included in the reported GWP. Each product is assigned to a material class, which defines the corresponding mechanical and physical properties listed in Table~\ref{tab:material_properties}.
+The assessment does not use every EPD contained in the database. Table~\ref{tab:product_specific_gwp_values} includes only the product records that can enter the final comparison. These comprise the EPDs selected for the deterministic material variants and the additional records available to the empirical uncertainty-quantification pools. Records are retained only when density and mechanical class are available, the statistical-selection flag is active, and the source is not classified as Betonsortenrechner, Ecoinvent or KBOB. Within this filtered dataset, uncertainty sampling remains restricted to the same material and mechanical-property class. Density and GWP are sampled jointly from the same product record.
+
+The database product IDs in Table~\ref{tab:product_specific_gwp_values} provide an unambiguous link to the underlying EPD identifier, producer and product name stored in \texttt{database\_260126.db}. The reported ranges therefore describe only the EPD records used by the deterministic comparison or the UQ analysis, rather than the full contents of the material database.
 
 \begin{table*}[h]
     \centering
@@ -138,33 +140,37 @@ The range of product-specific GWP values stored in the database is summarised in
     \begin{tabularx}{\textwidth}{@{}
         >{\raggedright\arraybackslash}X
         |>{\raggedright\arraybackslash}X
-        |c|r|r@{}}
+        |>{\raggedright\arraybackslash}X
+        |c|r|r|r@{}}
     \hline
     \textbf{Material} &
     \textbf{Material class} &
-    \textbf{Products} &
+    \textbf{Database product IDs} &
+    \textbf{EPDs} &
+    \textbf{$\rho_{\min}$--$\rho_{\max}$} &
     \textbf{$GWP_{\min}$} &
     \textbf{$GWP_{\max}$} \\
     &
     &
     &
+    -- &
+    kg/m$^3$ &
     kg CO$_2$-eq/t &
     kg CO$_2$-eq/t \\
     \hline
 
-    Ready-mixed concrete & C20/25 & 7  & 77.0   & 102.4 \\
-    Ready-mixed concrete & C25/30 & 8  & 75.4   & 100.1 \\
-    Ready-mixed concrete & C30/37 & 9  & 76.7   & 104.2 \\
-    Reinforcing steel    & B500B  & 18 & 352.9  & 922.7 \\
-    Prestressing steel   & Y1860  & 9  & 389.0  & 2250.0 \\
-    Glue-laminated timber& GL24h  & 21 & -1534.9& 765.5 \\
-    Solid structural timber & C24 & 10 & 75.7   & 363.0 \\
-    3- and 5-ply wood    & C24    & 13 & -66.2  & 556.0 \\
-    3- and 5-ply wood    & GL24h  & 3  & 250.0  & 415.6 \\
+    Ready-mixed concrete & C20/25 & 23 & 1 & 2440 & 77.0 & 77.0 \\
+    Ready-mixed concrete & C25/30 & 24, 26, 27 & 3 & 2400--2439 & 78.7 & 87.3 \\
+    Ready-mixed concrete & C30/37 & 25 & 1 & 2347 & 87.2 & 87.2 \\
+    Reinforcing steel & B500B & 38, 39, 42, 46--49 & 7 & 7850 & 460.2 & 618.2 \\
+    Prestressing steel & Y1860 & 121, 124, 128 & 3 & 7850 & 588.0 & 1309.0 \\
+    Glue-laminated timber & GL24h & 67, 69--71, 88, 90--92 & 8 & 424--480 & 116.6 & 319.9 \\
+    Solid structural timber & C24 & 73 & 1 & 470 & 137.1 & 137.1 \\
+    3- and 5-ply wood & C24 & 77, 80, 82, 83, 87 & 5 & 470 & 170.3 & 418.1 \\
     \hline
     \end{tabularx}
     \endgroup
-    \caption{Product-specific GWP values used for the sustainability assessment.}
+    \caption{EPD product records used by the deterministic final comparison or its empirical UQ pools. Product IDs refer to \texttt{database\_260126.db}; GWP is the product-specific total GWP per unit mass.}
     \label{tab:product_specific_gwp_values}
 \end{table*}
 
@@ -208,7 +214,7 @@ The range of product-specific GWP values stored in the database is summarised in
     -- &
     -- &
     30 &
-    2241–2440 &
+    2440 &
     -- &
     2.5 &
     -- &
@@ -221,7 +227,7 @@ The range of product-specific GWP values stored in the database is summarised in
     -- &
     -- &
     32 &
-    2242–2439 &
+    2400--2439 &
     -- &
     2.5 &
     -- &
@@ -234,7 +240,7 @@ The range of product-specific GWP values stored in the database is summarised in
     -- &
     -- &
     34 &
-    2332–2430 &
+    2347 &
     -- &
     2.5 &
     -- &
@@ -260,21 +266,8 @@ The range of product-specific GWP values stored in the database is summarised in
     24 &
     1.8 &
     11.5 &
-    424–483 &
+    424--480 &
     0.7 &
-    0.6 &
-    -- &
-    -- &
-    -- \\
-
-    C16 &
-    -- &
-    -- &
-    16 &
-    1.5 &
-    8.0 &
-    500 &
-    0.8 &
     0.6 &
     -- &
     -- &
@@ -286,7 +279,7 @@ The range of product-specific GWP values stored in the database is summarised in
     24 &
     1.5 &
     11.0 &
-    400–523 &
+    470 &
     0.8 &
     0.6 &
     -- &
@@ -306,32 +299,6 @@ The range of product-specific GWP values stored in the database is summarised in
     -- &
     -- \\
 
-    DBS\_6 &
-    -- &
-    -- &
-    -- &
-    -- &
-    -- &
-    -- &
-    -- &
-    -- &
-    Screw &
-    6 &
-    $5.83 \times 10^6$ \\
-
-    DBS\_8 &
-    -- &
-    -- &
-    -- &
-    -- &
-    -- &
-    -- &
-    -- &
-    -- &
-    Screw &
-    8 &
-    $7.78 \times 10^6$ \\
-
     DBS\_10 &
     -- &
     -- &
@@ -344,19 +311,6 @@ The range of product-specific GWP values stored in the database is summarised in
     Screw &
     10 &
     $9.70 \times 10^6$ \\
-
-    DBS\_12 &
-    -- &
-    -- &
-    -- &
-    -- &
-    -- &
-    -- &
-    -- &
-    -- &
-    Screw &
-    12 &
-    $1.167 \times 10^7$ \\
 
     Kerve\_20 &
     -- &
@@ -439,7 +393,7 @@ The range of product-specific GWP values stored in the database is summarised in
     \hline
     \end{tabularx}
     \endgroup
-    \caption{Mechanical properties data on characteristic design level. Mass is stored producer-specific.}
+    \caption{Mechanical and physical properties used in the final comparison. Product density is taken from the EPD records listed in Table~\ref{tab:product_specific_gwp_values}; only employed material classes, connector types and floor-build-up materials are shown.}
     \label{tab:material_properties}
 \end{table*}
 
@@ -1210,7 +1164,7 @@ The implemented acoustic model is intentionally simplified. A fully spectral pre
 
 \subsection{Final comparison setup}
 
-The final comparison was defined through a set of residential and office cases with fixed load levels, discrete span values, structural systems and material groups. The cases are summarised in Table~\ref{tab:final_comparison_cases}. The corresponding start values, optimisation variables and bounds are listed in Table~\ref{tab:final_comparison_bounds}. This separation keeps the comparison inputs transparent: Table~\ref{tab:final_comparison_cases} defines which systems are compared, while Table~\ref{tab:final_comparison_bounds} defines how each system is optimised.
+The final comparison was defined through a set of residential and office cases with fixed load levels, discrete span values and structural systems. The cases are summarised in Table~\ref{tab:final_comparison_cases}; the materials and fixed geometric inputs are shown in the cross-section catalogue. The corresponding start values, optimisation variables and bounds are listed in Table~\ref{tab:final_comparison_bounds}. This separation keeps the comparison inputs transparent: Table~\ref{tab:final_comparison_cases} defines which systems are compared, while Table~\ref{tab:final_comparison_bounds} defines how each system is optimised.
 
 \begin{table*}[t]
     \centering
@@ -1218,80 +1172,69 @@ The final comparison was defined through a set of residential and office cases w
     \scriptsize
     \setlength{\tabcolsep}{3.5pt}
     \renewcommand{\arraystretch}{1.2}
-    \begin{tabularx}{\textwidth}{@{}l|c|l|>{\hsize=0.7\hsize\raggedright\arraybackslash}X|>{\hsize=0.7\hsize\raggedright\arraybackslash}X|>{\hsize=0.8\hsize\raggedright\arraybackslash}X|>{\hsize=1.8\hsize\raggedright\arraybackslash}X@{}}
+    \begin{tabularx}{\textwidth}{@{}l|c|l|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}X@{}}
     \hline
     \textbf{Case} &
     \textbf{$q_k$} &
     \textbf{Span} &
     \textbf{Cross-section} &
     \textbf{Description} &
-    \textbf{Structural system} &
-    \textbf{Materials / fixed input} \\
-    & kN/m$^2$ & m & & & & \\ \hline
+    \textbf{Structural system} \\
+    & kN/m$^2$ & m & & & \\ \hline
     Residential & 2.0 & 3, 5, 6, 7, 8, 10 &
-    Rectangular concrete &
+    Rectangular concrete* &
     conventionally reinforced &
-    2-way, full continuity, walls &
-    ready-mixed concrete, B500B; fixed line supports \\
+    2-way, full continuity, walls \\
 
     Residential & 2.0 & 3, 5, 6, 7, 8, 10 &
-    Rectangular concrete PT &
-    post-tensioned, distributed layout &
-    2-way, full continuity, walls &
-    ready-mixed concrete, B500B, Y1860; layout $[0,1,0,1]$; fixed line supports\\
+    Post-tensioned concrete &
+    distributed tendon layout &
+    2-way, full continuity, walls \\
 
     Residential & 2.0 & 3, 5, 6, 7, 8, 10 &
-    Rectangular wood &
-    BSH &
-    Simple span &
-    glue-laminated timber and solid structural timber; fire from bottom \\
+    Rectangular timber* &
+    glue-laminated timber &
+    Simple span \\
 
     Residential & 2.0 & 3, 5, 6, 7, 8, 10 &
-    TCC &
-    BSH, kerve, $s=0.50$\,m &
-    Simple span &
-    ready-mixed concrete, B500B, BSH, kerve; $a_{\mathrm{ribs}}=1.00$\,m, $b_w=1.00$\,m \\
+    TCC flat, kerve &
+    glue-laminated timber; connector: 20\,mm kerve (30\,mm for $L_0>7$\,m) &
+    Simple span \\
 
     Residential & 2.0 & 3, 5, 6, 7, 8, 10 &
-    TCC &
-    ribs, DBS\_10, $s=0.06$\,m (2 rows $s=0.12$\,m) &
-    Simple span &
-    ready-mixed concrete, B500B, BSH, DBS\_10; $a_{\mathrm{ribs}}=0.625$\,m, $b_w=0.18$\,m \\
+    TCC ribs, screws &
+    $s_{eq}=0.06$\,m (2 rows at $s=0.12$\,m); connector: screws, $d=8$\,mm &
+    Simple span \\
 
     Residential & 2.0 & 3, 5, 6, 7, 8, 10 &
-    Ribbed timber &
-    hollow-core &
-    Simple span &
-    glue-laminated timber and solid structural timber; fire from bottom and sides \\
+    Ribbed timber hollow core* &
+    hollow-core insulation &
+    Simple span \\
 
     Office & 3.0 & 8, 10, 12, 16 &
-    Rectangular concrete &
+    Rectangular concrete* &
     conventionally reinforced &
-    2-way, full continuity, columns &
-    ready-mixed concrete, B500B; fixed point supports \\
+    2-way, full continuity, columns \\
 
     Office & 3.0 & 8, 10, 12, 16 &
-    Rectangular concrete PT &
-    post-tensioned, distributed layout &
-    2-way, full continuity, columns &
-    ready-mixed concrete, B500B, Y1860; layout $[0,1,0,1]$; fixed point supports \\
+    Post-tensioned concrete &
+    distributed tendon layout &
+    2-way, full continuity, columns \\
 
     Office & 3.0 & 8, 10, 12, 16 &
-    Rectangular concrete PT &
-    post-tensioned, banded layout &
-    2-way, full continuity, columns &
-    ready-mixed concrete, B500B, Y1860; layout $[1,0,1,0]$; fixed point supports \\
+    Post-tensioned concrete &
+    banded tendon layout &
+    2-way, full continuity, columns \\
 
     Office & 3.0 & 8, 10, 12, 16 &
-    Ribbed concrete &
+    Ribbed concrete* &
     conventionally reinforced &
-    Continuous beam &
-    ready-mixed concrete, B500B; fire from bottom and sides \\
+    Continuous beam \\
 
     \hline
     \end{tabularx}
     \endgroup
-    \caption{Input definition for the final comparison of slab systems. Only the discrete span values available in \texttt{slab\_properties.db} are used. The listed material groups are taken from \texttt{database\_260126.db}; for each mechanical property, the dataset generator considers the best and worst available EPD by GWP.}
+    \caption{Input definition for the final comparison of slab systems. Only the discrete span values available in \texttt{slab\_properties.db} are used. Materials and fixed geometric inputs are defined in the cross-section catalogue.}
     \label{tab:final_comparison_cases}
 \end{table*}
 
@@ -1343,9 +1286,55 @@ The final comparison was defined through a set of residential and office cases w
     \label{tab:final_comparison_bounds}
 \end{table*}
 
-\subsubsection{Sampling of material variants}
+\subsubsection{Definition of plotting envelopes}
 
-In the final comparison, material variation is generated by selecting the best and worst available EPD by GWP within each mechanical property group. Thus, for example, concrete strength class C30/37 is sampled with its lowest and highest available product-specific GWP, but it is not mixed with another strength class.
+In the final comparison, product variation is generated by selecting the lowest and highest available product-specific GWP within each material and mechanical-property class. Thus, for example, concrete strength class C30/37 is represented by the products with the lowest and highest available GWP within C30/37 and is not combined with products from another strength class. This procedure is applied to every material component and to all resulting material combinations within a cross-section. Each material combination is optimised independently, and only candidates satisfying the ENV design criterion are retained. The minimum and maximum values of these valid candidates at each span define the plotting-envelope boundaries. In addition, a statistical median is calculated from the valid candidates. This median is a statistical value and does not necessarily correspond to an existing product combination or optimised cross-section.
+
+Because density and GWP are product-specific properties, the selected material combinations also affect the structural mass and can lead to different optimised geometries. Consequently, the floor-system height and mass may vary within the plotting envelope. The envelopes for cost and construction time are based on triangular distributions with a range of $\pm 20\,\%$ around the deterministic value.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{IMAGES/cross_section_catalog_envelope_construction.png}
+    \caption{Schematic definition of the plotting envelope from valid optimised material combinations.}
+    \label{fig:cross_section_catalog_envelope_construction}
+\end{figure}
+
+\subsubsection{Monte Carlo estimation of the probability of the lowest GWP}
+
+The deterministic plotting envelopes describe the possible range of the optimised results but do not indicate how frequently one floor system performs better than another. Therefore, an empirical Monte Carlo analysis is used to estimate the probability that a floor system has the lowest realised GWP at a given span. The analysis is performed separately for total GWP, $GWP_{\mathrm{tot}}$, and structural GWP, $GWP_{\mathrm{struct}}$.
+
+For each material and mechanical-property class used by the deterministic comparison, an empirical product pool is created from the eligible database records. Only records with the statistical-selection flag enabled and with valid density and GWP values are retained; generic records from Betonsortenrechner, Ecoinvent and KBOB are excluded. The density and GWP of a product remain paired and are sampled jointly from the same database row. Hence, no continuous probability distribution is assumed and no values are generated between observed products. If only one eligible product is available in a pool, that material input remains deterministic.
+
+For each Monte Carlo draw, one product record is sampled with equal probability from every empirical material pool. The same sampled density--GWP pair is applied to all cross-section variants that use the corresponding material and mechanical-property class. This common sampling preserves comparability between floor systems and avoids assigning different realisations of the same material class within one draw. For a component with volume $V_j$, sampled density $\rho_j^{(r)}$ and product-specific GWP $g_j^{(r)}$, its structural GWP contribution in draw $r$ is calculated as
+
+\begin{equation}
+GWP_{\mathrm{struct}}^{(r)}
+=
+\sum_j
+V_j\,\rho_j^{(r)}\,
+\frac{g_j^{(r)}}{1000}.
+\end{equation}
+
+Here, $g_j^{(r)}$ is expressed in kg CO$_2$-eq per tonne and the resulting GWP is expressed in kg CO$_2$-eq/m$^2$. The GWP of the automatically generated floor build-up is added to obtain $GWP_{\mathrm{tot}}^{(r)}$. The sampled density is also used to recalculate the structural mass. The geometry of each previously optimised candidate is retained during this post-processing step; the structural optimisation is not repeated for every Monte Carlo draw.
+
+At each span, several feasible ENV candidates may exist for one floor system because different deterministic material combinations produced different optimised cross-sections. To avoid assuming that the best candidate is known before the actual products are selected, one feasible ENV candidate is selected with equal probability for each floor system and Monte Carlo draw. The sampled material properties are then propagated through this realised candidate. Subsequently, the realised GWP values of all floor systems are compared, and the system with the lowest value is recorded as the winner of that draw.
+
+Using $N=5000$ Monte Carlo draws, the probability that floor system $i$ has the lowest GWP is estimated as
+
+\begin{equation}
+\widehat{P}_i(\mathrm{lowest\ GWP})
+=
+\frac{1}{N}
+\sum_{r=1}^{N}
+\mathbb{I}
+\left[
+i
+=
+\operatorname*{arg\,min}_k GWP_k^{(r)}
+\right],
+\end{equation}
+
+where $\mathbb{I}[\cdot]$ is the indicator function and $k$ denotes all floor systems included in the respective comparison. The resulting probabilities are presented in the \texttt{uq\_probability\_best} plots. In addition, the 5th, 50th and 95th percentiles of the realised GWP values are reported in the GWP uncertainty plots. These percentile bands represent the empirical Monte Carlo distribution and are therefore conceptually different from the absolute minimum--maximum plotting envelopes.
 
 \subsection{Verification of implemented models}
 

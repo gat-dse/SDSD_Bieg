@@ -76,6 +76,7 @@ SCENARIOS = {
             {
                 "id": "res_rc_flat_walls",
                 "label": "Rectangular concrete",
+                "comparison_label": "Rectangular concrete*",
                 "dimension": "2D",
                 "crsec_type": "rc_rec",
                 "materials": "concrete",
@@ -86,6 +87,7 @@ SCENARIOS = {
             {
                 "id": "res_pt_flat_walls_dist",
                 "label": "Rectangular concrete PT dist.",
+                "comparison_label": "Post-tensioned concrete\n(distributed tendon layout)",
                 "dimension": "2D",
                 "crsec_type": "pc_rec",
                 "materials": "concrete",
@@ -97,6 +99,7 @@ SCENARIOS = {
             {
                 "id": "res_wood_flat_simple",
                 "label": "Rectangular wood",
+                "comparison_label": "Rectangular timber*",
                 "dimension": "1D",
                 "crsec_type": "wd_rec",
                 "materials": "timber",
@@ -108,6 +111,7 @@ SCENARIOS = {
             {
                 "id": "res_tcc_flat_kerve",
                 "label": "TCC flat, kerve",
+                "comparison_label": "TCC flat, kerve",
                 "dimension": "1D",
                 "crsec_type": "tcc",
                 "materials": "tcc_kerve",
@@ -130,6 +134,7 @@ SCENARIOS = {
             {
                 "id": "res_tcc_ribs_dbs",
                 "label": "TCC ribs, DBS",
+                "comparison_label": "TCC ribs, screws",
                 "dimension": "1D",
                 "crsec_type": "tcc",
                 "materials": "tcc_dbs",
@@ -142,6 +147,7 @@ SCENARIOS = {
             {
                 "id": "res_hollow_core_simple",
                 "label": "Ribbed timber hollow core",
+                "comparison_label": "Ribbed timber hollow core*",
                 "dimension": "1D",
                 "crsec_type": "wd_rib",
                 "materials": "timber",
@@ -161,6 +167,7 @@ SCENARIOS = {
             {
                 "id": "off_rc_flat_columns",
                 "label": "Rectangular concrete",
+                "comparison_label": "Rectangular concrete*",
                 "dimension": "2D",
                 "crsec_type": "rc_rec",
                 "materials": "concrete",
@@ -172,6 +179,7 @@ SCENARIOS = {
             {
                 "id": "off_pt_flat_columns_dist",
                 "label": "Rectangular concrete PT dist.",
+                "comparison_label": "Post-tensioned concrete\n(distributed tendon layout)",
                 "dimension": "2D",
                 "crsec_type": "pc_rec",
                 "materials": "concrete",
@@ -184,6 +192,7 @@ SCENARIOS = {
             {
                 "id": "off_pt_flat_columns_band",
                 "label": "Rectangular concrete PT band.",
+                "comparison_label": "Post-tensioned concrete\n(banded tendon layout)",
                 "dimension": "2D",
                 "crsec_type": "pc_rec",
                 "materials": "concrete",
@@ -196,6 +205,7 @@ SCENARIOS = {
             {
                 "id": "off_ribbed_concrete_continuous",
                 "label": "Ribbed concrete",
+                "comparison_label": "Ribbed concrete*",
                 "dimension": "1D",
                 "crsec_type": "rc_rib",
                 "materials": "concrete",

@@ -32,6 +32,7 @@ from run_final_comparison import (
     BAND_ALPHA_COMPARISON,
     COST_TIME_UNCERTAINTY_HIGH,
     COST_TIME_UNCERTAINTY_LOW,
+    ENV_COMPARISON_TEXT_SIZE,
     SYSTEM_COLORS,
     is_cost_or_time_metric,
     mix_color,
@@ -44,16 +45,16 @@ SUMMARY_FILE = Path("plots") / "final_comparison_summary.xlsx"
 OUTPUT_DIR = Path(inputs.OUTPUT_DIR)
 
 METRICS = [
-    ("gwp_struct", "GWP_struct [kg-CO2-eq/m2]", "GWP$_{struct}$ [kg-CO$_2$-eq/m$^2$]"),
-    ("gwp_total", "GWP_total [kg-CO2-eq/m2]", "GWP$_{tot}$ [kg-CO$_2$-eq/m$^2$]"),
-    ("h_struct", "h_struct [m]", "h$_{struct}$ [m]"),
-    ("h_total", "h_total [m]", "h$_{tot}$ [m]"),
-    ("m_struct", "m_struct [kN/m2]", "m$_{struct}$ [kN/m$^2$]"),
-    ("m_total", "m_total [kN/m2]", "m$_{tot}$ [kN/m$^2$]"),
-    ("cost_struct", "cost_struct [CHF/m2]", "cost$_{struct}$ [CHF/m$^2$]"),
-    ("cost_total", "cost_total [CHF/m2]", "cost$_{tot}$ [CHF/m$^2$]"),
-    ("time_struct", "time_struct [h/m2]", "t$_{construct,struct}$ [h/m$^2$]"),
-    ("time_total", "time_total [h/m2]", "t$_{construct,tot}$ [h/m$^2$]"),
+    ("gwp_struct", "GWP_struct [kg-CO2-eq/m2]", "$GWP_{struct}$ [kg-CO$_2$-eq/m$^2$]"),
+    ("gwp_total", "GWP_total [kg-CO2-eq/m2]", "$GWP_{tot}$ [kg-CO$_2$-eq/m$^2$]"),
+    ("h_struct", "h_struct [m]", "Structural height $h_{struct}$ [m]"),
+    ("h_total", "h_total [m]", "Total height $h_{tot}$ [m]"),
+    ("m_struct", "m_struct [kN/m2]", "Structural mass $m_{struct}$ [kN/m$^2$]"),
+    ("m_total", "m_total [kN/m2]", "Total mass $m_{tot}$ [kN/m$^2$]"),
+    ("cost_struct", "cost_struct [CHF/m2]", "Structural cost $C_{struct}$ [CHF/m$^2$]"),
+    ("cost_total", "cost_total [CHF/m2]", "Total cost $C_{tot}$ [CHF/m$^2$]"),
+    ("time_struct", "time_struct [h/m2]", "Structural construction time $t_{struct}$ [h/m$^2$]"),
+    ("time_total", "time_total [h/m2]", "Total construction time $t_{tot}$ [h/m$^2$]"),
 ]
 
 
@@ -114,81 +115,70 @@ def replot_case(case_name: str, scenario: dict, summary: pd.DataFrame) -> Path:
         & (summary["uls_feasible"].astype(str).str.lower().isin(["true", "1", "yes"]))
     ].copy()
 
-    fig, axes = plt.subplots(5, 2, figsize=(12.0, 17.2), sharex=True)
-    axes = axes.flatten()
-    for ax, (key, metric_col, ylabel) in zip(axes, METRICS):
-        y_values = []
-        for system in scenario["systems"]:
-            system_rows = case_rows[case_rows["system_id"] == system["id"]]
-            if system_rows.empty:
-                continue
-            color = system_colour(system)
-            envelope = envelope_from_rows(system_rows, scenario["lengths"], metric_col)
-            if is_cost_or_time_metric(key):
-                uncertainty_min = uncertainty_scaled(envelope["min"], COST_TIME_UNCERTAINTY_LOW)
-                uncertainty_max = uncertainty_scaled(envelope["max"], COST_TIME_UNCERTAINTY_HIGH)
-                y_values.extend(uncertainty_min)
-                y_values.extend(uncertainty_max)
+    fig, axes = plt.subplots(5, 2, figsize=(15.5, 17.2), sharex=True)
+    for row in range(5):
+        paired_y_values = []
+        for col in range(2):
+            ax = axes[row, col]
+            key, metric_col, panel_label = METRICS[2 * row + col]
+            for system in scenario["systems"]:
+                system_rows = case_rows[case_rows["system_id"] == system["id"]]
+                if system_rows.empty:
+                    continue
+                color = system_colour(system)
+                envelope = envelope_from_rows(system_rows, scenario["lengths"], metric_col)
+                if is_cost_or_time_metric(key):
+                    uncertainty_min = uncertainty_scaled(envelope["min"], COST_TIME_UNCERTAINTY_LOW)
+                    uncertainty_max = uncertainty_scaled(envelope["max"], COST_TIME_UNCERTAINTY_HIGH)
+                    paired_y_values.extend(uncertainty_min)
+                    paired_y_values.extend(uncertainty_max)
+                    ax.fill_between(
+                        envelope["lengths"], uncertainty_min, uncertainty_max,
+                        facecolor=color, edgecolor="none", linewidth=0.0,
+                        alpha=0.12, zorder=1,
+                    )
+                else:
+                    paired_y_values.extend(envelope["min"])
+                    paired_y_values.extend(envelope["max"])
                 ax.fill_between(
-                    envelope["lengths"],
-                    uncertainty_min,
-                    uncertainty_max,
-                    facecolor=color,
-                    edgecolor="none",
-                    linewidth=0.0,
-                    alpha=0.12,
-                    zorder=1,
+                    envelope["lengths"], envelope["min"], envelope["max"],
+                    facecolor=color, edgecolor="none", linewidth=0,
+                    alpha=BAND_ALPHA_COMPARISON,
                 )
-            else:
-                y_values.extend(envelope["min"])
-                y_values.extend(envelope["max"])
-            ax.fill_between(
-                envelope["lengths"],
-                envelope["min"],
-                envelope["max"],
-                facecolor=color,
-                edgecolor="none",
-                linewidth=0,
-                alpha=BAND_ALPHA_COMPARISON,
+                draw_envelope(ax, envelope, color)
+            ax.text(
+                0.025, 0.965, panel_label, transform=ax.transAxes,
+                ha="left", va="top", fontsize=ENV_COMPARISON_TEXT_SIZE,
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.78, "pad": 2.0},
+                zorder=10,
             )
-            draw_envelope(ax, envelope, color)
-        ax.set_ylabel(ylabel)
-        ax.set_xticks(scenario["lengths"])
-        set_readable_ylim(ax, y_values)
-        ax.tick_params(axis="both", which="major", labelsize=15)
-        ax.grid(True, alpha=0.35)
+            ax.set_xticks(scenario["lengths"])
+            ax.tick_params(axis="both", which="major", labelsize=ENV_COMPARISON_TEXT_SIZE)
+            ax.grid(True, alpha=0.35)
+        for ax in axes[row, :]:
+            set_readable_ylim(ax, paired_y_values)
 
-    for ax in axes[-2:]:
-        ax.set_xlabel("l [m]")
+    for ax in axes[-1, :]:
+        ax.set_xlabel("l [m]", fontsize=ENV_COMPARISON_TEXT_SIZE)
 
     handles = [
         Patch(
             facecolor=system_colour(system),
             edgecolor="none",
             alpha=BAND_ALPHA_COMPARISON,
-            label=f"{system['label']}\n{system.get('structural_system', '')}",
+            label=system.get("comparison_label", system["label"]),
         )
         for system in scenario["systems"]
     ]
-    handles.append(Patch(
-        facecolor="#777777",
-        edgecolor="none",
-        alpha=0.12,
-        label="cost/time: Tri(0.8, 1.0, 1.2) range",
-    ))
-    fig.suptitle(
-        f"{scenario['label']}, q$_k$={scenario['qk'] / 1000:.1f} kN/m$^2$ - ENV comparison\n"
-        f"envelopes of geometry and material/product variants; cost/time show early-design +/-20% range",
-        y=0.992,
-    )
     fig.legend(
         handles=handles,
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.94),
-        ncol=min(3, max(1, len(handles))),
+        bbox_to_anchor=(0.5, 0.995),
+        ncol=4,
         frameon=False,
+        fontsize=ENV_COMPARISON_TEXT_SIZE,
     )
-    fig.tight_layout(rect=(0, 0, 1, 0.895))
+    fig.tight_layout(rect=(0, 0, 1, 0.91))
     path = OUTPUT_DIR / f"final_env_comparison_{case_name}.png"
     fig.savefig(path, dpi=400, bbox_inches="tight")
     plt.close(fig)

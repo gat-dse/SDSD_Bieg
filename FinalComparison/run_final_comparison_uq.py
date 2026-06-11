@@ -4,7 +4,8 @@ The script answers whether the deterministic ranking is robust against
 uncertain material and assessment data. It does not re-optimize cross-sections.
 
 Uncertainty model:
-- Product GWP and density/specific weight are empirically sampled from database products.
+- Product GWP and density/specific weight are empirically sampled from the same
+  filtered database range used to select deterministic product extremes.
 - Cost and construction-time assumptions use +/-20% triangular multipliers.
 - Morris-style screening is limited to material GWP and density inputs for
   ecological sustainability.
@@ -314,7 +315,7 @@ def product_table(database: Path) -> pd.DataFrame:
     with sqlite3.connect(database) as conn:
         products = pd.read_sql_query(
             """
-            SELECT PRO_ID, MATERIAL, MECH_PROP, DENSITY, Total_GWP
+            SELECT PRO_ID, MATERIAL, MECH_PROP, DENSITY, Total_GWP, Statistik, SOURCE
             FROM products
             WHERE PRO_ID IS NOT NULL
             """,
@@ -329,8 +330,18 @@ def product_table(database: Path) -> pd.DataFrame:
             conn,
         )
     products["PRO_ID"] = pd.to_numeric(products["PRO_ID"], errors="coerce").astype("Int64")
-    products = products.merge(material_prop, left_on="MECH_PROP", right_on="name", how="left")
     products["DENSITY"] = pd.to_numeric(products["DENSITY"], errors="coerce")
+    source = products["SOURCE"].astype("string")
+    products["deterministic_eligible"] = (
+        products["DENSITY"].notna()
+        & products["MECH_PROP"].notna()
+        & pd.to_numeric(products["Statistik"], errors="coerce").eq(1)
+        & source.notna()
+        & ~source.str.contains("Betonsortenrechner", case=False, regex=False, na=True)
+        & ~source.str.contains("Ecoinvent", case=False, regex=False, na=True)
+        & ~source.str.contains("KBOB", case=False, regex=False, na=True)
+    )
+    products = products.merge(material_prop, left_on="MECH_PROP", right_on="name", how="left")
     density_fallback = pd.to_numeric(products["density_load"], errors="coerce") / G
     products["DENSITY"] = products["DENSITY"].fillna(density_fallback)
     return products
@@ -338,9 +349,46 @@ def product_table(database: Path) -> pd.DataFrame:
 
 def parse_materials(text: str) -> dict[str, int]:
     parsed: dict[str, int] = {}
-    for cls, _name, prod_id in MATERIAL_TOKEN_RE.findall(str(text)):
-        parsed[cls] = int(prod_id)
+    for cls, prod_id in parse_material_entries(text):
+        parsed[cls] = prod_id
     return parsed
+
+
+def parse_material_entries(text: str) -> list[tuple[str, int]]:
+    return [(cls, int(prod_id)) for cls, _name, prod_id in MATERIAL_TOKEN_RE.findall(str(text))]
+
+
+def row_product_volumes(row: pd.Series) -> list[tuple[int, float]]:
+    entries = parse_material_entries(row.get("materials", ""))
+    products_by_class: dict[str, list[int]] = {}
+    for cls, prod_id in entries:
+        products_by_class.setdefault(cls, []).append(prod_id)
+
+    result: list[tuple[int, float]] = []
+    for comp in COMPONENTS.values():
+        if comp["class"] == "Wood":
+            continue
+        prod_ids = products_by_class.get(comp["class"], [])
+        volume = safe_float(row.get(comp["volume_col"], 0.0))
+        if prod_ids and volume > 0:
+            result.append((prod_ids[-1], volume))
+
+    wood_ids = products_by_class.get("Wood", [])
+    wood_volume = safe_float(row.get(COMPONENTS["wood"]["volume_col"], 0.0))
+    section_type = str(row.get("section_type", "")).lower()
+    if len(wood_ids) >= 3 and section_type == "wd_rib":
+        b = parse_geometry_value(row.get("geometry", ""), "b")
+        h = parse_geometry_value(row.get("geometry", ""), "h")
+        a = parse_geometry_value(row.get("geometry", ""), "a")
+        t2 = parse_geometry_value(row.get("geometry", ""), "t2")
+        t3 = parse_geometry_value(row.get("geometry", ""), "t3")
+        volumes = [b * h / a if a > 0 else float("nan"), t2, t3]
+        if all(np.isfinite(volume) and volume >= 0 for volume in volumes):
+            result.extend(zip(wood_ids[:3], volumes))
+            return result
+    if wood_ids and wood_volume > 0:
+        result.append((wood_ids[-1], wood_volume))
+    return result
 
 
 def fit_for_product(products: pd.DataFrame, prod_id: int, variable: str) -> FitResult:
@@ -351,9 +399,11 @@ def fit_for_product(products: pd.DataFrame, prod_id: int, variable: str) -> FitR
                          float("inf"), float("inf"), float("inf"), float("nan"), 0.0)
     material = str(row.iloc[0]["MATERIAL"])
     mech_prop = str(row.iloc[0]["MECH_PROP"])
+    eligible = products["deterministic_eligible"].fillna(False)
     for scope, mask in (
-        ("same material and mechanical class", (products["MATERIAL"] == material) & (products["MECH_PROP"] == mech_prop)),
-        ("same material", products["MATERIAL"] == material),
+        ("deterministic range: same material and mechanical class",
+         eligible & (products["MATERIAL"] == material) & (products["MECH_PROP"] == mech_prop)),
+        ("deterministic range: same material", eligible & (products["MATERIAL"] == material)),
     ):
         values = pd.to_numeric(products.loc[mask, variable], errors="coerce").dropna().to_numpy(dtype=float)
         if len(values) >= 3:
@@ -365,7 +415,7 @@ def fit_for_product(products: pd.DataFrame, prod_id: int, variable: str) -> FitR
 def fit_cache_for_summary(summary: pd.DataFrame, products: pd.DataFrame) -> dict[tuple[int, str], FitResult]:
     cache: dict[tuple[int, str], FitResult] = {}
     for materials in summary["materials"].dropna().unique():
-        for prod_id in parse_materials(materials).values():
+        for _cls, prod_id in parse_material_entries(materials):
             for variable in ("Total_GWP", "DENSITY"):
                 cache[(prod_id, variable)] = fit_for_product(products, prod_id, variable)
     return cache
@@ -379,9 +429,11 @@ def empirical_pool_for_product(products: pd.DataFrame, prod_id: int) -> Empirica
 
     material = str(row.iloc[0]["MATERIAL"])
     mech_prop = str(row.iloc[0]["MECH_PROP"])
+    eligible = products["deterministic_eligible"].fillna(False)
     for scope, mask in (
-        ("same material and mechanical class", (products["MATERIAL"] == material) & (products["MECH_PROP"] == mech_prop)),
-        ("same material", products["MATERIAL"] == material),
+        ("deterministic range: same material and mechanical class",
+         eligible & (products["MATERIAL"] == material) & (products["MECH_PROP"] == mech_prop)),
+        ("deterministic range: same material", eligible & (products["MATERIAL"] == material)),
     ):
         candidates = products.loc[mask, ["DENSITY", "Total_GWP"]].copy()
         candidates["DENSITY"] = pd.to_numeric(candidates["DENSITY"], errors="coerce")
@@ -415,7 +467,7 @@ def empirical_pools_for_summary(summary: pd.DataFrame, products: pd.DataFrame) -
     prod_to_pool: dict[int, tuple[str, str, str]] = {}
     pools: dict[tuple[str, str, str], EmpiricalPool] = {}
     for materials in summary["materials"].dropna().unique():
-        for prod_id in parse_materials(materials).values():
+        for _cls, prod_id in parse_material_entries(materials):
             pool = empirical_pool_for_product(products, prod_id)
             prod_to_pool[prod_id] = pool.key
             pools.setdefault(pool.key, pool)
@@ -466,17 +518,12 @@ def row_component_samples(row: pd.Series, products: pd.DataFrame,
                           prod_to_pool: dict[int, tuple[str, str, str]],
                           empirical_draws: dict[tuple[str, str, str], dict[str, np.ndarray]],
                           rng: np.random.Generator, n: int) -> dict[str, np.ndarray]:
-    material_ids = parse_materials(row.get("materials", ""))
     gwp_struct = np.full(n, 0.0)
     weight_struct = np.full(n, 0.0)
     deterministic_gwp_known = 0.0
     deterministic_weight_known = 0.0
 
-    for comp in COMPONENTS.values():
-        prod_id = material_ids.get(comp["class"])
-        volume = safe_float(row.get(comp["volume_col"], 0.0))
-        if prod_id is None or volume <= 0:
-            continue
+    for prod_id, volume in row_product_volumes(row):
         prod_row = products.loc[products["PRO_ID"] == prod_id]
         if prod_row.empty:
             continue
@@ -580,16 +627,24 @@ def build_uq_summary(summary: pd.DataFrame, products: pd.DataFrame,
             metric_name: {} for metric_name in UQ_METRICS
         }
         for (system_id, system), system_group in group.groupby(["system_id", "system"]):
+            realised_candidates = env_comparison_candidates(
+                system_group, UQ_METRICS["GWP_total"]["column"]
+            )
+            if realised_candidates.empty:
+                continue
+            realised_variant = rng.integers(0, len(realised_candidates), size=n)
             for metric_name, metric in UQ_METRICS.items():
-                candidates = env_comparison_candidates(system_group, metric["column"])
-                if candidates.empty:
+                if metric["column"] not in realised_candidates.columns:
+                    continue
+                metric_values = pd.to_numeric(realised_candidates[metric["column"]], errors="coerce")
+                if metric_values.isna().any():
                     continue
                 candidate_samples = np.vstack([
                     row_samples[int(idx)][metric["sample"]]
-                    for idx in candidates.index
+                    for idx in realised_candidates.index
                 ])
-                lower_envelope_samples = np.nanmin(candidate_samples, axis=0)
-                system_samples_by_metric[metric_name][(system_id, system)] = lower_envelope_samples
+                realised_samples = candidate_samples[realised_variant, np.arange(n)]
+                system_samples_by_metric[metric_name][(system_id, system)] = realised_samples
             metric_stats = {}
             for metric_name, metric in UQ_METRICS.items():
                 samples = system_samples_by_metric[metric_name].get((system_id, system))
@@ -603,7 +658,7 @@ def build_uq_summary(summary: pd.DataFrame, products: pd.DataFrame,
                 "system": system,
                 "system_id": system_id,
                 "candidate_rows": int(len(env_comparison_candidates(system_group, "GWP_total [kg-CO2-eq/m2]"))),
-                "reference_definition": "sampled ENV lower envelope across feasible variants",
+                "reference_definition": "one uniformly selected feasible ENV variant per Monte Carlo draw",
                 "deterministic_GWP_total_lower_envelope": float(pd.to_numeric(
                     env_comparison_candidates(system_group, "GWP_total [kg-CO2-eq/m2]")["GWP_total [kg-CO2-eq/m2]"],
                     errors="coerce",
@@ -626,7 +681,7 @@ def build_uq_summary(summary: pd.DataFrame, products: pd.DataFrame,
                     "scenario": scenario,
                     "metric": metric_name,
                     "probability_lowest": float(np.mean(winners == local_idx)),
-                    "definition": "For each case/span/system/metric, common empirical product draws are propagated for all feasible ENV variants; per draw, the system lower envelope is the lowest sampled variant value, and the lowest system envelope wins.",
+                    "definition": "For each case/span/system, one feasible ENV variant is selected uniformly per draw. Common empirical product draws are propagated through that realised variant, and the system with the lowest realised value wins.",
                 })
 
         for metric_name, samples_by_system in system_samples_by_metric.items():
@@ -964,18 +1019,26 @@ def plot_robustness(system_stats: pd.DataFrame, robust: pd.DataFrame, plot_dir: 
     paths: list[Path] = []
     plt.rcParams.update(PLOT_STYLE)
     base_robust = robust[robust.get("scenario", "all systems") == "all systems"].copy()
-    gwp_robust = base_robust[base_robust["metric"] == "GWP_total"].copy()
+    gwp_robust = base_robust[base_robust["metric"].isin(["GWP_total", "GWP_struct"])].copy()
     for case, case_prob in gwp_robust.groupby("case"):
-        fig, ax = plt.subplots(figsize=(8.0, 4.6), constrained_layout=True)
-        for system, group in case_prob.sort_values("span_l_m").groupby("system"):
-            ax.plot(group["span_l_m"], group["probability_lowest"], marker="o",
-                    linewidth=1.8, color=system_color(system), label=system)
-        ax.set_ylim(-0.03, 1.03)
-        ax.set_title(f"{case}: P(best total GWP)\nENV lower envelope across feasible variants; lowest sampled envelope wins")
-        ax.set_xlabel("l [m]")
-        ax.set_ylabel("P(lowest GWP$_{tot}$)")
-        ax.grid(True, alpha=0.25)
-        ax.legend(fontsize=8, ncol=2, frameon=False)
+        fig, axes = plt.subplots(1, 2, figsize=(12.0, 4.8), sharex=True, sharey=True, constrained_layout=True)
+        for ax, metric, ylabel, title in (
+            (axes[0], "GWP_total", "P(lowest GWP$_{tot}$)", "Total GWP"),
+            (axes[1], "GWP_struct", "P(lowest GWP$_{struct}$)", "Structural GWP"),
+        ):
+            metric_prob = case_prob[case_prob["metric"] == metric]
+            for system, group in metric_prob.sort_values("span_l_m").groupby("system"):
+                ax.plot(group["span_l_m"], group["probability_lowest"], marker="o",
+                        linewidth=1.8, color=system_color(system), label=system)
+            ax.set_ylim(-0.03, 1.03)
+            ax.set_title(title)
+            ax.set_xlabel("l [m]")
+            ax.set_ylabel(ylabel)
+            ax.grid(True, alpha=0.25)
+        handles, labels = axes[0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.08),
+                   ncol=2, frameon=False, fontsize=8)
+        fig.suptitle(f"{case}: P(best GWP)\none uniformly selected feasible ENV variant per system and draw")
         path = output_dir / f"uq_probability_best_{safe_filename(case)}.png"
         fig.savefig(path, dpi=220)
         plt.close(fig)
@@ -998,7 +1061,7 @@ def plot_robustness(system_stats: pd.DataFrame, robust: pd.DataFrame, plot_dir: 
         handles, labels = axes_arr[0].get_legend_handles_labels()
         fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 1.01),
                    ncol=min(3, max(1, len(labels))), frameon=False)
-        fig.suptitle(f"{case}: P(best value) for final ENV comparison factors\nsampled ENV lower envelopes across feasible variants", y=1.035)
+        fig.suptitle(f"{case}: P(best value) for final ENV comparison factors\none uniformly selected feasible ENV variant per system and draw", y=1.035)
         path = output_dir / f"uq_probability_best_all_ENV_factors_{safe_filename(case)}.png"
         fig.savefig(path, dpi=220, bbox_inches="tight")
         plt.close(fig)
@@ -1026,20 +1089,28 @@ def plot_robustness(system_stats: pd.DataFrame, robust: pd.DataFrame, plot_dir: 
         paths.append(path)
 
     for case, case_stats in system_stats.groupby("case"):
-        fig, ax = plt.subplots(figsize=(8.0, 4.6), constrained_layout=True)
-        for system, group in case_stats.sort_values("span_l_m").groupby("system"):
-            x = group["span_l_m"].to_numpy(dtype=float)
-            median = group["GWP_total_p50"].to_numpy(dtype=float)
-            p05 = group["GWP_total_p05"].to_numpy(dtype=float)
-            p95 = group["GWP_total_p95"].to_numpy(dtype=float)
-            color = system_color(system)
-            ax.plot(x, median, marker="o", linewidth=1.8, color=color, label=system)
-            ax.fill_between(x, p05, p95, color=color, alpha=0.14, linewidth=0)
-        ax.set_title(f"{case}: total GWP uncertainty bands\nthick line = Monte Carlo median, band = 5th-95th percentile")
-        ax.set_xlabel("l [m]")
-        ax.set_ylabel("GWP$_{tot}$ [kg CO$_2$-eq/m$^2$]")
-        ax.grid(True, alpha=0.25)
-        ax.legend(fontsize=8, ncol=2, frameon=False)
+        fig, axes = plt.subplots(1, 2, figsize=(12.0, 4.8), sharex=True, constrained_layout=True)
+        for ax, metric, ylabel, title in (
+            (axes[0], "GWP_total", "GWP$_{tot}$ [kg CO$_2$-eq/m$^2$]", "Total GWP"),
+            (axes[1], "GWP_struct", "GWP$_{struct}$ [kg CO$_2$-eq/m$^2$]", "Structural GWP"),
+        ):
+            for system, group in case_stats.sort_values("span_l_m").groupby("system"):
+                x = group["span_l_m"].to_numpy(dtype=float)
+                median = group[f"{metric}_p50"].to_numpy(dtype=float)
+                p05 = group[f"{metric}_p05"].to_numpy(dtype=float)
+                p95 = group[f"{metric}_p95"].to_numpy(dtype=float)
+                color = system_color(system)
+                ax.plot(x, median, marker="o", linewidth=1.8, color=color, label=system)
+                ax.fill_between(x, p05, p95, color=color, alpha=0.14, linewidth=0)
+            ax.set_title(title)
+            ax.set_ylabel(ylabel)
+            ax.grid(True, alpha=0.25)
+        axes[0].set_xlabel("l [m]")
+        axes[1].set_xlabel("l [m]")
+        handles, labels = axes[0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.08),
+                   ncol=2, frameon=False, fontsize=8)
+        fig.suptitle(f"{case}: GWP uncertainty bands\nthick line = Monte Carlo median, band = 5th-95th percentile")
         path = output_dir / f"uq_gwp_uncertainty_{safe_filename(case)}.png"
         fig.savefig(path, dpi=220)
         plt.close(fig)
@@ -1259,7 +1330,7 @@ def main() -> None:
     assumptions = pd.DataFrame([
         {"item": "Scope", "value": "Post-processing UQ of deterministic optimized final comparison rows"},
         {"item": "Summary sheet", "value": selected_sheet},
-        {"item": "Product GWP", "value": "Empirical Monte Carlo sampling from observed product database rows with the same material and mechanical class; no continuous fitted distribution is used for metric propagation"},
+        {"item": "Product GWP", "value": "Empirical Monte Carlo sampling from rows in the deterministic product range: same material and mechanical class, Statistik = 1, and sources Betonsortenrechner/Ecoinvent/KBOB excluded; no continuous fitted distribution is used for metric propagation"},
         {"item": "Specific weight", "value": "Empirical Monte Carlo sampling from observed product density paired with product GWP; specific weight = density * g"},
         {"item": "Cost", "value": "Triangular multiplier Tri(0.8, 1.0, 1.2), early-design assumption uncertainty"},
         {"item": "Construction time", "value": "Triangular multiplier Tri(0.8, 1.0, 1.2), early-design assumption uncertainty"},
@@ -1269,7 +1340,8 @@ def main() -> None:
         {"item": "Morris proxy inputs", "value": "Strength, E modulus, connector Kser and static height are post-processing proxies; no structural re-optimisation"},
         {"item": "Morris output", "value": "GWP_total only"},
         {"item": "Common product draws", "value": "For one Monte Carlo draw, each material/mechanical-class pool is sampled once and the same sampled density/GWP pair is applied to every variant using that pool"},
-        {"item": "Probability best definition", "value": "For each case/span/system/metric, empirical product draws are propagated for all feasible ENV variants used in the comparison; per draw, each system's lower envelope is the lowest sampled variant value, and the system with the lowest sampled envelope wins"},
+        {"item": "Variant realisation", "value": "For each case/span/system, one feasible ENV variant is selected uniformly per Monte Carlo draw; variants are not minimised after uncertain product values are known"},
+        {"item": "Probability best definition", "value": "Common empirical product draws are propagated through the realised variant of each system, and the system with the lowest realised value wins"},
         {"item": "Samples", "value": args.samples},
         {"item": "Morris trajectories", "value": args.morris_trajectories},
         {"item": "Seed", "value": args.seed},
