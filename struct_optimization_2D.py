@@ -199,9 +199,7 @@ def calc_uls_penalty(member):
 
 
 def calc_sls1_penalty(member, use_cracked_deflection=True):
-    use_cracked = use_cracked_deflection and not (
-        member.mkd_p < member.section.mr_p and member.mkd_n > member.section.mr_n
-    )
+    use_cracked = use_cracked_deflection and not struct_analysis.concrete_member_is_uncracked(member)
     if use_cracked:
         checks = [
             (member.w_install_ger - member.w_install_adm, member.w_install_adm),
@@ -380,7 +378,7 @@ def rc_rqs(var, add_arg):
     penalty = criterion_penalty(
         member,
         criterion,
-        include_uls_guard=(criterion == "ENV"),
+        include_uls_guard=(criterion in ("SLS1", "ENV")),
         use_cracked_deflection=True,
     )
     if to_opt == "GWP":
@@ -509,7 +507,7 @@ def pc_rqs(var, add_arg):
     penalty = criterion_penalty(
         member,
         criterion,
-        include_uls_guard=(criterion == "ENV"),
+        include_uls_guard=(criterion in ("SLS1", "ENV")),
         use_cracked_deflection=False,
     )
     penalty += min_reinf_penalty
@@ -591,7 +589,7 @@ def rc_rib_rqs(var, add_arg):
     penalty1 = max(member.qk - member.qk_zul_gzt, 0)
 
     # define penalty2, if SLS1 (deflections) are not fulfilled
-    if member.mkd_p < member.section.mr_p and member.mkd_n < member.section.mr_n:
+    if struct_analysis.concrete_member_is_uncracked(member):
         d1, d2, d3 = [member.w_install - member.w_install_adm, member.w_use - member.w_use_adm,
                       member.w_app - member.w_app_adm]
     else:

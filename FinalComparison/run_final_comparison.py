@@ -317,7 +317,7 @@ def member_is_feasible_for_criterion(member, criterion="ENV", tol=1e-4):
     if criterion == "ULS":
         required = ["uls_utilization"]
     elif criterion == "SLS1":
-        required = ["sls1_utilization"]
+        required = ["uls_utilization", "sls1_utilization"]
     elif criterion == "SLS2":
         required = ["sls2_utilization"]
     elif criterion == "FIRE":
@@ -358,11 +358,7 @@ def utilization_row(member):
     sls1_basis = "elastic"
     sls1_active_components = sls1_components
     if section_type == "rc_rec":
-        is_uncracked = (
-            safe_float(getattr(member, "mkd_p", float("nan"))) < safe_float(getattr(member.section, "mr_p", float("nan")))
-            and safe_float(getattr(member, "mkd_n", float("nan"))) > safe_float(getattr(member.section, "mr_n", float("nan")))
-        )
-        if not is_uncracked:
+        if not struct_analysis.concrete_member_is_uncracked(member):
             sls1_basis = "cracked"
             sls1_active_components = sls1_ger_components
     sls1_util = max(finite_values(sls1_active_components.values()) or [float("nan")])
@@ -904,44 +900,65 @@ def series_for_criterion(series, criterion):
 
 
 def plot_single_system(case_name, scenario, system, all_series, output_dir):
-    fig, ax = plt.subplots(figsize=(8.0, 5.4))
-    handles = []
-    y_values = []
-    for criterion in inputs.DESIGN_CRITERIA:
-        subset = series_for_criterion(all_series, criterion)
-        if not subset:
-            continue
-        envelope = envelope_by_length(subset, "gwp_struct", require_uls_feasible=True, criterion=criterion)
-        y_values.extend(envelope["min"])
-        y_values.extend(envelope["max"])
-        color = criterion_color(system, criterion)
-        ax.fill_between(
-            envelope["lengths"],
-            envelope["min"],
-            envelope["max"],
-            facecolor=color,
+    fig, axes = plt.subplots(1, 2, figsize=(14.0, 5.4), sharey=True)
+    handles = [
+        Patch(
+            facecolor=criterion_color(system, criterion),
             edgecolor="none",
-            linewidth=0,
             alpha=BAND_ALPHA_SINGLE,
+            label=criterion,
         )
-        draw_single_criterion_envelope(ax, envelope, color, criterion)
-        handles.append(Patch(facecolor=color, edgecolor="none", alpha=BAND_ALPHA_SINGLE, label=criterion))
+        for criterion in inputs.DESIGN_CRITERIA
+    ]
+    y_values = []
+    panels = [
+        (axes[0], "gwp_struct", "$GWP_{struct}$ [kg-CO$_2$-eq/m$^2$]"),
+        (axes[1], "gwp_total", "$GWP_{tot}$ [kg-CO$_2$-eq/m$^2$]"),
+    ]
+    has_data = False
+    for ax, key, panel_label in panels:
+        for criterion in inputs.DESIGN_CRITERIA:
+            subset = series_for_criterion(all_series, criterion)
+            if not subset:
+                continue
+            has_data = True
+            envelope = envelope_by_length(subset, key, require_uls_feasible=True, criterion=criterion)
+            y_values.extend(envelope["min"])
+            y_values.extend(envelope["max"])
+            color = criterion_color(system, criterion)
+            ax.fill_between(
+                envelope["lengths"],
+                envelope["min"],
+                envelope["max"],
+                facecolor=color,
+                edgecolor="none",
+                linewidth=0,
+                alpha=BAND_ALPHA_SINGLE,
+            )
+            draw_single_criterion_envelope(ax, envelope, color, criterion)
+        ax.text(
+            0.025, 0.965, panel_label, transform=ax.transAxes,
+            ha="left", va="top", fontsize=17,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.78, "pad": 2.0},
+            zorder=10,
+        )
+        ax.set_xlabel("l [m]")
+        ax.set_xticks(scenario["lengths"])
+        ax.grid(True, alpha=0.35)
+        ax.tick_params(axis="both", which="major", labelsize=15)
 
-    if not handles:
+    if not has_data:
         plt.close(fig)
         return None
 
-    ax.set_title(f"{scenario['label']} - {system['label']}\n"
+    for ax in axes:
+        set_readable_ylim(ax, y_values)
+    fig.suptitle(f"{scenario['label']} - {system['label']}\n"
                  f"q$_k$={scenario['qk'] / 1000:.1f} kN/m$^2$, "
                  f"n$_{{iter}}$={system_max_iter(system)}, envelope of material/product variants")
-    ax.set_xlabel("l [m]")
-    ax.set_ylabel("GWP$_{struct}$ [kg-CO$_2$-eq/m$^2$]")
-    ax.set_xticks(scenario["lengths"])
-    set_readable_ylim(ax, y_values)
-    ax.grid(True, alpha=0.35)
-    ax.tick_params(axis="both", which="major", labelsize=15)
-    ax.legend(handles=handles, title="Design criterion", frameon=False)
-    fig.tight_layout()
+    fig.legend(handles=handles, title="Design criterion", frameon=False,
+               loc="upper center", bbox_to_anchor=(0.5, 0.89), ncol=4)
+    fig.tight_layout(rect=(0, 0, 1, 0.80))
     path = output_dir / f"final_single_{case_name}_{system['id']}.png"
     fig.savefig(path, dpi=400, bbox_inches="tight")
     plt.close(fig)
@@ -1094,8 +1111,11 @@ def main():
                 system,
                 design_series,
                 inputs.DESIGN_CRITERIA,
-                [("gwp_struct", "GWP_struct [kg-CO2-eq/m2]")],
-                "single_system_GWP_struct",
+                [
+                    ("gwp_struct", "GWP_struct [kg-CO2-eq/m2]"),
+                    ("gwp_total", "GWP_total [kg-CO2-eq/m2]"),
+                ],
+                "single_system_GWP",
             ))
             single_path = plot_single_system(case_name, scenario, system, design_series, output_dir)
             if single_path:

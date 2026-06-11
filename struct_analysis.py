@@ -40,6 +40,18 @@ from scipy.optimize import minimize, root_scalar
 from scipy.optimize import least_squares
 
 
+def concrete_member_is_uncracked(member):
+    """Return whether all available concrete design moments stay below cracking."""
+    section = member.section
+    moment_pairs = [(member.mkd_p, member.mkd_n)]
+    if hasattr(member, "mkd_p_y") and hasattr(member, "mkd_n_y"):
+        moment_pairs.append((member.mkd_p_y, member.mkd_n_y))
+    return all(
+        positive_moment < section.mr_p and negative_moment > section.mr_n
+        for positive_moment, negative_moment in moment_pairs
+    )
+
+
 #CONSTANTS--------------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------
 g = 10.0 #simplified gravitational acceleration [m/s^2]
@@ -2465,8 +2477,8 @@ class Member1D:
         self.w_install_adm = self.system.li_max / self.requirements.lw_install
         self.w_use_adm = self.system.li_max / self.requirements.lw_use
         self.w_app_adm = self.system.li_max / self.requirements.lw_app
-        self.mkd_n = self.system.alpha_m[0] * (self.gk + self.qk) * self.system.l_tot ** 2
-        self.mkd_p = self.system.alpha_m[1] * (self.gk + self.qk) * self.system.l_tot ** 2
+        self.mkd_p = self.system.alpha_m[0] * (self.gk + self.qk) * self.system.l_tot ** 2
+        self.mkd_n = self.system.alpha_m[1] * (self.gk + self.qk) * self.system.l_tot ** 2
         self.qk_zul_gzt = float
         if fire is not None:
             self.fire = fire
@@ -2736,7 +2748,7 @@ class Member1D:
         l_rech = self.system.li_max
         section_material = self.section.section_type[0:2]
         if section_material == "rc":  # take cracked stiffness for calculation of concrete sections if section is cracked
-            if self.mkd_p < self.section.mr_p and self.mkd_n > self.section.mr_n:
+            if concrete_member_is_uncracked(self):
                 eil = self.section.ei1
             else:
                 eil = self.section.ei2
@@ -2845,11 +2857,10 @@ class Member2D:
         self.w_install_adm = self.li_min / self.requirements.lw_install
         self.w_use_adm = self.li_min / self.requirements.lw_use
         self.w_app_adm = self.li_min / self.requirements.lw_app
-        self.mkd_n = self.system.alpha_m_x[0] * (self.gk + self.qk) * self.li_max ** 2
-        self.mkd_p = self.system.alpha_m_x[1] * (self.gk + self.qk) * self.li_max ** 2
-        self.mkd_n_y = self.system.alpha_m_y[0] * (self.gk + self.qk) * self.li_min ** 2
-        self.mkd_p_y = self.system.alpha_m_y[1] * (self.gk + self.qk) * self.li_min ** 2
-        #TODO: Everything for lx and ly!
+        self.mkd_p = self.system.alpha_m_x[0] * (self.gk + self.qk) * self.li_max ** 2
+        self.mkd_n = self.system.alpha_m_x[1] * (self.gk + self.qk) * self.li_max ** 2
+        self.mkd_p_y = self.system.alpha_m_y[0] * (self.gk + self.qk) * self.li_min ** 2
+        self.mkd_n_y = self.system.alpha_m_y[1] * (self.gk + self.qk) * self.li_min ** 2
         self.qk_zul_gzt = float
         self.fire = [0, 0, 0, 0]  # fire from bottom, left, top, right (0: no fire; 1: fire)
         if fire_b is True:
@@ -3277,7 +3288,7 @@ class Member2D:
         l_rech = self.system.li_max
         section_material = self.section.section_type[0:2]
         if section_material in ("rc", "pc"):  # take cracked stiffness for concrete sections if section is cracked
-            if self.mkd_p < self.section.mr_p and self.mkd_n > self.section.mr_n:
+            if concrete_member_is_uncracked(self):
                 eil = self.section.ei1
             else:
                 eil = self.section.ei2
