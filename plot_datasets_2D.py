@@ -71,6 +71,7 @@ def product_mech_prop(cursor, prod_id):
 def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requirements, crsec_type, mat_names,
                  g2k=0.75, qk=2.0, max_iter=100, idx_vrfctn=-1, slab_support="PL-eingespannt",
                  auto_floor_buildup=False, pt_layout=None, check_punching=True, start_h_by_span=None,
+                 uls_bending_only=False, optimize_shear_reinforcement=True,
                  plot=True, return_series=False):
 
     if idx_vrfctn == -1:
@@ -434,7 +435,9 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                         section0 = i[0]
                     floorstruc = floor_for_section(section0, i[1])
                     member0 = struct_analysis.Member2D(section0, sys, floorstruc, requirements, g2k, qk,
-                                                       check_punching=check_punching)
+                                                       check_punching=check_punching,
+                                                       uls_bending_only=uls_bending_only,
+                                                       optimize_shear_reinforcement=optimize_shear_reinforcement)
                     opt_section = struct_optimization_2D.get_optimized_section(member0, criterion, optimum, max_iter)
                     optimized_floorstruc = floor_for_section(opt_section, floorstruc)
                     if auto_floor_buildup and floor_signature(optimized_floorstruc) != floor_signature(floorstruc):
@@ -443,7 +446,9 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                         # the floor load that will actually be exported.
                         refined_member = struct_analysis.Member2D(
                             opt_section, sys, optimized_floorstruc, requirements, g2k, qk,
-                            check_punching=check_punching
+                            check_punching=check_punching,
+                            uls_bending_only=uls_bending_only,
+                            optimize_shear_reinforcement=optimize_shear_reinforcement,
                         )
                         opt_section = struct_optimization_2D.get_optimized_section(
                             refined_member, criterion, optimum, max_iter
@@ -451,7 +456,9 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                         optimized_floorstruc = floor_for_section(opt_section, optimized_floorstruc)
                     floorstruc = optimized_floorstruc
                     opt_member = struct_analysis.Member2D(opt_section, sys, floorstruc, requirements, g2k, qk,
-                                                          check_punching=check_punching)
+                                                          check_punching=check_punching,
+                                                          uls_bending_only=uls_bending_only,
+                                                          optimize_shear_reinforcement=optimize_shear_reinforcement)
                     members.append(opt_member)
                 member_list.append(members)
                 if i[0].section_type[0:2] == "rc":

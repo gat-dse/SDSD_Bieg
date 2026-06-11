@@ -3,9 +3,8 @@
 Run this after run_final_comparison.py has created:
     plots/final_comparison_summary.xlsx
 
-The script selects the best ENV member by total GWP for:
-- Residential, l = 6 m
-- Office, l = 12 m
+The script selects the best ENV member by total GWP for every case and span
+available in the result workbook.
 
 The plots are intended as separate thesis figures: all systems are arranged in
 one row, the upper edge of the total cross-section is aligned, and geometry,
@@ -27,11 +26,7 @@ os.chdir(REPO_ROOT)
 
 SUMMARY_FILE = Path("plots/final_comparison_summary.xlsx")
 OUTPUT_DIR = Path("plots")
-TARGETS = [
-    ("Residential", 6.0),
-    ("Office", 12.0),
-]
-
+WEB_OUTPUT_DIR = SCRIPT_DIR / "pairwise_weighting_web" / "cross_sections"
 CS_WIDTH = 1.00
 COLUMN_SPACING = 2.45
 
@@ -70,6 +65,17 @@ SYSTEM_ORDER = {
     "TCC flat, kerve": 5,
     "TCC ribs, DBS": 6,
     "Ribbed timber hollow core": 7,
+}
+
+SYSTEM_TITLES = {
+    "Rectangular concrete": "Rectangular concrete",
+    "Rectangular concrete PT dist.": "Post-tensioned concrete\n(distributed tendon layout)",
+    "Rectangular concrete PT band.": "Post-tensioned concrete\n(banded tendon layout)",
+    "Ribbed concrete": "Ribbed concrete",
+    "Rectangular wood": "Rectangular timber",
+    "TCC flat, kerve": "TCC flat, kerve",
+    "TCC ribs, DBS": "TCC ribs, screws",
+    "Ribbed timber hollow core": "Ribbed timber hollow core",
 }
 
 
@@ -790,7 +796,8 @@ def draw_cross_section(ax, row, x_center, total_top, name_y, text_y, scale):
     draw_height_dimension(ax, dim_x_struct, y_bottom, struct_height, f"h$_{{struct}}$={h_struct * 100:.0f} cm", side="right")
 
     system = str(row.get("system", ""))
-    ax.text(x_center, name_y, wrap_text(system, 18), ha="center", va="top", fontsize=11, fontweight="bold")
+    title = SYSTEM_TITLES.get(system, system)
+    ax.text(x_center, name_y, wrap_text(title, 24), ha="center", va="top", fontsize=11, fontweight="bold")
 
     material_text = material_short(row)
     floor_text = " | ".join(f"{floor_label(name)}: {height * 1000:.0f} mm" for name, height in floor_layers)
@@ -905,6 +912,8 @@ def plot_case(df, case_name, span):
     safe_case = case_name.lower().replace(" ", "_")
     path = OUTPUT_DIR / f"final_cross_sections_{safe_case}_{int(span)}m.png"
     fig.savefig(path, dpi=400, bbox_inches="tight")
+    WEB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    fig.savefig(WEB_OUTPUT_DIR / path.name, dpi=400, bbox_inches="tight")
     plt.close(fig)
     return path
 
@@ -915,9 +924,16 @@ def main():
             f"{SUMMARY_FILE} not found. Run run_final_comparison.py first, then run this script."
         )
     OUTPUT_DIR.mkdir(exist_ok=True)
+    WEB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     df = pd.read_excel(SUMMARY_FILE, sheet_name="best_ENV_total_GWP")
+    targets = (
+        df[["case", "span_l_m"]]
+        .drop_duplicates()
+        .sort_values(["case", "span_l_m"])
+        .itertuples(index=False, name=None)
+    )
     paths = []
-    for case_name, span in TARGETS:
+    for case_name, span in targets:
         paths.append(plot_case(df, case_name, span))
     print("Created cross-section overview plots:")
     for path in paths:

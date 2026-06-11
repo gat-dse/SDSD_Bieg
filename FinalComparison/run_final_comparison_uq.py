@@ -67,6 +67,33 @@ SYSTEM_COLORS = {
     "Ribbed concrete": "#005F3C",
 }
 
+UQ_PROBABILITY_TEXT_SIZE = 17
+
+RESIDENTIAL_SYSTEM_LABELS = {
+    "Rectangular concrete": "Rectangular concrete*\n2-way, full continuity, walls",
+    "Rectangular concrete PT dist.": (
+        "Post-tensioned concrete\n(distributed tendon layout)\n"
+        "2-way, full continuity, walls"
+    ),
+    "Rectangular wood": "Rectangular timber*\nSimple span",
+    "TCC flat, kerve": "TCC flat, kerve\nSimple span",
+    "TCC ribs, DBS": "TCC ribs, screws\nSimple span",
+    "Ribbed timber hollow core": "Ribbed timber hollow core*\nSimple span",
+}
+
+OFFICE_SYSTEM_LABELS = {
+    "Rectangular concrete": "Rectangular concrete*\n2-way, full continuity, columns",
+    "Rectangular concrete PT dist.": (
+        "Post-tensioned concrete\n(distributed tendon layout)\n"
+        "2-way, full continuity, columns"
+    ),
+    "Rectangular concrete PT band.": (
+        "Post-tensioned concrete\n(banded tendon layout)\n"
+        "2-way, full continuity, columns"
+    ),
+    "Ribbed concrete": "Ribbed concrete*\nContinuous beam",
+}
+
 G = 10.0
 COST_TIME_LOW = 0.80
 COST_TIME_MODE = 1.00
@@ -512,6 +539,28 @@ def parse_geometry_value(text: str, key: str) -> float:
 
 def system_color(system: str) -> str:
     return SYSTEM_COLORS.get(str(system), "#444444")
+
+
+def probability_legend_label(case: str, system: str) -> str:
+    if str(case).lower() == "residential":
+        return RESIDENTIAL_SYSTEM_LABELS.get(str(system), str(system))
+    if str(case).lower() == "office":
+        return OFFICE_SYSTEM_LABELS.get(str(system), str(system))
+    return str(system)
+
+
+def unique_probability_legend(axes, case: str):
+    handles = []
+    labels = []
+    seen = set()
+    for ax in np.asarray(axes).flatten():
+        for handle, system in zip(*ax.get_legend_handles_labels()):
+            if system in seen:
+                continue
+            seen.add(system)
+            handles.append(handle)
+            labels.append(probability_legend_label(case, system))
+    return handles, labels
 
 
 def row_component_samples(row: pd.Series, products: pd.DataFrame,
@@ -1021,7 +1070,13 @@ def plot_robustness(system_stats: pd.DataFrame, robust: pd.DataFrame, plot_dir: 
     base_robust = robust[robust.get("scenario", "all systems") == "all systems"].copy()
     gwp_robust = base_robust[base_robust["metric"].isin(["GWP_total", "GWP_struct"])].copy()
     for case, case_prob in gwp_robust.groupby("case"):
-        fig, axes = plt.subplots(1, 2, figsize=(12.0, 4.8), sharex=True, sharey=True, constrained_layout=True)
+        is_residential = str(case).lower() == "residential"
+        fig, axes = plt.subplots(
+            1, 2,
+            figsize=(15.5, 5.6) if is_residential else (12.0, 4.8),
+            sharex=True,
+            sharey=True,
+        )
         for ax, metric, ylabel, title in (
             (axes[0], "GWP_total", "P(lowest GWP$_{tot}$)", "Total GWP"),
             (axes[1], "GWP_struct", "P(lowest GWP$_{struct}$)", "Structural GWP"),
@@ -1031,21 +1086,57 @@ def plot_robustness(system_stats: pd.DataFrame, robust: pd.DataFrame, plot_dir: 
                 ax.plot(group["span_l_m"], group["probability_lowest"], marker="o",
                         linewidth=1.8, color=system_color(system), label=system)
             ax.set_ylim(-0.03, 1.03)
-            ax.set_title(title)
-            ax.set_xlabel("l [m]")
-            ax.set_ylabel(ylabel)
+            if is_residential:
+                parameter = "GWP_{tot}" if metric == "GWP_total" else "GWP_{struct}"
+                ax.set_title(
+                    rf"$P(\mathrm{{lowest}}\ {parameter})$",
+                    loc="left", pad=8, fontsize=UQ_PROBABILITY_TEXT_SIZE,
+                )
+                ax.set_xlabel("l [m]", fontsize=UQ_PROBABILITY_TEXT_SIZE)
+                ax.tick_params(axis="both", labelsize=UQ_PROBABILITY_TEXT_SIZE)
+            else:
+                ax.set_title(title)
+                ax.set_xlabel("l [m]")
+                ax.set_ylabel(ylabel)
             ax.grid(True, alpha=0.25)
-        handles, labels = axes[0].get_legend_handles_labels()
-        fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.08),
-                   ncol=2, frameon=False, fontsize=8)
-        fig.suptitle(f"{case}: P(best GWP)\none uniformly selected feasible ENV variant per system and draw")
+        if is_residential:
+            handles, labels = unique_probability_legend(axes, case)
+            fig.legend(
+                handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.995),
+                ncol=3, frameon=False, fontsize=UQ_PROBABILITY_TEXT_SIZE,
+            )
+            fig.tight_layout(rect=(0, 0, 1, 0.72))
+        else:
+            handles, labels = axes[0].get_legend_handles_labels()
+            fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.08),
+                       ncol=2, frameon=False, fontsize=8)
+            fig.suptitle(f"{case}: P(best GWP)\none uniformly selected feasible ENV variant per system and draw")
+            fig.tight_layout()
         path = output_dir / f"uq_probability_best_{safe_filename(case)}.png"
-        fig.savefig(path, dpi=220)
+        fig.savefig(path, dpi=220, bbox_inches="tight")
         plt.close(fig)
         paths.append(path)
 
-    for case, case_prob in base_robust.groupby("case"):
-        fig, axes = plt.subplots(5, 2, figsize=(12.0, 15.2), sharex=True, constrained_layout=True)
+    all_factor_scenarios = [
+        (case, case_prob, "")
+        for case, case_prob in base_robust.groupby("case")
+    ]
+    office_without_ribbed_all = robust[
+        (robust["case"].astype(str).str.lower() == "office")
+        & (robust.get("scenario", "all systems") == "without ribbed concrete")
+    ].copy()
+    if not office_without_ribbed_all.empty:
+        all_factor_scenarios.append(
+            ("Office", office_without_ribbed_all, "_without_ribbed_concrete")
+        )
+
+    for case, case_prob, filename_suffix in all_factor_scenarios:
+        use_comparison_style = str(case).lower() in {"residential", "office"}
+        fig, axes = plt.subplots(
+            5, 2,
+            figsize=(15.5, 17.2) if use_comparison_style else (12.0, 15.2),
+            sharex=True,
+        )
         axes_arr = axes.flatten()
         for ax, (metric_name, metric) in zip(axes_arr, UQ_METRICS.items()):
             metric_prob = case_prob[case_prob["metric"] == metric_name]
@@ -1053,16 +1144,51 @@ def plot_robustness(system_stats: pd.DataFrame, robust: pd.DataFrame, plot_dir: 
                 ax.plot(group["span_l_m"], group["probability_lowest"], marker="o",
                         linewidth=1.4, color=system_color(system), label=system)
             ax.set_ylim(-0.03, 1.03)
-            ax.set_title(metric["label"], fontsize=11)
-            ax.set_ylabel("P(lowest)")
+            if use_comparison_style:
+                parameter_labels = {
+                    "GWP_struct": "GWP_{struct}",
+                    "GWP_total": "GWP_{tot}",
+                    "h_struct": "h_{struct}",
+                    "h_total": "h_{tot}",
+                    "m_struct": "m_{struct}",
+                    "m_total": "m_{tot}",
+                    "cost_struct": "C_{struct}",
+                    "cost_total": "C_{tot}",
+                    "time_struct": "t_{struct}",
+                    "time_total": "t_{tot}",
+                }
+                ax.set_title(
+                    rf"$P(\mathrm{{lowest}}\ {parameter_labels[metric_name]})$",
+                    loc="left", pad=8, fontsize=UQ_PROBABILITY_TEXT_SIZE,
+                )
+                ax.tick_params(axis="both", labelsize=UQ_PROBABILITY_TEXT_SIZE)
+            else:
+                ax.set_title(metric["label"], fontsize=11)
+                ax.set_ylabel("P(lowest)")
             ax.grid(True, alpha=0.25)
         for ax in axes_arr[-2:]:
-            ax.set_xlabel("l [m]")
-        handles, labels = axes_arr[0].get_legend_handles_labels()
-        fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 1.01),
-                   ncol=min(3, max(1, len(labels))), frameon=False)
-        fig.suptitle(f"{case}: P(best value) for final ENV comparison factors\none uniformly selected feasible ENV variant per system and draw", y=1.035)
-        path = output_dir / f"uq_probability_best_all_ENV_factors_{safe_filename(case)}.png"
+            if use_comparison_style:
+                ax.set_xlabel("l [m]", fontsize=UQ_PROBABILITY_TEXT_SIZE)
+            else:
+                ax.set_xlabel("l [m]")
+        if use_comparison_style:
+            handles, labels = unique_probability_legend(axes_arr, case)
+            fig.legend(
+                handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.995),
+                ncol=3 if str(case).lower() == "residential" else 4,
+                frameon=False, fontsize=UQ_PROBABILITY_TEXT_SIZE,
+            )
+            fig.tight_layout(rect=(0, 0, 1, 0.88))
+        else:
+            handles, labels = axes_arr[0].get_legend_handles_labels()
+            fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 1.01),
+                       ncol=min(3, max(1, len(labels))), frameon=False)
+            fig.suptitle(f"{case}: P(best value) for final ENV comparison factors\none uniformly selected feasible ENV variant per system and draw", y=1.035)
+            fig.tight_layout()
+        path = output_dir / (
+            f"uq_probability_best_all_ENV_factors_{safe_filename(case)}"
+            f"{filename_suffix}.png"
+        )
         fig.savefig(path, dpi=220, bbox_inches="tight")
         plt.close(fig)
         paths.append(path)

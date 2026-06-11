@@ -166,7 +166,10 @@ def replot_case(case_name: str, scenario: dict, summary: pd.DataFrame) -> Path:
             facecolor=system_colour(system),
             edgecolor="none",
             alpha=BAND_ALPHA_COMPARISON,
-            label=system.get("comparison_label", system["label"]),
+            label=(
+                f"{system.get('comparison_label', system['label'])}\n"
+                f"{system.get('structural_system', '')}"
+            ),
         )
         for system in scenario["systems"]
     ]

@@ -175,6 +175,8 @@ SCENARIOS = {
                 "structural_system": "2-way, full continuity, columns",
                 "slab_support": "PL-eingespannt",
                 "start_h_by_span": {8: 0.25, 10: 0.35, 12: 0.45, 16: 0.60},
+                "uls_bending_only": True,
+                "optimize_shear_reinforcement": False,
             },
             {
                 "id": "off_pt_flat_columns_dist",
@@ -188,6 +190,8 @@ SCENARIOS = {
                 "structural_system": "2-way, full continuity, columns",
                 "slab_support": "PL-eingespannt",
                 "start_h_by_span": {8: 0.20, 10: 0.25, 12: 0.30, 16: 0.40},
+                "uls_bending_only": True,
+                "optimize_shear_reinforcement": False,
             },
             {
                 "id": "off_pt_flat_columns_band",
@@ -201,6 +205,8 @@ SCENARIOS = {
                 "structural_system": "2-way, full continuity, columns",
                 "slab_support": "PL-eingespannt",
                 "start_h_by_span": {8: 0.20, 10: 0.25, 12: 0.30, 16: 0.40},
+                "uls_bending_only": True,
+                "optimize_shear_reinforcement": False,
             },
             {
                 "id": "off_ribbed_concrete_continuous",

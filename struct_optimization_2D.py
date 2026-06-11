@@ -275,18 +275,20 @@ def criterion_penalty(member, criterion, include_uls_guard=True, use_cracked_def
 #OPTIMIZATION OF RECTANGULAR CONCRETE CROSS-SECTIONS
 #.......................................................................................................................
 def opt_rc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.16):
+    optimize_shear = getattr(m, "optimize_shear_reinforcement", True)
+    uls_bending_only = getattr(m, "uls_bending_only", False)
     # definition of initial values for variables, which are going to be optimized
     h0 = m.section.h  # start value for height corresponds to 1/20 of system length
     di_xu0 = m.section.bw[0][0]  # start value for rebar diameter 40 mm
     di_xo0 = m.section.bw[1][0]  # start value for upper rebar diameter
-    di_bw0 = m.section.bw_bg[0]
+    di_bw0 = m.section.bw_bg[0] if optimize_shear else 0.0
     var0 = [h0, di_xu0, di_xo0, di_bw0]
 
     # define bounds of variables
     bh = (h_min, 1.2)  # height between h_min and 1.2 m
     bdi_xu = (0.006, 0.04)  # diameter of rebars between 6 mm and 40 mm
     bdi_xo = (0.006, 0.04)  # diameter of rebars between 6 mm and 40 mm
-    bdi_bw = (0.0, 0.016)  # stirrup diameter for shear/punching checks
+    bdi_bw = (0.0, 0.016) if optimize_shear else (0.0, 0.0)
     bounds = [bh, bdi_xu, bdi_xo, bdi_bw]
 
     # definition of fixed values of cross-section
@@ -301,17 +303,21 @@ def opt_rc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.16):
         n_bw = 10
     add_arg = [m.system, co, st, b, s_xu, s_xo, s_yu, s_yo, s_bw, n_bw,
                m.floorstruc, m.requirements, to_opt, criterion, m.g2k, m.qk, phi, c_nom, xi, jnt_srch,
-               getattr(m, "check_punching", True)]
+               getattr(m, "check_punching", True), uls_bending_only, optimize_shear]
 
     def make_seed_member(point):
         h, di_xu, di_xo, di_bw = point
+        if not optimize_shear:
+            di_bw = 0.0
         section = struct_analysis.RectangularConcrete(
             co, st, b, h, di_xu, s_xu, di_xo, s_xo, di_xu, s_yu, di_xo, s_yo,
             di_bw, s_bw, n_bw, phi, c_nom, xi, jnt_srch
         )
         return struct_analysis.Member2D(
             section, m.system, m.floorstruc, m.requirements, m.g2k, m.qk,
-            evaluate_service=False, check_punching=getattr(m, "check_punching", True)
+            evaluate_service=False, check_punching=getattr(m, "check_punching", True),
+            uls_bending_only=uls_bending_only,
+            optimize_shear_reinforcement=optimize_shear,
         )
 
     var0 = rectangular_feasible_start(var0, bounds, make_seed_member)
@@ -324,6 +330,8 @@ def opt_rc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.16):
         {"args": (add_arg,), "bounds": bounds, "method": "Powell"},
     )
     h, di_xu, di_xo, di_bw = opt.x
+    if not optimize_shear:
+        di_bw = 0.0
     optimized_section = struct_analysis.RectangularConcrete(co, st, b, h, di_xu, s_xu, di_xo, s_xo, di_xu, s_yu, di_xo, s_yo, di_bw, s_bw, n_bw,
                                                             phi, c_nom, xi, jnt_srch)
     return optimized_section
@@ -348,6 +356,11 @@ def rc_rqs(var, add_arg):
     qk = add_arg[15]
     phi, c_nom, xi, jnt_srch = add_arg[16:20]
     check_punching = add_arg[20] if len(add_arg) > 20 else True
+    uls_bending_only = add_arg[21] if len(add_arg) > 21 else False
+    optimize_shear = add_arg[22] if len(add_arg) > 22 else True
+
+    if not optimize_shear:
+        di_bw = 0.0
 
     if invalid_rectangular_geometry(h, c_nom, di_xu, di_xo, di_bw):
         return 1e12
@@ -359,7 +372,9 @@ def rc_rqs(var, add_arg):
 
     # create member
     member = struct_analysis.Member2D(section, system, floorstruc, criteria, g2k, qk,
-                                      check_punching=check_punching)
+                                      check_punching=check_punching,
+                                      uls_bending_only=uls_bending_only,
+                                      optimize_shear_reinforcement=optimize_shear)
     member.calc_qk_zul_gzt()  # calculate admissible live load
 
     penalty = criterion_penalty(
@@ -378,13 +393,16 @@ def rc_rqs(var, add_arg):
 # OPTIMIZATION OF RECTANGULAR POST-TENSIONED CONCRETE CROSS-SECTIONS
 # .......................................................................................................................
 def opt_pc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.18): #h_min is set to 18 cm, because of minimum height for post-tensioned systems
+    optimize_shear = getattr(m, "optimize_shear_reinforcement", True)
+    uls_bending_only = getattr(m, "uls_bending_only", False)
     h0 = m.section.h
     di_xu0 = m.section.bw[0][0]
     di_xo0 = m.section.bw[1][0]
-    di_bw0 = m.section.bw_bg[0]
+    di_bw0 = m.section.bw_bg[0] if optimize_shear else 0.0
     var0 = [h0, di_xu0, di_xo0, di_bw0]
 
-    bounds = [(h_min, 1.2), (0.006, 0.04), (0.006, 0.04), (0.0, 0.016)]
+    shear_bounds = (0.0, 0.016) if optimize_shear else (0.0, 0.0)
+    bounds = [(h_min, 1.2), (0.006, 0.04), (0.006, 0.04), shear_bounds]
 
     b = m.section.b
     s_xu, s_xo = m.section.bw[0][1], m.section.bw[1][1]
@@ -399,11 +417,13 @@ def opt_pc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.18): #h_m
         m.system, co, st, pt, b, s_xu, s_xo, s_yu, s_yo, s_bw, n_bw,
         m.floorstruc, m.requirements, to_opt, criterion, m.g2k, m.qk,
         phi, c_nom, xi, jnt_srch, m.section.layout, m.section.c_nom_pt, m.section.A_p,
-        getattr(m, "check_punching", True)
+        getattr(m, "check_punching", True), uls_bending_only, optimize_shear
     ]
 
     def make_seed_member(point):
         h, di_xu, di_xo, di_bw = point
+        if not optimize_shear:
+            di_bw = 0.0
         section = struct_analysis.PostTensionedConcrete(
             co, st, pt, m.system.lx, m.system.ly, b, h, di_xu, s_xu, di_xo, s_xo,
             di_xu, s_yu, di_xo, s_yo, di_bw, s_bw, n_bw, phi, c_nom, xi, jnt_srch,
@@ -411,7 +431,9 @@ def opt_pc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.18): #h_m
         )
         return struct_analysis.Member2D(
             section, m.system, m.floorstruc, m.requirements, m.g2k, m.qk,
-            evaluate_service=False, check_punching=getattr(m, "check_punching", True)
+            evaluate_service=False, check_punching=getattr(m, "check_punching", True),
+            uls_bending_only=uls_bending_only,
+            optimize_shear_reinforcement=optimize_shear,
         )
 
     var0 = rectangular_feasible_start(var0, bounds, make_seed_member)
@@ -439,6 +461,8 @@ def opt_pc_rec(m, to_opt="GWP", criterion="ULS", max_iter=100, h_min=0.18): #h_m
         },
     )
     h, di_xu, di_xo, di_bw = opt.x
+    if not optimize_shear:
+        di_bw = 0.0
     return struct_analysis.PostTensionedConcrete(
         co, st, pt, m.system.lx, m.system.ly, b, h, di_xu, s_xu, di_xo, s_xo,
         di_xu, s_yu, di_xo, s_yo, di_bw, s_bw, n_bw, phi, c_nom, xi, jnt_srch,
@@ -453,6 +477,11 @@ def pc_rqs(var, add_arg):
     floorstruc, criteria, to_opt, criterion, g2k, qk = add_arg[11:17]
     phi, c_nom, xi, jnt_srch, layout, c_nom_pt, A_p = add_arg[17:24]
     check_punching = add_arg[24] if len(add_arg) > 24 else True
+    uls_bending_only = add_arg[25] if len(add_arg) > 25 else False
+    optimize_shear = add_arg[26] if len(add_arg) > 26 else True
+
+    if not optimize_shear:
+        di_bw = 0.0
 
     if invalid_rectangular_geometry(h, c_nom, di_xu, di_xo, di_bw):
         return 1e12
@@ -471,7 +500,9 @@ def pc_rqs(var, add_arg):
     min_reinf_penalty = pt_min_reinforcement_penalty(section)
     member = struct_analysis.Member2D(
         section, system, floorstruc, criteria, g2k, qk, evaluate_service=evaluate_service,
-        check_punching=check_punching
+        check_punching=check_punching,
+        uls_bending_only=uls_bending_only,
+        optimize_shear_reinforcement=optimize_shear,
     )
     member.calc_qk_zul_gzt()
 
@@ -503,8 +534,8 @@ def opt_rc_rib(m, to_opt="GWP", criterion="ULS", max_iter=100):
     var0 = [h_w0, h_f0, di_x_w0, di_xo0, b_w0, b0]
 
     # define bounds of variables
-    bh_f = (0.12, 0.5)  # height between 12 cm and 50 cm
-    bh_w = (0.04, 2)  # height between 10 cm and 2.0 m
+    bh_f = (0.12, 0.4)  # flange height between 12 cm and 40 cm
+    bh_w = (0.05, 1.2)  # rib web height between 5 cm and 1.2 m
     bdi_x_w = (0.008, 0.04)  # diameter of rebars between 8 mm and 40 mm
     bdi_xo = (0.008, 0.04)  # upper reinforcement over supports
     bb_w = (0.15, 0.4)  # rib width between 15 and 40 cm
@@ -700,10 +731,8 @@ def opt_wd_rib(m, to_opt="GWP", criterion="ULS", max_iter=100):
     var0 = [b0, h0, t20, t30]
 
     # define bounds of variables
-    bh = (0.22, 2.0)  # height of rib between 22 cm (minimal requirement b x h = 100 x 220 for R60 according to Lignum 4.1, Table 433-2,
-    # Column G) and 200 cm
-    bb = (0.1, 0.52)  # width of rib between 10 cm (minimal requirement b x h = 100 x 220 for R60 according to Lignum 4.1, Table 433-2,
-    # Column G) and 52 cm
+    bh = (0.40, 0.80)  # rib height between 40 cm and 80 cm
+    bb = (0.10, 0.28)  # rib width between 10 cm and 28 cm
     bt2 = (0.025, 0.16)  # hight of lower sheating between 2.5 cm (minimal requirement for R60 according to Lignum 4.1, Table 433-2,
     # Column G) and 16 cm
     bt3 = (0.027, 0.16)  # hight of lower sheating between 2.7 cm (minimal requirement for R60 according to Lignum 4.1, Table 433-2,

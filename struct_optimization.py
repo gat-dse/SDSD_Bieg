@@ -283,8 +283,8 @@ def opt_rc_rib(m, to_opt="GWP", criterion="ULS", max_iter=100):
     var0 = [h_w0, h_f0, di_x_w0, di_xo0, b_w0, b0]
 
     # define bounds of variables
-    bh_f = (0.08, 0.5)  # height between 12 cm and 50 cm
-    bh_w = (0.04, 1.0)  # rib web height between 4 cm and 1.0 m
+    bh_f = (0.12, 0.4)  # flange height between 12 cm and 40 cm
+    bh_w = (0.05, 1.2)  # rib web height between 5 cm and 1.2 m
     bdi_x_w = (0.008, 0.04)  # diameter of rebars between 8 mm and 40 mm
     bdi_xo = (0.008, 0.04)  # upper reinforcement over supports
     bb_w = (0.15, 0.4)  # rib width between 15 and 40 cm
@@ -484,9 +484,8 @@ def opt_wd_rib(m, to_opt="GWP", criterion="ULS", max_iter=100):
     # define bounds of variables
     # TODO: Stimmen die Randbedingungen der Schichtdicken so gemäss Lignum? Ist zu verifizieren!
     # TODO: Ev. Fallunterscheidung -> Falls unten GFP vorhanden, gem. aktuellem Stand, falls nicht, dann 2. Fall definieren.
-    bh = (0.40, 2.0)  # height of rib between 40 cm and 200 cm
-    bb = (0.1, 0.24)  # width of rib between 10 cm (minimal requirement b x h = 100 x 220 for R60 according to Lignum 4.1, Table 433-2,
-    # Column G) and 24 cm
+    bh = (0.40, 0.80)  # rib height between 40 cm and 80 cm
+    bb = (0.10, 0.28)  # rib width between 10 cm and 28 cm
     bt2 = (0.025, 0.16)  # hight of lower sheating between 2.5 cm (minimal requirement for R60 according to Lignum 4.1, Table 433-2,
     # Column G) and 16 cm
     bt3 = (0.027, 0.16)  # hight of lower sheating between 2.7 cm (minimal requirement for R60 according to Lignum 4.1, Table 433-2,

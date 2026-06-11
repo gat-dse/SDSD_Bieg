@@ -2800,7 +2800,8 @@ class Member1D:
 class Member2D:
     def __init__(self, section, system, floorstruc, requirements, g2k=0.0, qk=2e3, psi0=0.7, psi1=0.5, psi2=0.3,
                      fire_b=True, fire_l=False, fire_t=False, fire_r=False, evaluate_service=True,
-                     check_punching=True):
+                     check_punching=True, uls_bending_only=False,
+                     optimize_shear_reinforcement=True):
         """
         Definiert ein 2-Dimensionales Bauteil (Platte) mit Eigenschaften
         :section:
@@ -2809,6 +2810,8 @@ class Member2D:
         self.section = section
         self.system = system
         self.check_punching = check_punching
+        self.uls_bending_only = uls_bending_only
+        self.optimize_shear_reinforcement = optimize_shear_reinforcement
         self.floorstruc = floorstruc
         self.requirements = requirements
         self.acoustic = AcousticFloorGenerator.evaluate_floorstruc(section, floorstruc)
@@ -3001,6 +3004,8 @@ class Member2D:
         qs_class_vorh = [self.section.qs_class_n, self.section.qs_class_p]
 
         def finalize(qu_bend, qu_shear):
+            if self.uls_bending_only:
+                qu_shear = float("inf")
             self.qu_bending = qu_bend
             self.qu_shear = qu_shear
             if qu_bend <= qu_shear:

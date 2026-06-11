@@ -850,6 +850,8 @@ def run_system(scenario, system, criteria):
             pt_layout=system.get("pt_layout"),
             check_punching=inputs.CHECK_PUNCHING_SHEAR,
             start_h_by_span=system.get("start_h_by_span"),
+            uls_bending_only=system.get("uls_bending_only", False),
+            optimize_shear_reinforcement=system.get("optimize_shear_reinforcement", True),
         )
         return series
     if system["dimension"] == "1D":
@@ -1007,7 +1009,7 @@ def plot_env_comparison(case_name, scenario, env_results, output_dir):
             facecolor=item["color"],
             edgecolor="none",
             alpha=BAND_ALPHA_COMPARISON,
-            label=item["comparison_label"],
+            label=f"{item['comparison_label']}\n{item['structural_system']}",
         )
         for item in env_results
     ]

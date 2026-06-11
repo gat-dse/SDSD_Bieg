@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Assessment of Floor Systems</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="access-locked">
+  <section id="access-gate" class="access-gate" aria-labelledby="access-title">
+    <form id="access-form" class="access-card">
+      <p class="eyebrow">Restricted access</p>
+      <h1 id="access-title">Assessment of Floor Systems</h1>
+      <p>Enter the general access key to open the sustainability assessment.</p>
+      <label for="access-key">Access key</label>
+      <input id="access-key" type="password" autocomplete="current-password" required autofocus>
+      <p id="access-error" class="access-error" role="alert" hidden>Incorrect access key.</p>
+      <button type="submit">Open assessment</button>
+    </form>
+  </section>
+  <main class="page-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Interactive sustainability assessment</p>
+        <h1>Assessment of Floor Systems</h1>
+        <p class="hero-copy">The sustainability assessment criteria can be weighted to support a holistic floor-system design. All systems included in the comparison fulfil the structural and acoustic requirements according to the applicable SIA standards.</p>
+      </div>
+    </header>
+
+    <section class="control-panel" aria-label="Comparison settings">
+      <div class="selectors">
+        <label>Case<select id="case-select"></select></label>
+        <label>Scenario<select id="scenario-select"></select></label>
+        <label>Span<select id="span-select"></select></label>
+      </div>
+
+      <div class="weight-heading">
+        <div>
+          <h2>Criterion weights</h2>
+          <p>Weights are normalized automatically. A zero weight excludes a criterion.</p>
+        </div>
+        <button id="equalize-button" type="button">Equal weights</button>
+      </div>
+      <div id="weight-controls" class="weight-grid"></div>
+      <div class="weight-summary">
+        <span>Normalized allocation</span>
+        <div id="weight-allocation" class="allocation-bar" aria-label="Normalized weight allocation"></div>
+      </div>
+    </section>
+
+    <section class="result-grid">
+      <article class="result-card" data-scope="struct">
+        <div class="result-heading">
+          <div>
+            <p class="scope-label">Structural - Structural cross-section</p>
+            <h2>Structural sustainability score</h2>
+          </div>
+          <div id="struct-winner" class="winner-chip"></div>
+        </div>
+        <div id="struct-ranking" class="ranking"></div>
+      </article>
+
+      <article class="result-card" data-scope="total">
+        <div class="result-heading">
+          <div>
+            <p class="scope-label">Total - Total cross-section</p>
+            <h2>Total sustainability score</h2>
+          </div>
+          <div id="total-winner" class="winner-chip"></div>
+        </div>
+        <div id="total-ranking" class="ranking"></div>
+      </article>
+    </section>
+
+    <section class="detail-card">
+      <div class="detail-heading">
+        <div>
+          <p class="scope-label">Score development</p>
+          <h2>Sustainability scores across spans</h2>
+        </div>
+        <div class="scope-toggle" role="group" aria-label="Chart scope">
+          <button class="active" data-chart-scope="struct" type="button">Structural - Structural cross-section</button>
+          <button data-chart-scope="total" type="button">Total - Total cross-section</button>
+        </div>
+      </div>
+      <div id="span-chart" class="span-chart"></div>
+    </section>
+
+    <section class="detail-card cross-section-card">
+      <div class="detail-heading">
+        <div>
+          <p class="scope-label">Optimised design</p>
+          <h2>Cross-sections at the selected span</h2>
+          <p class="section-copy">The optimised cross-sections can be plotted for each available span. The figure updates with the selected case and span.</p>
+        </div>
+      </div>
+      <img id="cross-section-plot" class="cross-section-plot" alt="Optimised floor-system cross-sections at the selected span">
+      <p id="cross-section-message" class="cross-section-message" hidden>Cross-section plot not available for this selection.</p>
+    </section>
+
+    <footer>
+      The sustainability score combines the user-defined criterion weights with the mean outperformance probabilities. These values are based on pairwise probabilities calculated as <i>P</i>(A &lt; B) + 0.5<i>P</i>(A = B) and averaged over all feasible opponents; the resulting sustainability score is not a probability of being the global winner.
+    </footer>
+  </main>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
