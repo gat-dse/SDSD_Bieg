@@ -49,11 +49,7 @@ def feasible_rows(rows: pd.DataFrame, criterion: str) -> pd.DataFrame:
     values = pd.to_numeric(rows[column], errors="coerce")
     if criterion == "FIRE":
         return rows[values.isna() | (values <= 1.0001)]
-    feasible = values.notna() & (values <= 1.0001)
-    if criterion == "SLS1":
-        uls = pd.to_numeric(rows["uls_utilization"], errors="coerce")
-        feasible &= uls.notna() & (uls <= 1.0001)
-    return rows[feasible]
+    return rows[values.notna() & (values <= 1.0001)]
 
 
 def envelope(rows: pd.DataFrame, spans: list[float], column: str) -> dict[str, list[float]]:

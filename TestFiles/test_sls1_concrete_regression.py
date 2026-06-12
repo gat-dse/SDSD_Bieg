@@ -42,7 +42,7 @@ def test_sls1_penalty_uses_cracked_deflection_after_cracking():
     assert penalty == pytest.approx(1500.0)
 
 
-def test_sls1_criterion_rejects_uls_infeasible_member():
+def test_standalone_sls1_allows_uls_infeasible_member():
     member = concrete_member(80.0, -90.0)
     member.qk = 3000.0
     member.qk_zul_gzt = 0.0
@@ -50,6 +50,30 @@ def test_sls1_criterion_rejects_uls_infeasible_member():
     member.w_install_ger = member.w_use_ger = member.w_app_ger = 0.0
     member.w_install_adm = member.w_use_adm = member.w_app_adm = 0.010
 
-    penalty = struct_optimization_2D.criterion_penalty(member, "SLS1", include_uls_guard=True)
+    penalty = struct_optimization_2D.criterion_penalty(member, "SLS1", include_uls_guard=False)
 
-    assert penalty >= struct_optimization_2D.ULS_INFEASIBLE_BASE_PENALTY
+    assert penalty == 0.0
+
+
+def vibration_member(f1, a_ed, wf_ed=0.0, ve_ed=0.0):
+    return SimpleNamespace(
+        f1=f1,
+        a_ed=a_ed,
+        wf_ed=wf_ed,
+        ve_ed=ve_ed,
+        ve_cd=0.01,
+        r1=1.0,
+        requirements=SimpleNamespace(f1=8.0, a_cd=0.1, w_f_cdr1=0.001),
+    )
+
+
+def test_sls2_accepts_frequency_below_8_hz_when_acceleration_passes():
+    member = vibration_member(f1=7.0, a_ed=0.05)
+
+    assert struct_optimization_2D.calc_sls2_penalty(member) == 0.0
+
+
+def test_sls2_penalizes_low_frequency_when_acceleration_also_fails():
+    member = vibration_member(f1=7.0, a_ed=0.2)
+
+    assert struct_optimization_2D.calc_sls2_penalty(member) > 0.0

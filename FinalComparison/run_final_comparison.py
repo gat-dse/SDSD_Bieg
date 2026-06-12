@@ -317,7 +317,7 @@ def member_is_feasible_for_criterion(member, criterion="ENV", tol=1e-4):
     if criterion == "ULS":
         required = ["uls_utilization"]
     elif criterion == "SLS1":
-        required = ["uls_utilization", "sls1_utilization"]
+        required = ["sls1_utilization"]
     elif criterion == "SLS2":
         required = ["sls2_utilization"]
     elif criterion == "FIRE":
@@ -368,14 +368,23 @@ def utilization_row(member):
     f1_req = getattr(requirements, "f1", float("nan"))
     a_cd = getattr(requirements, "a_cd", float("nan"))
     wf_cd = getattr(requirements, "w_f_cdr1", float("nan"))
+    sls2_frequency_util = safe_ratio(f1_req, getattr(member, "f1", float("nan")))
+    sls2_acceleration_util = safe_ratio(getattr(member, "a_ed", float("nan")), a_cd)
+    sls2_resonance_util = min(finite_values([sls2_frequency_util, sls2_acceleration_util]) or [float("nan")])
     sls2_components = {
         "sls2_f1_util": safe_ratio(f1_req, getattr(member, "f1", float("nan"))),
-        "sls2_acceleration_util": safe_ratio(getattr(member, "a_ed", float("nan")), a_cd),
+        "sls2_acceleration_util": sls2_acceleration_util,
+        "sls2_frequency_or_acceleration_util": sls2_resonance_util,
         "sls2_walking_deflection_util": safe_ratio(getattr(member, "wf_ed", float("nan")), wf_cd),
         "sls2_velocity_util": safe_ratio(getattr(member, "ve_ed", float("nan")), getattr(member, "ve_cd", float("nan"))),
     }
-    sls2_util = max(finite_values(sls2_components.values()) or [float("nan")])
-    sls2_governing_component = governing_key(sls2_components)
+    sls2_active_components = {
+        "sls2_frequency_or_acceleration_util": sls2_resonance_util,
+        "sls2_walking_deflection_util": sls2_components["sls2_walking_deflection_util"],
+        "sls2_velocity_util": sls2_components["sls2_velocity_util"],
+    }
+    sls2_util = max(finite_values(sls2_active_components.values()) or [float("nan")])
+    sls2_governing_component = governing_key(sls2_active_components)
 
     fire_resistance = getattr(member, "fire_resistance", float("nan"))
     if not isinstance(fire_resistance, (int, float)):
@@ -554,12 +563,11 @@ def sls2_debug_diagnostics(member, scenario, system, length):
         getattr(getattr(member, "section", None), "section_type", "") == "tcc"
         and scenario.get("label") == "Residential"
         and safe_float(length) >= 6.0
-        and diagnostics.get("sls2_governing_component") == "sls2_f1_util"
+        and diagnostics.get("sls2_governing_component") == "sls2_frequency_or_acceleration_util"
     ):
         note = (
-            "Residential TCC SLS2 is frequency-governed: f1 is close to or below "
-            "the required limit; inspect f1_Hz, sls2_f1_required_Hz and the "
-            "component margins before interpreting acceleration/velocity penalties."
+            "Residential TCC SLS2 is governed by the alternative frequency or "
+            "acceleration check; inspect both component utilizations."
         )
 
     return {

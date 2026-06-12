@@ -220,15 +220,12 @@ def calc_sls2_penalty(member):
     pen_a = member.a_ed - member.requirements.a_cd
     pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1
     pen_v = member.ve_ed - member.ve_cd
-    if member.f1 < member.requirements.f1:
-        return max(
-            SLS2_FREQUENCY_PENALTY_WEIGHT * pen_f,
-            SLS2_ACCELERATION_PENALTY_WEIGHT * pen_a,
-            SLS2_WALKING_DEFLECTION_PENALTY_WEIGHT * pen_w,
-            SLS2_VELOCITY_PENALTY_WEIGHT * pen_v,
-            0.0,
-        )
+    resonance_penalty = min(
+        SLS2_FREQUENCY_PENALTY_WEIGHT * pen_f,
+        SLS2_ACCELERATION_PENALTY_WEIGHT * pen_a,
+    )
     return max(
+        resonance_penalty,
         SLS2_WALKING_DEFLECTION_PENALTY_WEIGHT * pen_w,
         SLS2_VELOCITY_PENALTY_WEIGHT * pen_v,
         0.0,
@@ -378,7 +375,7 @@ def rc_rqs(var, add_arg):
     penalty = criterion_penalty(
         member,
         criterion,
-        include_uls_guard=(criterion in ("SLS1", "ENV")),
+        include_uls_guard=(criterion == "ENV"),
         use_cracked_deflection=True,
     )
     if to_opt == "GWP":
@@ -507,7 +504,7 @@ def pc_rqs(var, add_arg):
     penalty = criterion_penalty(
         member,
         criterion,
-        include_uls_guard=(criterion in ("SLS1", "ENV")),
+        include_uls_guard=(criterion == "ENV"),
         use_cracked_deflection=False,
     )
     penalty += min_reinf_penalty
