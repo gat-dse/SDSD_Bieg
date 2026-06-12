@@ -17,9 +17,12 @@ OUTPUT_DIR = "plots"
 DESIGN_CRITERIA = ["ULS", "SLS1", "SLS2", "FIRE"]
 ENV_CRITERIA = ["ENV"]
 OPTIMA = ["GWP"]
-MAX_ITER = int(os.environ.get("SDSD_MAX_ITER", 10))
-HIGH_ITER = int(os.environ.get("SDSD_HIGH_ITER", 20))
-HIGH_ITER_SECTION_TYPES = {"rc_rec", "pc_rec", "rc_rib", "tcc"}
+# TCC and ribbed-concrete objectives have a more pronounced non-convex design
+# space. Give those systems a larger search budget while keeping the remaining
+# systems inexpensive to evaluate.
+MAX_ITER = int(os.environ.get("SDSD_MAX_ITER", 20))
+HIGH_ITER = int(os.environ.get("SDSD_HIGH_ITER", 30))
+HIGH_ITER_SECTION_TYPES = {"rc_rib", "tcc"}
 G2K = 0.75e3
 VERIFICATION_INDEX = 1
 

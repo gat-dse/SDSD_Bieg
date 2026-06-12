@@ -1723,7 +1723,8 @@ class TCC(SupStrucTCC):
 
         self.rebar_d = 0.006
         self.rebar_s = 0.150
-        self.rebar_layers = 4 if self.h_c > 0.12 else 2
+        # One central reinforcement mesh: two orthogonal bar directions.
+        self.rebar_layers = 2
         self.as_rebar = self.calc_tcc_rebar_area(self.rebar_d, self.rebar_s, self.rebar_layers)
         wood_volume = self.d + self.A_w / self.a_ribs
         concrete_volume = max(self.h_c - self.as_rebar, 0.0)
