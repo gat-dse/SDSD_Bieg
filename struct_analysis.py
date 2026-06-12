@@ -304,7 +304,7 @@ class SupStrucRectangular(Section):
 #........................................................................
 class RectangularWood(SupStrucRectangular, Section):
     # defines properties of rectangular, wooden cross-section
-    def __init__(self, wood_type, b, h, phi=0.6, xi=0.01, ei_b=0.0):  # create a rectangular timber object
+    def __init__(self, wood_type, b, h, phi=0.6, xi=0.02, ei_b=0.0):  # create a rectangular timber object
         section_type = "wd_rec"
         super().__init__(section_type, b, h, phi)
         self.wood_type = wood_type
@@ -1482,7 +1482,7 @@ class SupStrucRibWood(Section):
 class RibWood(SupStrucRibWood):
     # defines properties of ribbed timber slab = "Hohlkastendecke" → box beam floor or "Ripendecke" = → joist floor
     def __init__(self, wood_type_1, wood_type_2, wood_type_3, l0, b, h, a, t2, t3, phi_1=0.6, phi_2=0.6, phi_3=0.6,
-                 xi=0.01, ei_b=0.0):  # create a rectangular timber object
+                 xi=0.02, ei_b=0.0):  # create a rectangular timber object
         section_type = "wd_rib"
         self.wood_type_1 = wood_type_1
         self.wood_type_2 = wood_type_2
