@@ -7,8 +7,9 @@ import numpy as np
 ULS_INFEASIBLE_BASE_PENALTY = 1e9
 ULS_INFEASIBLE_DEFICIT_FACTOR = 1e6
 SLS2_FREQUENCY_PENALTY_WEIGHT = 25.0
-SLS2_INFEASIBLE_BASE_PENALTY = 1e8
-SLS2_FREQUENCY_DEFICIT_FACTOR = 1e7
+SLS2_ACCELERATION_PENALTY_WEIGHT = 1e2
+SLS2_WALKING_DEFLECTION_PENALTY_WEIGHT = 1e5
+SLS2_VELOCITY_PENALTY_WEIGHT = 1e3
 
 
 def uls_infeasible_penalty(member, deficit=None):
@@ -17,9 +18,21 @@ def uls_infeasible_penalty(member, deficit=None):
     return ULS_INFEASIBLE_BASE_PENALTY + ULS_INFEASIBLE_DEFICIT_FACTOR * deficit
 
 
-def sls2_frequency_infeasible_penalty(member):
-    deficit = max(member.requirements.f1 - member.f1, 0.0)
-    return SLS2_INFEASIBLE_BASE_PENALTY + SLS2_FREQUENCY_DEFICIT_FACTOR * deficit
+def calc_sls2_penalty(member):
+    pen_f = member.requirements.f1 - member.f1
+    pen_a = member.a_ed - member.requirements.a_cd
+    pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1
+    pen_v = member.ve_ed - member.ve_cd
+    resonance_penalty = min(
+        SLS2_FREQUENCY_PENALTY_WEIGHT * pen_f,
+        SLS2_ACCELERATION_PENALTY_WEIGHT * pen_a,
+    )
+    return max(
+        resonance_penalty,
+        SLS2_WALKING_DEFLECTION_PENALTY_WEIGHT * pen_w,
+        SLS2_VELOCITY_PENALTY_WEIGHT * pen_v,
+        0.0,
+    )
 
 
 class RandomDisplacementBounds(object):
@@ -662,16 +675,7 @@ def tcc_rqs(var, add_arg):
     penalty2 = 1e5 * max(d1, d2, d3, 0) 
     
     # SLS2 penalty (vibration)
-    pen_a = member.a_ed - member.requirements.a_cd  
-    pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1  
-    pen_v = member.ve_ed - member.ve_cd
-    if member.f1 < member.requirements.f1: #low frequency vibration limit not fulfilled
-        pen_f = member.requirements.f1 - member.f1
-        penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
-        if criterion in ("SLS2", "ENV"):
-            return sls2_frequency_infeasible_penalty(member)
-    else:
-        penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
+    penalty3 = calc_sls2_penalty(member)
     # Fire resistance penalty
     member.get_fire_resistance()
     penalty4 = max(member.requirements.t_fire - member.fire_resistance, 0)

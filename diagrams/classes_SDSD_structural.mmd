@@ -1,0 +1,791 @@
+classDiagram
+  class AcousticFloorGenerator {
+    cement_screed : str
+    glass_wool : str
+    gravel : str
+    parquet : str
+    acoustic_validity_warnings(section, f0_airborne, f0_impact)
+    effective_spring_stiffness(section, floorstruc, spring_stiffness)
+    evaluate(section, database_name, layer_specs, screed_thickness, gravel_thickness, spring_stiffness)
+    evaluate_floorstruc(section, floorstruc, spring_stiffness)
+    floating_screed_improvement(m_base, m_screed, spring_stiffness, rw_mass, impact_band_max)
+    generate(section, database_name, requirements, gravel_step, gravel_max)
+    gravel_damping(m_gravel, m_section)
+    hollow_core_damping(section)
+    is_tcc(section)
+    planning_surcharge(section)
+    section_mass(section)
+    target_values(section, requirements)
+    tcc_concrete_topping_mass(section)
+  }
+  class AcousticRequirements {
+    level : str
+    lnw_max : float
+    rw_min : float
+  }
+  class AcousticResult {
+    delta_gravel
+    delta_hollow_core
+    delta_lnw_floating
+    delta_rw_floating
+    delta_tcc_topping : float
+    f0_airborne : NoneType
+    f0_impact : NoneType
+    floorstruc
+    gravel_thickness
+    lnw
+    model_branch : str
+    rw
+    screed_thickness
+    validity_warnings : list
+  }
+  class BeamContinuousSupEl {
+    alpha_m : list
+    alpha_v : list
+    alpha_w : float
+    alpha_w_f_cd : float
+    kf2 : float
+    l_tot
+    li_max
+    qs_cl_erf : list
+  }
+  class BeamContinuousSupPl {
+    alpha_m : list
+    alpha_v : list
+    alpha_w : float
+    alpha_w_f_cd : float
+    kf2 : float
+    l_tot
+    li_max
+    qs_cl_erf : list
+  }
+  class BeamSimpleSup {
+    alpha_m : list
+    alpha_v : list
+    alpha_w : float
+    alpha_w_f_cd : float
+    kf2 : float
+    l_tot
+    li_max
+    qs_cl_erf : list
+  }
+  class BeamTwoSpan {
+    alpha_m : list
+    alpha_v : list
+    alpha_w : float
+    alpha_w_f_cd : float
+    kf2 : float
+    l_tot
+    li_max
+    qs_cl_erf : list
+  }
+  class ConnectorTCC {
+    GWP : float
+    K_ser
+    construction_time
+    cost
+    mech_prop
+    name
+    get_design_values()
+  }
+  class FloorStruc {
+    co2 : int
+    construction_time : int
+    cost : int
+    database_name
+    ei : int
+    gk_area : int
+    h : int
+    layer_specs : list
+    layers : list
+  }
+  class LoadCombinations {
+    g0k
+    g1k
+    g2k
+    gamma_g : float
+    gamma_q : float
+    gk
+    psi : list
+    qk : float
+    sls_freq()
+    sls_per()
+    sls_rare()
+    uls()
+    uls_per()
+    uls_short()
+  }
+  class MatLayer {
+    GWP
+    co2
+    construction_time
+    cost
+    density
+    ei : float
+    gk
+    h
+    name
+    weight
+  }
+  class Member1D {
+    a_ed : float
+    acoustic
+    acoustic_verified
+    bm_rech
+    co2
+    ei_b
+    f1
+    fire : list
+    fire_resistance : int
+    floorstruc
+    g0k
+    g1k
+    g2k
+    gamma_g : float
+    gamma_q : float
+    gk
+    li_max
+    load_combinations
+    m
+    mkd_n
+    mkd_p
+    psi : list
+    q_freq
+    q_per
+    q_rare
+    q_uls
+    qk : float
+    qk_zul_bending_gzt : float
+    qk_zul_gzt : float, int
+    qk_zul_shear_gzt : float
+    qu
+    qu_bending
+    qu_shear
+    r1 : float
+    requirements
+    section
+    system
+    uls_governing_mode : str
+    ve_cd
+    ve_ed
+    w_app
+    w_app_adm
+    w_app_ger
+    w_install
+    w_install_adm
+    w_install_ger
+    w_use
+    w_use_adm
+    w_use_ger
+    wf_ed
+    calc_f1()
+    calc_qk_zul_gzt()
+    calc_qu()
+    calc_vib1(f0)
+    calc_vib2(f)
+    get_fire_resistance()
+  }
+  class Member2D {
+    a_ed : float, int
+    acoustic
+    acoustic_verified
+    bm_rech
+    check_punching : bool
+    co2
+    ei_b
+    f1 : float
+    fire : list
+    fire_resistance : int, list
+    floorstruc
+    g0k
+    g1k
+    g2k
+    gk
+    li_max
+    li_min
+    load_combinations
+    m
+    mkd_n
+    mkd_n_y
+    mkd_p
+    mkd_p_y
+    optimize_shear_reinforcement : bool
+    psi : list
+    pt_uls_m_rd_neg
+    pt_uls_m_rd_pos
+    pt_uls_m_sec_neg
+    pt_uls_m_sec_pos
+    pt_uls_q_bend_neg : float
+    pt_uls_q_bend_pos : float
+    punching_vrds_required : float
+    q_freq
+    q_per
+    q_rare
+    qk : float
+    qk_zul_bending_gzt
+    qk_zul_gzt : float
+    qk_zul_shear_gzt
+    qu
+    qu_bending
+    qu_shear : float
+    r1 : float
+    requirements
+    section
+    system
+    uls_bending_only : bool
+    uls_governing_mode : str
+    ve_cd : float, int
+    ve_ed : float, int
+    w_app : float
+    w_app_adm
+    w_app_ger : float
+    w_install : float
+    w_install_adm
+    w_install_ger : float
+    w_use : float
+    w_use_adm
+    w_use_ger : float
+    wf_ed : float, int
+    calc_f1()
+    calc_punching_m_ed(q_area, secondary_forces)
+    calc_punching_m_rd()
+    calc_punching_qu()
+    calc_punching_resistance_for_current_loads()
+    calc_punching_secondary_force(secondary_forces)
+    calc_qk_zul_gzt(gamma_g, gamma_q)
+    calc_qu()
+    calc_required_punching_shear_reinforcement_resistance(q_area)
+    calc_shear_prestress_deviation_force()
+    calc_shear_qu()
+    calc_shear_secondary_force(index)
+    calc_vib1(f0)
+    calc_vib2(f)
+    get_fire_resistance()
+    should_check_punching()
+    uls_redistributed_moment_factors()
+  }
+  class PostTensionedConcrete {
+    A_p : float
+    Psx : int
+    Psy : int
+    Px_total
+    Py_total
+    as_n : int
+    as_p : int
+    as_yo
+    as_yu
+    bw : list
+    c_nom_pt : float
+    co2
+    co2_concrete
+    co2_pt_steel
+    co2_rebar
+    construction_time
+    cost
+    cost_concrete
+    cost_pt_steel
+    cost_rebar
+    d
+    dp
+    ds
+    e_midspan
+    e_support
+    ei1
+    ei2
+    f
+    f_w_ger : float
+    f_x
+    f_y
+    g0k
+    i
+    joint_surcharge : float
+    l_x
+    l_y
+    layout : list
+    m_r
+    m_r_min_reinf
+    m_r_pt
+    minimal_reinforcement_ok : bool
+    mr_n
+    mr_p
+    mu_max
+    mu_min
+    pdx : int
+    pdy : int
+    pt_steel_type
+    qs_class_n : int
+    qs_class_p : int
+    roh
+    rohs
+    section_type : str
+    volume_concrete
+    volume_pt_steel
+    volume_reinforcement
+    w
+    x_n : int
+    x_p : int
+    calc_EIeff(P_total, l, MEd_SLS, M_sec, m_r)
+    calc_eccentricity()
+    calc_mr_pt(P_total, l)
+    calc_mr_without_pt()
+    calc_mu_pt(P_total, l, sign)
+    calc_prestress_deviation_loads()
+    calc_prestress_shear_deviation_force(direction)
+    calc_prestress_sin_beta()
+    calc_pt_steel_volume_per_m2(tendon_info)
+    calc_punching_prestress_deviation_force(column_width, column_length)
+    calc_punching_shear_resistance(column_width, column_length, ke, l_x, l_y, m_ed, m_rd, rotation_factor, v_prestress)
+    fire_resistance(section)
+    get_secondaryInternalForces(system)
+    mu_unsigned_pt(P_total, l, fpd, fsd, fcd, dp, ds, dis, s)
+    set_initial_pt_reinforcement()
+    set_loadBalancing(degree_of_posttensioning, longterm_losses)
+    set_minimalReinforcement(target_mr, use_pt)
+    update_prestressing_system()
+    update_reinforcement_areas()
+  }
+  class PrestressingSteel {
+    Ep
+    GWP
+    construction_time
+    cost
+    density : float
+    fp01k
+    fpd
+    fpk
+    mech_prop
+    prod_id
+    specific_weight : float
+    get_design_values(gamma_p)
+  }
+  class ReadyMixedConcrete {
+    Ecm
+    GWP
+    construction_time
+    construction_time_scaffold : float
+    cost
+    cost2 : int
+    density : float
+    dmax : int
+    ec2d : float
+    fcd
+    fck
+    fctm
+    mech_prop
+    phi
+    prod_id
+    specific_weight
+    tcd
+    weight
+    get_design_values(gamma_c, eta_t)
+  }
+  class RectangularConcrete {
+    as_bw
+    as_n : int
+    as_p : int
+    as_yo
+    as_yu
+    bw : list
+    bw_bg : list
+    c_nom : float
+    co2
+    co2_concrete
+    co2_pt_steel : float
+    co2_rebar
+    concrete_type
+    construction_time
+    cost
+    cost_concrete
+    cost_pt_steel : float
+    cost_rebar
+    d
+    ds
+    ei1
+    ei2
+    ei_b
+    g0k
+    h_installation
+    joint_surcharge : float
+    mr_n
+    mr_p
+    mu_max
+    mu_min
+    qs_class_n : int
+    qs_class_p : int
+    rebar_type
+    roh
+    rohs
+    volume_concrete
+    volume_pt_steel : float
+    volume_reinforcement
+    vu_n
+    vu_p
+    w
+    x_n : int
+    x_p : int
+    xi : float
+    calc_as_bw(di, n, s, d)
+    calc_d()
+    calc_mu(sign)
+    calc_punching_shear_reinforcement_resistance(d_v)
+    calc_punching_shear_resistance(column_width, column_length, ke, l_x, l_y, m_ed, m_rd, rotation_factor, v_prestress)
+    calc_shear_resistance(d_installation)
+    calc_weight(concrete_area, reinforcement_area, pt_steel_area)
+    f_w_ger(roh, rohs, phi, h, d)
+    fire_resistance(section)
+    mu_unsigned(di, s, d, b, fsd, fcd, mr)
+    vu_unsigned(bw, di, n, s, as_bw, d, dv, x, fck, fcd, tcd, fsk, fsd, es, dmax, alpha, kc)
+  }
+  class RectangularWood {
+    co2
+    co2_wood
+    construction_time
+    cost
+    cost_wood
+    ei1
+    ei_b : float
+    g0k
+    h_installation : int
+    mu_max
+    mu_min
+    qs_class_n : int
+    qs_class_p : int
+    volume_wood
+    vu_n
+    vu_p
+    w
+    wood_type
+    xi : float
+    fire_minimizer(t, args)
+    fire_resistance(member)
+    remaining_section(section, fire, t, dred)
+  }
+  class Requirements {
+    a_cd : float
+    acoustic
+    alpha_ve_cd : float
+    f1 : int
+    install : str
+    lw_app : int
+    lw_install : int
+    lw_use : int
+    t_fire : int
+    w_f_cdr1 : float
+  }
+  class RibWood {
+    co2
+    co2_hollow_core_insulation
+    co2_wood
+    construction_time
+    construction_time_hollow_core_insulation : float
+    construction_time_wood
+    cost
+    cost_hollow_core_insulation
+    cost_wood
+    ei1
+    ei_b : float
+    g0k
+    h_installation
+    hollow_core_insulation_construction_time : float
+    hollow_core_insulation_cost : float
+    hollow_core_insulation_density : float
+    hollow_core_insulation_gk
+    hollow_core_insulation_gwp : float
+    hollow_core_insulation_thickness
+    hollow_core_insulation_weight : float
+    l0
+    mu_max
+    mu_min
+    phi : float
+    phi_1 : float
+    phi_2 : float
+    phi_3 : float
+    qs_class_n : int
+    qs_class_p : int
+    volume_hollow_core_insulation
+    volume_wood
+    vu_n
+    vu_p
+    w
+    wood_type_1
+    wood_type_2
+    wood_type_3
+    xi : float
+    calc_mu()
+    calc_n()
+    calc_vu()
+    fire_resistance(section)
+    mu_unsigned(fy, iy, z, n)
+  }
+  class RibbedConcrete {
+    as_PB_bw : int
+    as_PB_n : int
+    as_PB_p : int
+    as_bw : int
+    as_n : int
+    as_p : int
+    bw : list
+    bw_bg : list
+    bw_bg_r : list
+    bw_r : list
+    c_nom : float
+    co2
+    co2_concrete
+    co2_pt_steel : float
+    co2_rebar
+    concrete_type
+    construction_time
+    cost
+    cost_concrete
+    cost_pt_steel : float
+    cost_rebar
+    d
+    d_PB
+    ds
+    ds_PB
+    ei1
+    ei2
+    ei_b
+    g0k
+    h_installation
+    joint_surcharge : float
+    mr_n
+    mr_p
+    mr_pb_n
+    mr_pb_p
+    mu_max : int
+    mu_max_slab : int
+    mu_min : int
+    mu_min_slab : int
+    qs_class_n : int
+    qs_class_n_slab : int
+    qs_class_p : int
+    qs_class_p_slab : int
+    rebar_type
+    roh
+    roh_slab
+    rohs
+    volume_concrete
+    volume_pt_steel : float
+    volume_reinforcement
+    vu_PB_n
+    vu_PB_p
+    vu_n
+    vu_p
+    w : float
+    x_PB_n : int
+    x_PB_p : int
+    x_n : int
+    x_p : int
+    xi : float
+    calc_d()
+    calc_mu(sign)
+    calc_mu_pb(sign)
+    calc_shear_resistance(bauteil, d_installation)
+    calc_weight(concrete_area, reinforcement_area)
+    f_w_ger(roh, rohs, phi, h, d)
+    fire_resistance(section)
+    mu_unsigned(di, s, d, b, fsd, fcd, mr)
+    mu_unsigned_PB(di, n, d, b, h_f, fsd, fcd, mr)
+    mu_unsigned_different_widths(di, s, d, b_as, b_comp, fsd, fcd, mr)
+    vu_unsigned(bw, as_bw, d, dv, x, fck, fcd, tcd, fsk, fsd, es, dmax, alpha, kc)
+  }
+  class Section {
+    section_type
+  }
+  class Slab {
+    alpha_m_x : tuple
+    alpha_m_y : tuple
+    alpha_v : tuple
+    alpha_w : float
+    alpha_w_f_cd
+    column_ke : float
+    column_length : float
+    column_tributary_area : NoneType
+    column_width : float
+    has_columns
+    kf2 : float
+    l_tot
+    li_max
+    lx
+    ly
+    qs_cl_erf : list
+    raender
+    result
+    calc_alpha_w_f_cd(alpha_w)
+  }
+  class SteelReinforcingBar {
+    Es
+    GWP
+    construction_time
+    cost
+    density : float
+    fsd
+    fsk
+    mech_prop
+    prod_id
+    specific_weight
+    get_design_values(gamma_s)
+  }
+  class SupStrucRectangular {
+    a_brutt
+    b
+    h
+    iy
+    phi : int
+    calc_area()
+    calc_moment_of_inertia()
+    calc_strength_elast(fy, ty)
+    calc_strength_plast(fy, ty)
+    calc_weight(material)
+  }
+  class SupStrucRibWood {
+    a
+    a_brutt
+    b
+    bc_ef
+    bt_ef
+    h
+    iy
+    iy_inf
+    n
+    n_inf
+    t2
+    t3
+    w : float
+    z_s
+    calc_area()
+    calc_bef(sign)
+    calc_center_of_gravity()
+    calc_moment_of_inertia()
+    calc_weight(rib_material, bottom_material, top_material)
+  }
+  class SupStrucRibbedConcrete {
+    a_brutt
+    b
+    b_eff
+    b_w
+    h
+    h_f
+    h_w
+    iy
+    l0
+    phi : int
+    w : float
+    z_s
+    calc_area()
+    calc_beff()
+    calc_center_of_gravity()
+    calc_moment_of_inertia()
+    calc_weight(material)
+  }
+  class SupStrucTCC {
+    A_c
+    A_w
+    I_yc
+    I_yw
+    a_ribs
+    b_ceff
+    b_w
+    d
+    h
+    h_c
+    h_w
+    l0
+    w : float
+    calc_area(h, b)
+    calc_beff(a_ribs, b_w, l0)
+    calc_moment_of_inertia(h, b)
+    calc_weight(wood_material, concrete_material, rebar_material, wood_volume, concrete_volume, reinforcement_volume)
+  }
+  class TCC {
+    EI_SLS : ndarray
+    EI_ULS : ndarray
+    Mu : ndarray
+    Vu : ndarray
+    a_SLS : ndarray
+    a_ULS : ndarray
+    as_rebar
+    co2
+    co2_concrete
+    co2_connector
+    co2_rebar
+    co2_wood
+    concrete_type
+    connector_type
+    construction_time
+    cost
+    cost_concrete
+    cost_connector
+    cost_rebar
+    cost_wood
+    ei1
+    ei_b
+    g0k
+    gamma_SLS
+    gamma_ULS
+    h_installation
+    mu_max : int
+    mu_min : float
+    phi : int
+    psi_SLS : ndarray
+    psi_ULS : ndarray
+    qs_class_n : int
+    qs_class_p : int
+    rebar_d : float
+    rebar_layers : int
+    rebar_s : float
+    rebar_type
+    s
+    volume_concrete
+    volume_reinforcement
+    volume_wood
+    vu_n : float
+    vu_p : int
+    w
+    wood_type
+    xi : float
+    calc_EIeff()
+    calc_gamma()
+    calc_mu()
+    calc_tcc_rebar_area(di, spacing, n_layers)
+    calc_vu()
+    fire_minimizer(t, member)
+    fire_resistance(member)
+    get_h_installation()
+    remaining_section(section, fire, t, dred)
+  }
+  class Wood {
+    Emmean
+    GWP
+    burn_rate
+    construction_time
+    cost
+    cost2 : int
+    density : float
+    fmd
+    fmk
+    fvd
+    mech_prop
+    phi
+    prod_id
+    specific_weight
+    weight
+    get_design_values(gamma_m, eta_m, eta_t, eta_w)
+  }
+  PostTensionedConcrete --|> RectangularConcrete
+  RectangularConcrete --|> SupStrucRectangular
+  RectangularWood --|> Section
+  RectangularWood --|> SupStrucRectangular
+  RibWood --|> SupStrucRibWood
+  RibbedConcrete --|> SupStrucRibbedConcrete
+  SupStrucRectangular --|> Section
+  SupStrucRibWood --|> Section
+  SupStrucRibbedConcrete --|> Section
+  SupStrucTCC --|> Section
+  TCC --|> SupStrucTCC
+  AcousticRequirements --* Requirements : acoustic
+  AcousticResult --* Member1D : acoustic
+  AcousticResult --* Member2D : acoustic
+  LoadCombinations --* Member1D : load_combinations
+  LoadCombinations --* Member2D : load_combinations
