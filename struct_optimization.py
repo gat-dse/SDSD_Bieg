@@ -1,6 +1,6 @@
 from scipy.optimize import direct
 import struct_analysis
-from scipy.optimize import basinhopping, Bounds  # import Minimierungsfunktion aus dem SyiPy-Paket
+from scipy.optimize import basinhopping, Bounds, OptimizeResult  # import Minimierungsfunktion aus dem SyiPy-Paket
 from scipy.optimize import minimize  # import Minimierungsfunktion aus dem SyiPy-Paket
 import numpy as np
 
@@ -616,6 +616,32 @@ def tcc_feasible_start(var0, bounds, make_member):
     return best_feasible[1] if best_feasible is not None else best_fallback[1]
 
 
+def best_tcc_basinhopping(func, var0, bounds, max_iter, add_arg):
+    minimizer_kwargs = {
+        "args": (add_arg,),
+        "bounds": bounds,
+        "method": "Powell",
+        "options": {"maxfev": 250, "xtol": 1e-4, "ftol": 1e-4},
+    }
+    start = np.asarray(var0, dtype=float)
+    best = OptimizeResult(x=start, fun=func(start, add_arg), success=True)
+    bounded_step = RandomDisplacementBounds(
+        np.array([bound[0] for bound in bounds]),
+        np.array([bound[1] for bound in bounds]),
+    )
+    optimized = basinhopping(
+        func,
+        start,
+        niter=max_iter,
+        T=1,
+        minimizer_kwargs=minimizer_kwargs,
+        take_step=bounded_step,
+    )
+    if optimized.fun < best.fun:
+        best = optimized
+    return best
+
+
 # Outer function to find optimal TCC cross-section
 def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.08, hw_min=0.05):
     #Initial values for optimization variables
@@ -653,9 +679,8 @@ def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.08, hw_min=
 
         var0 = tcc_feasible_start(var0, bounds, make_seed_member)
 
-    bounded_step = RandomDisplacementBounds(np.array([b[0] for b in bounds]), np.array([b[1] for b in bounds]))
-    # Run Bashinhoppin and return optimized section
-    opt = basinhopping(tcc_rqs, var0, niter=max_iter, T=1, minimizer_kwargs={"args": (add_arg,), "bounds": bounds, "method": "Powell"}, take_step=bounded_step)
+    # Keep the feasible raw start as a candidate, as done for PT concrete.
+    opt = best_tcc_basinhopping(tcc_rqs, var0, bounds, max_iter, add_arg)
     hc_opt, hw_opt = opt.x
     optimized_section = struct_analysis.TCC(conc, reb, wood, conn, s, a_ribs, hc_opt, hw_opt, bw, d, l0)
     optimized_section.h_w_max = h_w_max
