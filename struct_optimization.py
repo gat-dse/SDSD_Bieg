@@ -598,6 +598,26 @@ def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.08, hw_min=
     optimized_section = struct_analysis.TCC(conc, reb, wood, conn, s, a_ribs, hc_opt, hw_opt, bw, d, l0)
     optimized_section.h_w_max = h_w_max
 
+    if criterion in ("ULS", "ENV"):
+        m.calc_qk_zul_gzt()
+        optimized_member = struct_analysis.Member1D(
+            optimized_section,
+            m.system,
+            m.floorstruc,
+            m.requirements,
+            g2k=m.g2k,
+            qk=m.qk,
+            psi0=m.psi[0],
+            psi1=m.psi[1],
+            psi2=m.psi[2],
+            fire=m.fire,
+        )
+        optimized_member.calc_qk_zul_gzt()
+        seed_feasible = m.qk_zul_gzt >= m.qk
+        optimized_feasible = optimized_member.qk_zul_gzt >= optimized_member.qk
+        if seed_feasible and not optimized_feasible:
+            return m.section
+
     #TCC debugging line
     #print(f"Optimized TCC section: hc = {hc_opt:.3f} m, hw = {hw_opt:.3f} m, l0 = {l0:.3f} m, GWP = {optimized_section.co2:.2f} kg CO2e, height = {optimized_section.h:.3f} m")
     return optimized_section

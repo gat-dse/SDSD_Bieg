@@ -1081,7 +1081,7 @@ class SupStrucRibbedConcrete(Section):
     def calc_area(self):
         # in: width b and bw [m], height h and h_f[m]
         # out: area [m2]
-        a_brutt = self.b * self.h_f + self.b_w * (self.h - self.h_f)
+        a_brutt = self.b * self.h_f + self.b_w * self.h_w
         return a_brutt
 
     def calc_beff(self):
@@ -1162,6 +1162,10 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         a_s_slab = self.as_p + self.as_n + 0.5 * self.as_bw
         a_s_rib = self.as_PB_p + 0.5 * self.as_PB_bw
         #TODO: Achtung - es fehlt die Spreizbewehrung
+        # Assumption here hardcoded as d=8mm @ 150
+        a_s_spreibewehrung = 2*np.pi()*0.008^2/4/0.15 # 2-lagig[m2/m]
+        a_s_slab += a_s_spreibewehrung
+
         self.joint_surcharge = jnt_srch
         a_s_tot = (a_s_slab * self.b + a_s_rib) * (1 + self.joint_surcharge)
         concrete_area = max(self.a_brutt - a_s_tot, 0.0)
