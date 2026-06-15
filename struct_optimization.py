@@ -575,6 +575,47 @@ def wd_rib_rqs(var, add_arg):
     return to_minimize
 
 # TCC cross-section
+def tcc_feasible_start(var0, bounds, make_member):
+    lower = np.array([bound[0] for bound in bounds], dtype=float)
+    upper = np.array([bound[1] for bound in bounds], dtype=float)
+    base = np.clip(np.asarray(var0, dtype=float), lower, upper)
+    span = make_member(base).system.l_tot
+
+    hc_candidates = [
+        base[0], lower[0], 0.10, 0.12, 0.15, 0.18, 0.24, upper[0],
+    ]
+    hw_candidates = [
+        base[1], lower[1],
+        0.03 * span, 0.04 * span, 0.05 * span, 0.06 * span,
+        0.07 * span, 0.08 * span, 0.10 * span, upper[1],
+    ]
+
+    best_feasible = None
+    best_fallback = (float("-inf"), base)
+    seen = set()
+    for h_c in hc_candidates:
+        for h_w in hw_candidates:
+            point = np.clip(np.array([h_c, h_w], dtype=float), lower, upper)
+            key = tuple(np.round(point, 8))
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                member = make_member(point)
+                member.calc_qk_zul_gzt()
+            except Exception:
+                continue
+            qk_zul = getattr(member, "qk_zul_gzt", float("-inf"))
+            if qk_zul > best_fallback[0]:
+                best_fallback = (qk_zul, point)
+            if qk_zul + 1e-6 >= member.qk:
+                candidate = (member.section.co2, point)
+                if best_feasible is None or candidate[0] < best_feasible[0]:
+                    best_feasible = candidate
+
+    return best_feasible[1] if best_feasible is not None else best_fallback[1]
+
+
 # Outer function to find optimal TCC cross-section
 def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.08, hw_min=0.05):
     #Initial values for optimization variables
@@ -591,32 +632,33 @@ def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.08, hw_min=
     s, a_ribs, bw, d, l0 = m.section.s, m.section.a_ribs, m.section.b_w, m.section.d, m.li_max
     #Extract loads and fire settings to pass to the trail members
     add_arg = [m.system, conc, reb, wood, conn, s, a_ribs, bw, d, l0, m.floorstruc, m.requirements, to_opt, criterion, m.g2k, m.qk, m.psi[0], m.psi[1], m.psi[2], m.fire]    # Optimize step definition
+
+    if criterion in ("ULS", "ENV"):
+        def make_seed_member(point):
+            section = struct_analysis.TCC(
+                conc, reb, wood, conn, s, a_ribs, point[0], point[1], bw, d, l0
+            )
+            return struct_analysis.Member1D(
+                section,
+                m.system,
+                m.floorstruc,
+                m.requirements,
+                g2k=m.g2k,
+                qk=m.qk,
+                psi0=m.psi[0],
+                psi1=m.psi[1],
+                psi2=m.psi[2],
+                fire=m.fire,
+            )
+
+        var0 = tcc_feasible_start(var0, bounds, make_seed_member)
+
     bounded_step = RandomDisplacementBounds(np.array([b[0] for b in bounds]), np.array([b[1] for b in bounds]))
     # Run Bashinhoppin and return optimized section
     opt = basinhopping(tcc_rqs, var0, niter=max_iter, T=1, minimizer_kwargs={"args": (add_arg,), "bounds": bounds, "method": "Powell"}, take_step=bounded_step)
     hc_opt, hw_opt = opt.x
     optimized_section = struct_analysis.TCC(conc, reb, wood, conn, s, a_ribs, hc_opt, hw_opt, bw, d, l0)
     optimized_section.h_w_max = h_w_max
-
-    if criterion in ("ULS", "ENV"):
-        m.calc_qk_zul_gzt()
-        optimized_member = struct_analysis.Member1D(
-            optimized_section,
-            m.system,
-            m.floorstruc,
-            m.requirements,
-            g2k=m.g2k,
-            qk=m.qk,
-            psi0=m.psi[0],
-            psi1=m.psi[1],
-            psi2=m.psi[2],
-            fire=m.fire,
-        )
-        optimized_member.calc_qk_zul_gzt()
-        seed_feasible = m.qk_zul_gzt >= m.qk
-        optimized_feasible = optimized_member.qk_zul_gzt >= optimized_member.qk
-        if seed_feasible and not optimized_feasible:
-            return m.section
 
     #TCC debugging line
     #print(f"Optimized TCC section: hc = {hc_opt:.3f} m, hw = {hw_opt:.3f} m, l0 = {l0:.3f} m, GWP = {optimized_section.co2:.2f} kg CO2e, height = {optimized_section.h:.3f} m")

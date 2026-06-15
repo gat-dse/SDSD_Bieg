@@ -35,7 +35,7 @@ TARGETS = (
     ("residential", "res_tcc_ribs_dbs"),
     ("office", "off_ribbed_concrete_continuous"),
 )
-ITERATIONS = 40
+ITERATIONS = 30
 SUMMARY_PATH = Path(inputs.OUTPUT_DIR) / "final_comparison_summary.xlsx"
 
 

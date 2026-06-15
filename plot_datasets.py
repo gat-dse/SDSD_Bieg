@@ -447,7 +447,6 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             for optimum in optima:
                 members = []
                 warm_start_section = None
-                warm_start_length = None
                 for length in lengths:
                     if system_type == "simple_span":
                         sys = struct_analysis.BeamSimpleSup(length)
@@ -461,8 +460,7 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                         raise ValueError(f"Unknown 1D system_type: {system_type}")
                     seed_section = warm_start_section or i[0]
                     if warm_start_section is not None and seed_section.section_type == "tcc":
-                        span_factor = float(length) / float(warm_start_length)
-                        seed_section = scaled_tcc_warm_start(seed_section, factor=1.05 * span_factor)
+                        seed_section = scaled_tcc_warm_start(seed_section)
                     section0 = section_for_length(seed_section, length)
                     floorstruc = floor_for_section(section0, i[1])
                     member0 = struct_analysis.Member1D(section0, sys, floorstruc, requirements, g2k, qk)
@@ -487,7 +485,6 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                     members.append(opt_member)
                     if section0.section_type in ("tcc", "rc_rib"):
                         warm_start_section = opt_member.section
-                        warm_start_length = length
                 member_list.append(members)
                 if i[0].section_type[0:2] == "rc":
                     material_lg = i[0].concrete_type.mech_prop + " + " + i[0].rebar_type.mech_prop
