@@ -225,15 +225,7 @@ def rc_rqs(var, add_arg):
     penalty2 = 1e5 * max(d1, d2, d3, 0)
 
     # define penalty3, if SLS2 (vibrations) are not fulfilled
-    pen_a = member.a_ed - member.requirements.a_cd  # Grössenordnung 1e-2
-    pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1  # HBT S. 48. r2 wird gleich 1 gesetzt
-    # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
-    pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
-    if member.f1 < member.requirements.f1:
-        pen_f = member.requirements.f1 - member.f1
-        penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
-    else:
-        penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
+    penalty3 = calc_sls2_penalty(member)
 
 
     # define penalty4, if fire resistance is not fulfilled
@@ -364,15 +356,7 @@ def rc_rib_rqs(var, add_arg):
     penalty2 = 1e5 * max(d1, d2, d3, 0)
 
     # define penalty3, if SLS2 (vibrations) are not fulfilled
-    pen_a = member.a_ed - member.requirements.a_cd  # Grössenordnung 1e-2
-    pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1  # HBT S. 48. r2 wird gleich 1 gesetzt
-    # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
-    pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
-    if member.f1 < member.requirements.f1:
-        pen_f = member.requirements.f1 - member.f1
-        penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
-    else:
-        penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
+    penalty3 = calc_sls2_penalty(member)
 
 
     # define penalty4, if fire resistance is not fulfilled
@@ -448,15 +432,7 @@ def wd_rqs_h(h, args):
         penalty2 = 1e5*max(d1, d2, d3, 0)
         to_minimize = member.section.h*(1+penalty2)
     elif criterion == "SLS2":
-        pen_a = member.a_ed - member.requirements.a_cd  # Grössenordnung 1e-2
-        pen_w = member.wf_ed - member.requirements.w_f_cdr1*member.r1  # HBT S. 48. r2 wird gleich 1 gesetzt
-        # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
-        pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
-        if member.f1 < member.requirements.f1:
-            pen_f = member.requirements.f1 - member.f1
-            penalty2 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a*1e2, pen_w*1e5, pen_v*1e3, 0)
-        else:
-            penalty2 = max(pen_w*1e5, pen_v*1e3, 0)
+        penalty2 = calc_sls2_penalty(member)
         to_minimize = member.section.h*(1+penalty2)
     elif criterion == "FIRE":
         # define penalty4, if fire resistance is not fulfilled
@@ -466,17 +442,8 @@ def wd_rqs_h(h, args):
     elif criterion == "ENV":
         d1, d2, d3 = [member.w_install - member.w_install_adm, member.w_use - member.w_use_adm,
                       member.w_app - member.w_app_adm]
-        pen_a = member.a_ed - member.requirements.a_cd  # Grössenordnung 1e-2
-        pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1  # HBT S. 48. r2 wird gleich 1 gesetzt
-        # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
-        pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
         penalty2 = 1e5 * max(d1, d2, d3, 0)
-        
-        if member.f1 < member.requirements.f1:
-            pen_f = member.requirements.f1 - member.f1
-            penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
-        else:
-            penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
+        penalty3 = calc_sls2_penalty(member)
         member.get_fire_resistance()
         penalty4 = max(member.requirements.t_fire - member.fire_resistance, 0)
         to_minimize = member.section.h * (1 + penalty1 + penalty2 + penalty3 + penalty4)
@@ -561,15 +528,7 @@ def wd_rib_rqs(var, add_arg):
     penalty2 = 1e5 * max(d1, d2, d3, 0)
 
     # define penalty3, if SLS2 (vibrations) are not fulfilled
-    pen_a = member.a_ed - member.requirements.a_cd  # Grössenordnung 1e-2
-    pen_w = member.wf_ed - member.requirements.w_f_cdr1 * member.r1  # HBT S. 48. r2 wird gleich 1 gesetzt
-    # (Störungen im benachbarten Feld akzeptiert)  # Grössenordnung 1e-5
-    pen_v = member.ve_ed - member.ve_cd  # Grössenordnung 1e-3
-    if member.f1 < member.requirements.f1:
-        pen_f = member.requirements.f1 - member.f1
-        penalty3 = max(pen_f * SLS2_FREQUENCY_PENALTY_WEIGHT, pen_a * 1e2, pen_w * 1e5, pen_v * 1e3, 0)
-    else:
-        penalty3 = max(pen_w * 1e5, pen_v * 1e3, 0)
+    penalty3 = calc_sls2_penalty(member)
 
     # define penalty4, if fire resistance is not fulfilled
     member.get_fire_resistance()

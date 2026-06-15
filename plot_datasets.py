@@ -427,6 +427,7 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
         for criterion in criteria:
             for optimum in optima:
                 members = []
+                warm_start_section = None
                 for length in lengths:
                     if system_type == "simple_span":
                         sys = struct_analysis.BeamSimpleSup(length)
@@ -438,7 +439,8 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                         sys = struct_analysis.BeamContinuousSupPl(length)
                     else:
                         raise ValueError(f"Unknown 1D system_type: {system_type}")
-                    section0 = section_for_length(i[0], length)
+                    seed_section = warm_start_section or i[0]
+                    section0 = section_for_length(seed_section, length)
                     floorstruc = floor_for_section(section0, i[1])
                     member0 = struct_analysis.Member1D(section0, sys, floorstruc, requirements, g2k, qk)
                     if fire_array is not None:
@@ -460,6 +462,8 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                         if opt_member_alt.co2 < opt_member.co2:
                             opt_member = opt_member_alt
                     members.append(opt_member)
+                    if section0.section_type in ("tcc", "rc_rib"):
+                        warm_start_section = opt_member.section
                 member_list.append(members)
                 if i[0].section_type[0:2] == "rc":
                     material_lg = i[0].concrete_type.mech_prop + " + " + i[0].rebar_type.mech_prop

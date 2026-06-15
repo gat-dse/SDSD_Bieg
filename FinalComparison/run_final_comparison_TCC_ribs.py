@@ -1,9 +1,9 @@
-"""Rerun only the residential TCC-rib system and update the final summary.
+"""Rerun the TCC-rib and ribbed-concrete systems and update the final summary.
 
 The script preserves all other systems in ``final_comparison_summary.xlsx``.
-It replaces the TCC-rib rows in every result sheet, records the partial rerun
-in the metadata, and recreates the affected single-system and residential ENV
-plots without rerunning the other floor systems.
+It replaces the target rows in every result sheet, records the partial rerun
+in the metadata, and recreates the affected single-system and ENV plots without
+rerunning the other floor systems.
 """
 
 from __future__ import annotations
@@ -31,17 +31,19 @@ import replot_single_criteria_from_summary as single_replot
 import run_final_comparison as comparison
 
 
-CASE_ID = "residential"
-SYSTEM_ID = "res_tcc_ribs_dbs"
+TARGETS = (
+    ("residential", "res_tcc_ribs_dbs"),
+    ("office", "off_ribbed_concrete_continuous"),
+)
 ITERATIONS = 30
 SUMMARY_PATH = Path(inputs.OUTPUT_DIR) / "final_comparison_summary.xlsx"
 
 
-def target_configuration():
-    scenario = inputs.SCENARIOS[CASE_ID]
-    system = next((item for item in scenario["systems"] if item["id"] == SYSTEM_ID), None)
+def target_configuration(case_id, system_id):
+    scenario = inputs.SCENARIOS[case_id]
+    system = next((item for item in scenario["systems"] if item["id"] == system_id), None)
     if system is None:
-        raise RuntimeError(f"System {SYSTEM_ID!r} is not defined in scenario {CASE_ID!r}.")
+        raise RuntimeError(f"System {system_id!r} is not defined in scenario {case_id!r}.")
     return scenario, system
 
 
@@ -84,9 +86,9 @@ def best_rows(case_name, scenario, system, design_series, env_series):
     return rows
 
 
-def replace_system_rows(existing, replacement):
+def replace_system_rows(existing, replacement, system_id):
     replacement = pd.DataFrame(replacement)
-    mask = existing.get("system_id", pd.Series(index=existing.index, dtype=object)) == SYSTEM_ID
+    mask = existing.get("system_id", pd.Series(index=existing.index, dtype=object)) == system_id
     insertion_index = int(mask[mask].index.min()) if mask.any() else len(existing)
 
     columns = list(existing.columns)
@@ -103,7 +105,7 @@ def update_metadata(metadata):
     metadata = metadata.copy()
     updates = {
         "last_partial_rerun": datetime.now().isoformat(timespec="seconds"),
-        "last_partial_rerun_system": SYSTEM_ID,
+        "last_partial_rerun_system": ", ".join(system_id for _, system_id in TARGETS),
         "last_partial_rerun_iterations": ITERATIONS,
         "tcc_reinforcement_assumption": "One central mesh with two orthogonal reinforcement layers",
     }
@@ -118,8 +120,8 @@ def update_metadata(metadata):
 
 def write_summary(sheets):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup = SUMMARY_PATH.with_name(f"{SUMMARY_PATH.stem}_before_TCC_ribs_{timestamp}.xlsx")
-    temporary = SUMMARY_PATH.with_name(f".{SUMMARY_PATH.stem}_TCC_ribs_tmp.xlsx")
+    backup = SUMMARY_PATH.with_name(f"{SUMMARY_PATH.stem}_before_ribbed_systems_{timestamp}.xlsx")
+    temporary = SUMMARY_PATH.with_name(f".{SUMMARY_PATH.stem}_ribbed_systems_tmp.xlsx")
     shutil.copy2(SUMMARY_PATH, backup)
 
     try:
@@ -148,41 +150,50 @@ def main():
             f"Existing summary not found: {SUMMARY_PATH}. Run the complete comparison first."
         )
 
-    scenario, system = target_configuration()
-
     # Ensure every generated row and plot records the focused iteration count.
     inputs.HIGH_ITER = ITERATIONS
-    inputs.HIGH_ITER_SECTION_TYPES = {"tcc"}
+    inputs.HIGH_ITER_SECTION_TYPES = {"tcc", "rc_rib"}
 
-    print(f"Running {system['label']} only with n_iter={ITERATIONS}", flush=True)
-    design_series = comparison.run_system(scenario, system, inputs.DESIGN_CRITERIA)
-    env_series = comparison.run_system(scenario, system, inputs.ENV_CRITERIA)
+    replacements = []
+    for case_id, system_id in TARGETS:
+        scenario, system = target_configuration(case_id, system_id)
+        print(f"Running {scenario['label']} - {system['label']} with n_iter={ITERATIONS}", flush=True)
+        design_series = comparison.run_system(scenario, system, inputs.DESIGN_CRITERIA)
+        env_series = comparison.run_system(scenario, system, inputs.ENV_CRITERIA)
 
-    replacement_variants = comparison.collect_variant_rows(
-        CASE_ID, scenario, system, design_series + env_series
-    )
-    replacement_envelopes = comparison.collect_envelope_rows(
-        CASE_ID,
-        scenario,
-        system,
-        design_series,
-        inputs.DESIGN_CRITERIA,
-        [
-            ("gwp_struct", "GWP_struct [kg-CO2-eq/m2]"),
-            ("gwp_total", "GWP_total [kg-CO2-eq/m2]"),
-        ],
-        "single_system_GWP",
-    )
-    replacement_envelopes.extend(comparison.collect_envelope_rows(
-        CASE_ID,
-        scenario,
-        system,
-        env_series,
-        inputs.ENV_CRITERIA,
-        comparison.SUMMARY_METRICS,
-        "ENV_comparison",
-    ))
-    replacement_best = best_rows(CASE_ID, scenario, system, design_series, env_series)
+        replacement_variants = comparison.collect_variant_rows(
+            case_id, scenario, system, design_series + env_series
+        )
+        replacement_envelopes = comparison.collect_envelope_rows(
+            case_id,
+            scenario,
+            system,
+            design_series,
+            inputs.DESIGN_CRITERIA,
+            [
+                ("gwp_struct", "GWP_struct [kg-CO2-eq/m2]"),
+                ("gwp_total", "GWP_total [kg-CO2-eq/m2]"),
+            ],
+            "single_system_GWP",
+        )
+        replacement_envelopes.extend(comparison.collect_envelope_rows(
+            case_id,
+            scenario,
+            system,
+            env_series,
+            inputs.ENV_CRITERIA,
+            comparison.SUMMARY_METRICS,
+            "ENV_comparison",
+        ))
+        replacement_best = best_rows(case_id, scenario, system, design_series, env_series)
+        replacements.append((
+            case_id,
+            scenario,
+            system,
+            replacement_variants,
+            replacement_envelopes,
+            replacement_best,
+        ))
 
     sheets = pd.read_excel(SUMMARY_PATH, sheet_name=None)
     required = {"metadata", "all_variants", "envelope_borders", "best_ENV_total_GWP"}
@@ -191,22 +202,36 @@ def main():
         raise RuntimeError(f"Summary workbook is missing sheets: {sorted(missing)}")
 
     sheets["metadata"] = update_metadata(sheets["metadata"])
-    sheets["all_variants"] = replace_system_rows(sheets["all_variants"], replacement_variants)
-    sheets["envelope_borders"] = replace_system_rows(sheets["envelope_borders"], replacement_envelopes)
-    sheets["best_ENV_total_GWP"] = replace_system_rows(
-        sheets["best_ENV_total_GWP"], replacement_best
-    )
+    for _, _, system, replacement_variants, replacement_envelopes, replacement_best in replacements:
+        system_id = system["id"]
+        sheets["all_variants"] = replace_system_rows(
+            sheets["all_variants"], replacement_variants, system_id
+        )
+        sheets["envelope_borders"] = replace_system_rows(
+            sheets["envelope_borders"], replacement_envelopes, system_id
+        )
+        sheets["best_ENV_total_GWP"] = replace_system_rows(
+            sheets["best_ENV_total_GWP"], replacement_best, system_id
+        )
 
     backup = write_summary(sheets)
     summary = sheets["all_variants"]
-    single_path = single_replot.replot_system(CASE_ID, scenario, system, summary)
-    env_path = env_replot.replot_case(CASE_ID, scenario, summary)
+    single_paths = [
+        single_replot.replot_system(case_id, scenario, system, summary)
+        for case_id, scenario, system, *_ in replacements
+    ]
+    env_paths = [
+        env_replot.replot_case(case_id, scenario, summary)
+        for case_id, scenario, _, *_ in replacements
+    ]
 
     print(f"Updated {SUMMARY_PATH}", flush=True)
     print(f"Backup: {backup}", flush=True)
-    if single_path is not None:
-        print(f"Updated {single_path}", flush=True)
-    print(f"Updated {env_path}", flush=True)
+    for path in single_paths:
+        if path is not None:
+            print(f"Updated {path}", flush=True)
+    for path in env_paths:
+        print(f"Updated {path}", flush=True)
 
 
 if __name__ == "__main__":
