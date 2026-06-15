@@ -322,7 +322,9 @@ def contribution_text(row, total_column, total_label, total_unit, components):
         value = safe_float(row.get(column, 0.0))
         if abs(value) <= 1e-6:
             continue
-        parts.append(f"{label} {100 * value / total:.0f}%")
+        percentage = 100 * value / total
+        percentage_text = "<1%" if 0 < percentage < 1 else f"{percentage:.0f}%"
+        parts.append(f"{label} {percentage_text}")
     if not parts:
         return ""
     return f"{total_label}: {total:.1f} {total_unit} " + " | ".join(parts)
@@ -382,7 +384,9 @@ def time_contribution_text(row):
     ):
         if abs(value) <= 1e-6:
             continue
-        parts.append(f"{label} {100 * value / total:.0f}%")
+        percentage = 100 * value / total
+        percentage_text = "<1%" if 0 < percentage < 1 else f"{percentage:.0f}%"
+        parts.append(f"{label} {percentage_text}")
     if total <= 0 or not parts:
         return ""
     return f"Time$_{{total}}$: {total:.2f} h/m$^2$ " + " | ".join(parts)
@@ -631,7 +635,7 @@ def draw_solid(ax, x0, y0, width, height, facecolor):
 def draw_ribbed(ax, row, geom, x0, y0, width, height, facecolor):
     geom_h = max(geom.get("h", height), 1e-9)
     local_scale = height / geom_h
-    h_f = min(max(geom.get("h_f", geom.get("h_c", 0.08)) * local_scale, 0.035), height * 0.75)
+    h_f = min(max(geom.get("h_f", 0.12) * local_scale, 0.035), height * 0.75)
     h_w = height - h_f
     b_w = min(max(geom.get("b_w", width * 0.22) * local_scale, 0.06), width * 0.55)
     rib_x0 = x0 + width / 2 - b_w / 2

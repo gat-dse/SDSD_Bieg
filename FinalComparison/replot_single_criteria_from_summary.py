@@ -22,6 +22,7 @@ Path("outputs/matplotlib").mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("MPLCONFIGDIR", str(Path("outputs") / "matplotlib"))
 
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 import pandas as pd
 
@@ -133,6 +134,94 @@ def replot_system(case_name: str, scenario: dict, system: dict, summary: pd.Data
     return path
 
 
+def replot_residential_structural_gwp(summary: pd.DataFrame) -> Path | None:
+    case_name = "residential"
+    scenario = inputs.SCENARIOS[case_name]
+    systems_by_id = {system["id"]: system for system in scenario["systems"]}
+    systems = [
+        systems_by_id["res_rc_flat_walls"],
+        systems_by_id["res_pt_flat_walls_dist"],
+        systems_by_id["res_tcc_flat_kerve"],
+        systems_by_id["res_tcc_ribs_dbs"],
+        systems_by_id["res_wood_flat_simple"],
+        systems_by_id["res_hollow_core_simple"],
+    ]
+    if len(systems) != 6:
+        raise RuntimeError(f"Expected six residential systems, found {len(systems)}.")
+
+    fig, axes = plt.subplots(3, 2, figsize=(15.5, 15.0), sharex=True, sharey=True)
+    all_y_values = []
+    has_data = False
+    for ax, system in zip(axes.flat, systems):
+        rows = summary[
+            (summary["case"] == scenario["label"])
+            & (summary["system_id"] == system["id"])
+            & (summary["criterion"].isin(inputs.DESIGN_CRITERIA))
+        ]
+        for criterion in inputs.DESIGN_CRITERIA:
+            criterion_rows = feasible_rows(rows[rows["criterion"] == criterion], criterion)
+            values = envelope(
+                criterion_rows,
+                scenario["lengths"],
+                "GWP_struct [kg-CO2-eq/m2]",
+            )
+            if any(pd.notna(value) for value in values["median"]):
+                has_data = True
+            all_y_values.extend(values["min"])
+            all_y_values.extend(values["max"])
+            draw_envelope(ax, values, criterion_color(system, criterion), criterion)
+
+        system_label = system.get("comparison_label", system["label"]).replace("\n", " ")
+        setup_label = system.get("structural_system", "")
+        panel_label = (
+            f"$GWP_{{struct}}$ [kg-CO$_2$-eq/m$^2$]\n"
+            f"{system_label}\n{setup_label}"
+        )
+        ax.text(
+            0.025, 0.965, panel_label, transform=ax.transAxes,
+            ha="left", va="top", fontsize=17,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.78, "pad": 2.0},
+            zorder=10,
+        )
+        ax.set_xticks(scenario["lengths"])
+        ax.tick_params(axis="both", which="major", labelsize=15)
+        ax.grid(True, alpha=0.35)
+
+    if not has_data:
+        plt.close(fig)
+        return None
+
+    for ax in axes.flat:
+        set_readable_ylim(ax, all_y_values)
+    for ax in axes[-1, :]:
+        ax.set_xlabel("l [m]", fontsize=17)
+
+    handles = [
+        Line2D(
+            [0], [0], color="black", linewidth=1.8,
+            linestyle=CRITERION_LINE_STYLES[criterion]["linestyle"],
+            marker=CRITERION_LINE_STYLES[criterion]["marker"],
+            markerfacecolor="white", markersize=5.0, label=criterion,
+        )
+        for criterion in inputs.DESIGN_CRITERIA
+    ]
+    fig.legend(
+        handles=handles,
+        title="Design criterion",
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.995),
+        ncol=4,
+        frameon=False,
+        fontsize=17,
+        title_fontsize=17,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    path = OUTPUT_DIR / "final_single_residential_GWP_struct.png"
+    fig.savefig(path, dpi=400, bbox_inches="tight")
+    plt.close(fig)
+    return path
+
+
 def main() -> None:
     summary = pd.read_excel(SUMMARY_FILE, sheet_name="all_variants")
     for case_name, scenario in inputs.SCENARIOS.items():
@@ -140,6 +229,9 @@ def main() -> None:
             path = replot_system(case_name, scenario, system, summary)
             if path is not None:
                 print(f"Saved {path}")
+    path = replot_residential_structural_gwp(summary)
+    if path is not None:
+        print(f"Saved {path}")
 
 
 if __name__ == "__main__":

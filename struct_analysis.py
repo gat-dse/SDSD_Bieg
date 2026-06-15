@@ -402,11 +402,34 @@ class RectangularConcrete(SupStrucRectangular):
         self.co2 = (co2_rebar + co2_concrete)/self.b
         self.cost = (a_s_tot * self.rebar_type.cost + (self.a_brutt - a_s_tot) * self.concrete_type.cost)/self.b + self.concrete_type.cost2# [CHF/m]
         self.construction_time = (a_s_tot * self.rebar_type.construction_time + (self.a_brutt - a_s_tot) * self.concrete_type.construction_time)/self.b + self.concrete_type.construction_time_scaffold # [h/m]
+        self.punching_steel_volume = 0.0
+        self.punching_steel_co2 = 0.0
+        self.punching_steel_cost = 0.0
+        self.punching_steel_construction_time = 0.0
         self.ei_b = self.ei1
         self.xi = xi  # XXXXXXX preset value is an assumption. Has to be verified with literature. XXXXXXX
         self.ei2 = self.ei1 / self.f_w_ger(self.roh, self.rohs, 0, self.h, self.d)
         self.h_installation = self.h - 2*self.c_nom - self.bw[0][0] - self.bw[1][0] - self.bw[2][0] - self.bw[3][0]  # height available for installation of services
         self.w = self.g0k / self.b # weight of cross section per m2 [N/m2]
+
+    def set_punching_reinforcement_volume(self, volume):
+        """Include separately calculated punching steel in section impacts."""
+        self.co2 -= self.punching_steel_co2
+        self.cost -= self.punching_steel_cost
+        self.construction_time -= self.punching_steel_construction_time
+
+        self.punching_steel_volume = max(float(volume), 0.0)
+        self.punching_steel_co2 = (
+            self.punching_steel_volume * self.rebar_type.GWP * self.rebar_type.density
+        )
+        self.punching_steel_cost = self.punching_steel_volume * self.rebar_type.cost
+        self.punching_steel_construction_time = (
+            self.punching_steel_volume * self.rebar_type.construction_time
+        )
+
+        self.co2 += self.punching_steel_co2
+        self.cost += self.punching_steel_cost
+        self.construction_time += self.punching_steel_construction_time
 
     def calc_weight(self, concrete_area=None, reinforcement_area=0.0, pt_steel_area=0.0):
         #  out: product-specific weight of reinforced cross section per m length [N/m]
@@ -670,6 +693,9 @@ class PostTensionedConcrete(RectangularConcrete):
         self.co2 = co2_rebar + co2_concrete + co2_pt_steel # [kg_CO2_eq/m]
         self.cost = volume_reinforcement * self.rebar_type.cost + volume_concrete * self.concrete_type.cost + volume_pt_steel * self.pt_steel_type.cost + self.concrete_type.cost2# [CHF/m]
         self.construction_time = volume_reinforcement * self.rebar_type.construction_time + volume_concrete * self.concrete_type.construction_time + volume_pt_steel * self.pt_steel_type.construction_time  + self.concrete_type.construction_time_scaffold # [h/m]
+
+    def set_punching_reinforcement_volume(self, volume):
+        super().set_punching_reinforcement_volume(volume)
         
     def set_initial_pt_reinforcement(self):
         # Simplified PT layout assumption: use the same minimum bonded
@@ -1181,12 +1207,15 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         self.co2_concrete = co2_concrete / self.b
         self.co2_pt_steel = 0.0
         self.cost_rebar = a_s_tot * self.rebar_type.cost / self.b
-        self.cost_concrete = concrete_area * self.concrete_type.cost / self.b + self.concrete_type.cost2*2
+        formwork_factor = 2 * (self.b + 2 * self.h_f) / self.b # 2* accounts for additional complexity and decreased reuse of formwork for ribbed slabs compared to flat slabs. 
+        formwork_cost = self.concrete_type.cost2 * formwork_factor
+        formwork_time = self.concrete_type.construction_time_scaffold * formwork_factor
+        self.cost_concrete = concrete_area * self.concrete_type.cost / self.b + formwork_cost
         self.cost_pt_steel = 0.0
         self.ei1 = self.concrete_type.Ecm * self.iy  # elastic stiffness concrete (uncracked behaviour) [Nm^2]
         self.co2 = (co2_rebar + co2_concrete)/self.b
-        self.cost = (a_s_tot * self.rebar_type.cost + concrete_area * self.concrete_type.cost)/self.b + self.concrete_type.cost2*2 # [CHF/m] 
-        self.construction_time = (a_s_tot * self.rebar_type.construction_time + concrete_area * self.concrete_type.construction_time)/self.b + self.concrete_type.construction_time_scaffold*2 # [h/m]
+        self.cost = (a_s_tot * self.rebar_type.cost + concrete_area * self.concrete_type.cost)/self.b + formwork_cost # [CHF/m]
+        self.construction_time = (a_s_tot * self.rebar_type.construction_time + concrete_area * self.concrete_type.construction_time)/self.b + formwork_time # [h/m]
         self.ei_b = self.ei1  #!!!!!!!ANPASSEN AUF PB
         self.xi = xi  # XXXXXXX preset value is an assumption. Has to be verified with literature. XXXXXXX
         self.ei2 = self.ei1 / self.f_w_ger(self.roh, self.rohs, 0, self.h, self.d_PB)  #!!!!!ANPASSEN AUF PB
@@ -3271,6 +3300,37 @@ class Member2D:
         # required, use at least Vd/2 as minimum reinforcement resistance.
         self.punching_vrds_required = max(punching_deficit, 0.5 * v_ed) if punching_deficit > 0.0 else 0.0
         return self.punching_vrds_required
+
+    def apply_required_punching_reinforcement(self, q_area=None):
+        section = self.section
+        if (
+            getattr(section, "section_type", "") not in ("rc_rec", "pc_rec")
+            or not self.should_check_punching()
+        ):
+            volume = 0.0
+            a_ds_req = 0.0
+            v_rd_s_req = 0.0
+        else:
+            v_rd_s_req = self.calc_required_punching_shear_reinforcement_resistance(q_area)
+            ke = max(float(getattr(self.system, "column_ke", 1.0) or 1.0), 1e-9)
+            a_ds_req = max(v_rd_s_req, 0.0) / max(ke * section.rebar_type.fsd, 1e-9)
+            tributary_area = max(self.system.lx * self.system.ly, 1e-9)
+            joint_surcharge = max(float(getattr(section, "joint_surcharge", 0.0) or 0.0), 0.0)
+            volume = a_ds_req / tributary_area * (1.0 + joint_surcharge)
+
+        section.set_punching_reinforcement_volume(volume)
+        self.punching_a_ds_req_m2 = a_ds_req
+        self.punching_steel_volume_m3_m2 = volume
+        self.shear_reinforcement_volume_m3_m2 = 0.0
+        self.punching_steel_additional_volume_m3_m2 = volume
+        self.punching_steel_co2_kgCO2eq_m2 = section.punching_steel_co2
+        self.punching_steel_cost_CHF_m2 = section.punching_steel_cost
+        self.punching_steel_time_h_m2 = section.punching_steel_construction_time
+        self.punching_steel_additional_co2_kgCO2eq_m2 = section.punching_steel_co2
+        self.punching_steel_additional_cost_CHF_m2 = section.punching_steel_cost
+        self.punching_steel_additional_time_h_m2 = section.punching_steel_construction_time
+        self.punching_V_Rd_s_required_N = v_rd_s_req
+        return volume
 
     def calc_qk_zul_gzt(self, gamma_g=1.35, gamma_q=1.5):
         self.qu = self.calc_qu()

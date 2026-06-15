@@ -1070,7 +1070,7 @@ def export_excel_summary(output_dir, variant_rows, envelope_rows, best_rows):
         {"key": "diagnostics_sls2_raw_values", "value": "SLS2 raw values, limits, margins and sls2_debug_note are exported so frequency-governed TCC rows can be debugged without rerunning the optimizer."},
         {"key": "diagnostics_floor_buildup", "value": "Floor height, mass, GWP and cost contributions and shares are exported to separate structural and acoustic build-up effects."},
         {"key": "diagnostics_reinforcement", "value": "Rebar diameter and spacing summary columns make the continuous optimizer choices visible, including the PT bonded reinforcement floor."},
-        {"key": "punching_reinforcement_accounting", "value": "For point-supported rc_rec and pc_rec slabs, GWP, cost and construction time count max(averaged shear reinforcement, required punching reinforcement). The exported punching add-on is therefore max(punching - already counted shear, 0)."},
+        {"key": "punching_reinforcement_accounting", "value": "For point-supported rc_rec and pc_rec slabs, ordinary slab shear reinforcement as_bw is zero. Required punching reinforcement is calculated separately and its full distributed volume is included in GWP, cost and construction time."},
         {"key": "pt_min_reinforcement_diagnostics", "value": "For pc_rec rows, pt_eta_Mcr_MRd now uses the ordinary RC cracking moment without prestress as the bonded minimum-reinforcement target; pt_Mcr_kNm_m still reports Mcr,PT for serviceability cracking/stiffness."},
         {"key": "note", "value": "Envelope borders identify the member variant forming the lower or upper plot boundary at each span."},
     ]

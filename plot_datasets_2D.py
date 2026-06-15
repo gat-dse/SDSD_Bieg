@@ -104,63 +104,10 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
         def internal_floor_buildup_weight(section):
             return float(getattr(section, "hollow_core_insulation_gk", 0.0) or 0.0)
         def punching_steel_addon(mem):
-            section = mem.section
-            if (
-                getattr(section, "section_type", "") not in ("rc_rec", "pc_rec")
-                or not getattr(mem.system, "has_columns", False)
-            ):
-                mem.punching_a_ds_req_m2 = 0.0
-                mem.punching_steel_volume_m3_m2 = 0.0
-                mem.punching_steel_co2_kgCO2eq_m2 = 0.0
-                mem.punching_steel_cost_CHF_m2 = 0.0
-                mem.punching_steel_time_h_m2 = 0.0
-                mem.punching_V_Rd_s_required_N = 0.0
-                mem.shear_reinforcement_volume_m3_m2 = 0.0
-                mem.punching_steel_additional_volume_m3_m2 = 0.0
-                mem.punching_steel_additional_co2_kgCO2eq_m2 = 0.0
-                mem.punching_steel_additional_cost_CHF_m2 = 0.0
-                mem.punching_steel_additional_time_h_m2 = 0.0
-                return 0.0, 0.0, 0.0, 0.0
-            try:
-                v_rd_s_req = mem.calc_required_punching_shear_reinforcement_resistance()
-                ke = max(float(getattr(mem.system, "column_ke", 1.0) or 1.0), 1e-9)
-                beta_sin = 1.0  # vertical punching reinforcement, beta = 90 deg
-                sigma_sd = section.rebar_type.fsd
-                a_ds_req = max(v_rd_s_req, 0.0) / max(ke * sigma_sd * beta_sin, 1e-9)
-                tributary_area = max(mem.system.lx * mem.system.ly, 1e-9)
-                joint_surcharge = max(float(getattr(section, "joint_surcharge", 0.0) or 0.0), 0.0)
-                volume = a_ds_req / tributary_area * (1.0 + joint_surcharge)
-                shear_volume = (
-                    0.5
-                    * max(float(getattr(section, "as_bw", 0.0) or 0.0), 0.0)
-                    / max(float(getattr(section, "b", 1.0) or 1.0), 1e-9)
-                    * (1.0 + joint_surcharge)
-                )
-                additional_volume = max(volume - shear_volume, 0.0)
-                co2 = additional_volume * section.rebar_type.GWP * section.rebar_type.density
-                cost = additional_volume * section.rebar_type.cost
-                construction_time = additional_volume * section.rebar_type.construction_time
-            except Exception:
-                volume, shear_volume, additional_volume, co2, cost, construction_time = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-                a_ds_req = 0.0
-                v_rd_s_req = 0.0
-            mem.punching_a_ds_req_m2 = a_ds_req
-            mem.punching_steel_volume_m3_m2 = volume
-            mem.shear_reinforcement_volume_m3_m2 = shear_volume
-            mem.punching_steel_additional_volume_m3_m2 = additional_volume
-            mem.punching_steel_co2_kgCO2eq_m2 = co2
-            mem.punching_steel_cost_CHF_m2 = cost
-            mem.punching_steel_time_h_m2 = construction_time
-            mem.punching_steel_additional_co2_kgCO2eq_m2 = co2
-            mem.punching_steel_additional_cost_CHF_m2 = cost
-            mem.punching_steel_additional_time_h_m2 = construction_time
-            mem.punching_V_Rd_s_required_N = v_rd_s_req
-            return additional_volume, co2, cost, construction_time
+            return mem.apply_required_punching_reinforcement()
 
-        punching_addons = [punching_steel_addon(mem) for mem in members]
-        punching_co2 = [addon[1] for addon in punching_addons]
-        punching_cost = [addon[2] for addon in punching_addons]
-        punching_time = [addon[3] for addon in punching_addons]
+        for mem in members:
+            punching_steel_addon(mem)
 
         return {
             "legend": legend_entry,
@@ -168,8 +115,8 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
             "members": members,
             "h_struct": [section_height(mem.section) for mem in members],
             "h_total": [section_height(mem.section) + floor_value(mem, "h") for mem in members],
-            "gwp_struct": [mem.section.co2 + punching_co2[idx] for idx, mem in enumerate(members)],
-            "gwp_total": [mem.section.co2 + punching_co2[idx] + floor_value(mem, "co2") for idx, mem in enumerate(members)],
+            "gwp_struct": [mem.section.co2 for mem in members],
+            "gwp_total": [mem.section.co2 + floor_value(mem, "co2") for mem in members],
             "m_struct": [section_weight(mem.section) / 1000 for mem in members],
             "m_total": [
                 (
@@ -179,15 +126,13 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                 ) / 1000
                 for mem in members
             ],
-            "cost_struct": [getattr(mem.section, "cost", 0.0) + punching_cost[idx] for idx, mem in enumerate(members)],
-            "cost_total": [getattr(mem.section, "cost", 0.0) + punching_cost[idx] + floor_value(mem, "cost") for idx, mem in enumerate(members)],
+            "cost_struct": [getattr(mem.section, "cost", 0.0) for mem in members],
+            "cost_total": [getattr(mem.section, "cost", 0.0) + floor_value(mem, "cost") for mem in members],
             "time_struct": [
-                getattr(mem.section, "construction_time", 0.0) + punching_time[idx]
-                for idx, mem in enumerate(members)
+                getattr(mem.section, "construction_time", 0.0) for mem in members
             ],
             "time_total": [
                 getattr(mem.section, "construction_time", 0.0)
-                + punching_time[idx]
                 + floor_value(mem, "construction_time")
                 for idx, mem in enumerate(members)
             ],

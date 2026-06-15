@@ -1,4 +1,4 @@
-"""Rerun the TCC and ribbed-concrete systems and update the final summary.
+"""Rerun all office systems and update the final summary.
 
 The script preserves all other systems in ``final_comparison_summary.xlsx``.
 It replaces the target rows in every result sheet, records the partial rerun
@@ -31,12 +31,13 @@ import replot_single_criteria_from_summary as single_replot
 import run_final_comparison as comparison
 
 
-TARGETS = (
-    ("residential", "res_tcc_ribs_dbs"),
-    ("residential", "res_tcc_flat_kerve"),
-    ("office", "off_ribbed_concrete_continuous"),
+TARGETS = tuple(
+    ("office", system["id"])
+    for system in inputs.SCENARIOS["office"]["systems"]
 )
-ITERATIONS = 30
+
+DEFAULT_ITERATIONS = 20
+RIBBED_CONCRETE_ITERATIONS = 30
 SUMMARY_PATH = Path(inputs.OUTPUT_DIR) / "final_comparison_summary.xlsx"
 
 
@@ -48,8 +49,15 @@ def target_configuration(case_id, system_id):
     return scenario, system
 
 
+def iterations_for(system):
+    if system["crsec_type"] == "rc_rib":
+        return RIBBED_CONCRETE_ITERATIONS
+    return DEFAULT_ITERATIONS
+
+
 def best_rows(case_name, scenario, system, design_series, env_series):
     rows = []
+    n_iter = iterations_for(system)
     best = comparison.select_best_by_length(design_series + env_series, "gwp_total")
     for idx, length in enumerate(best["lengths"]):
         member = best["members"][idx]
@@ -61,7 +69,7 @@ def best_rows(case_name, scenario, system, design_series, env_series):
                 "system_id": system["id"],
                 "criterion": "ENV",
                 "optimum": "GWP",
-                "n_iter": ITERATIONS,
+                "n_iter": n_iter,
                 "variant": "no ENV-feasible candidate",
                 "span_l_m": length,
                 "qk_kN_m2": scenario["qk"] / 1000,
@@ -107,7 +115,10 @@ def update_metadata(metadata):
     updates = {
         "last_partial_rerun": datetime.now().isoformat(timespec="seconds"),
         "last_partial_rerun_system": ", ".join(system_id for _, system_id in TARGETS),
-        "last_partial_rerun_iterations": ITERATIONS,
+        "last_partial_rerun_iterations": (
+            f"{DEFAULT_ITERATIONS} default; "
+            f"{RIBBED_CONCRETE_ITERATIONS} ribbed concrete"
+        ),
         "tcc_reinforcement_assumption": "One central mesh with two orthogonal reinforcement layers",
     }
     for key, value in updates.items():
@@ -151,14 +162,16 @@ def main():
             f"Existing summary not found: {SUMMARY_PATH}. Run the complete comparison first."
         )
 
-    # Ensure every generated row and plot records the focused iteration count.
-    inputs.HIGH_ITER = ITERATIONS
-    inputs.HIGH_ITER_SECTION_TYPES = {"tcc", "rc_rib"}
+    # Use a larger search budget only for ribbed concrete.
+    inputs.MAX_ITER = DEFAULT_ITERATIONS
+    inputs.HIGH_ITER = RIBBED_CONCRETE_ITERATIONS
+    inputs.HIGH_ITER_SECTION_TYPES = {"rc_rib"}
 
     replacements = []
     for case_id, system_id in TARGETS:
         scenario, system = target_configuration(case_id, system_id)
-        print(f"Running {scenario['label']} - {system['label']} with n_iter={ITERATIONS}", flush=True)
+        n_iter = iterations_for(system)
+        print(f"Running {scenario['label']} - {system['label']} with n_iter={n_iter}", flush=True)
         design_series = comparison.run_system(scenario, system, inputs.DESIGN_CRITERIA)
         env_series = comparison.run_system(scenario, system, inputs.ENV_CRITERIA)
 

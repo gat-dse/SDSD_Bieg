@@ -371,6 +371,7 @@ def rc_rqs(var, add_arg):
                                       uls_bending_only=uls_bending_only,
                                       optimize_shear_reinforcement=optimize_shear)
     member.calc_qk_zul_gzt()  # calculate admissible live load
+    member.apply_required_punching_reinforcement()
 
     penalty = criterion_penalty(
         member,
@@ -500,6 +501,7 @@ def pc_rqs(var, add_arg):
         optimize_shear_reinforcement=optimize_shear,
     )
     member.calc_qk_zul_gzt()
+    member.apply_required_punching_reinforcement()
 
     penalty = criterion_penalty(
         member,
