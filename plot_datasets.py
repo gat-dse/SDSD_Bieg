@@ -108,6 +108,25 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
         new_section.h_w_max = getattr(section, "h_w_max", None)
         return new_section
 
+    def scaled_tcc_warm_start(section, factor=1.05):
+        h_w_max = getattr(section, "h_w_max", None) or 1.0
+        new_section = struct_analysis.TCC(
+            section.concrete_type,
+            section.rebar_type,
+            section.wood_type,
+            section.connector_type,
+            section.s,
+            section.a_ribs,
+            min(section.h_c * factor, 0.5),
+            min(section.h_w * factor, h_w_max),
+            section.b_w,
+            section.d,
+            section.l0,
+            section.xi,
+        )
+        new_section.h_w_max = h_w_max
+        return new_section
+
     def adjust_tcc_concrete_for_acoustics(section, fallback_floorstruc, h_step=0.01, h_max=0.24):
         floorstruc = floor_for_section(section, fallback_floorstruc)
         if not auto_floor_buildup or section.section_type != "tcc" or acoustic_verified(section, floorstruc):
@@ -440,6 +459,8 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                     else:
                         raise ValueError(f"Unknown 1D system_type: {system_type}")
                     seed_section = warm_start_section or i[0]
+                    if warm_start_section is not None and seed_section.section_type == "tcc":
+                        seed_section = scaled_tcc_warm_start(seed_section)
                     section0 = section_for_length(seed_section, length)
                     floorstruc = floor_for_section(section0, i[1])
                     member0 = struct_analysis.Member1D(section0, sys, floorstruc, requirements, g2k, qk)
