@@ -1,4 +1,4 @@
-"""Rerun the TCC-rib and ribbed-concrete systems and update the final summary.
+"""Rerun the TCC and ribbed-concrete systems and update the final summary.
 
 The script preserves all other systems in ``final_comparison_summary.xlsx``.
 It replaces the target rows in every result sheet, records the partial rerun
@@ -33,6 +33,7 @@ import run_final_comparison as comparison
 
 TARGETS = (
     ("residential", "res_tcc_ribs_dbs"),
+    ("residential", "res_tcc_flat_kerve"),
     ("office", "off_ribbed_concrete_continuous"),
 )
 ITERATIONS = 30
@@ -120,8 +121,8 @@ def update_metadata(metadata):
 
 def write_summary(sheets):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup = SUMMARY_PATH.with_name(f"{SUMMARY_PATH.stem}_before_ribbed_systems_{timestamp}.xlsx")
-    temporary = SUMMARY_PATH.with_name(f".{SUMMARY_PATH.stem}_ribbed_systems_tmp.xlsx")
+    backup = SUMMARY_PATH.with_name(f"{SUMMARY_PATH.stem}_before_target_systems_{timestamp}.xlsx")
+    temporary = SUMMARY_PATH.with_name(f".{SUMMARY_PATH.stem}_target_systems_tmp.xlsx")
     shutil.copy2(SUMMARY_PATH, backup)
 
     try:
@@ -220,9 +221,12 @@ def main():
         single_replot.replot_system(case_id, scenario, system, summary)
         for case_id, scenario, system, *_ in replacements
     ]
+    affected_cases = {
+        case_id: scenario for case_id, scenario, _, *_ in replacements
+    }
     env_paths = [
         env_replot.replot_case(case_id, scenario, summary)
-        for case_id, scenario, _, *_ in replacements
+        for case_id, scenario in affected_cases.items()
     ]
 
     print(f"Updated {SUMMARY_PATH}", flush=True)

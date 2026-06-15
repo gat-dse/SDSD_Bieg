@@ -468,6 +468,19 @@ def plot_dataset(lengths, database_name, criteria, optima, floorstruc, requireme
                         member0.fire = fire_array
                     opt_section = struct_optimization.get_optimized_section(member0, criterion, optimum, max_iter)
                     opt_section, floorstruc = adjust_tcc_concrete_for_acoustics(opt_section, floorstruc)
+                    if auto_floor_buildup and section0.section_type == "tcc":
+                        refined_member = struct_analysis.Member1D(
+                            opt_section, sys, floorstruc, requirements, g2k, qk
+                        )
+                        if fire_array is not None:
+                            refined_member.fire = fire_array
+                        opt_section = struct_optimization.opt_tcc(
+                            refined_member,
+                            optimum,
+                            criterion,
+                            max_iter,
+                            hc_min=opt_section.h_c,
+                        )
                     opt_member = struct_analysis.Member1D(opt_section, sys, floorstruc, requirements, g2k, qk)
                     # search for an alternative solution for rectangular concrete section with lower minimal h and fill in floorstructure
                     if section0.section_type == "rc_rec" and not auto_floor_buildup:

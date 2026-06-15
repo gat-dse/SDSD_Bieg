@@ -616,7 +616,7 @@ def tcc_feasible_start(var0, bounds, make_member):
     return best_feasible[1] if best_feasible is not None else best_fallback[1]
 
 
-def best_tcc_basinhopping(func, var0, bounds, max_iter, add_arg):
+def best_tcc_basinhopping(func, var0, bounds, max_iter, add_arg, is_feasible=None):
     minimizer_kwargs = {
         "args": (add_arg,),
         "bounds": bounds,
@@ -637,7 +637,11 @@ def best_tcc_basinhopping(func, var0, bounds, max_iter, add_arg):
         minimizer_kwargs=minimizer_kwargs,
         take_step=bounded_step,
     )
-    if optimized.fun < best.fun:
+    start_feasible = is_feasible(start) if is_feasible is not None else True
+    optimized_feasible = is_feasible(optimized.x) if is_feasible is not None else True
+    if optimized_feasible and (not start_feasible or optimized.fun < best.fun):
+        best = optimized
+    elif not start_feasible and optimized.fun < best.fun:
         best = optimized
     return best
 
@@ -659,28 +663,40 @@ def opt_tcc(m, to_opt="GWP", criterion="ULS", max_iter=100, hc_min=0.08, hw_min=
     #Extract loads and fire settings to pass to the trail members
     add_arg = [m.system, conc, reb, wood, conn, s, a_ribs, bw, d, l0, m.floorstruc, m.requirements, to_opt, criterion, m.g2k, m.qk, m.psi[0], m.psi[1], m.psi[2], m.fire]    # Optimize step definition
 
-    if criterion in ("ULS", "ENV"):
-        def make_seed_member(point):
-            section = struct_analysis.TCC(
-                conc, reb, wood, conn, s, a_ribs, point[0], point[1], bw, d, l0
-            )
-            return struct_analysis.Member1D(
-                section,
-                m.system,
-                m.floorstruc,
-                m.requirements,
-                g2k=m.g2k,
-                qk=m.qk,
-                psi0=m.psi[0],
-                psi1=m.psi[1],
-                psi2=m.psi[2],
-                fire=m.fire,
-            )
+    def make_seed_member(point):
+        section = struct_analysis.TCC(
+            conc, reb, wood, conn, s, a_ribs, point[0], point[1], bw, d, l0
+        )
+        return struct_analysis.Member1D(
+            section,
+            m.system,
+            m.floorstruc,
+            m.requirements,
+            g2k=m.g2k,
+            qk=m.qk,
+            psi0=m.psi[0],
+            psi1=m.psi[1],
+            psi2=m.psi[2],
+            fire=m.fire,
+        )
 
+    if criterion in ("ULS", "ENV"):
         var0 = tcc_feasible_start(var0, bounds, make_seed_member)
 
+    def is_uls_feasible(point):
+        member = make_seed_member(point)
+        member.calc_qk_zul_gzt()
+        return member.qk_zul_gzt + 1e-6 >= member.qk
+
     # Keep the feasible raw start as a candidate, as done for PT concrete.
-    opt = best_tcc_basinhopping(tcc_rqs, var0, bounds, max_iter, add_arg)
+    opt = best_tcc_basinhopping(
+        tcc_rqs,
+        var0,
+        bounds,
+        max_iter,
+        add_arg,
+        is_feasible=is_uls_feasible if criterion in ("ULS", "ENV") else None,
+    )
     hc_opt, hw_opt = opt.x
     optimized_section = struct_analysis.TCC(conc, reb, wood, conn, s, a_ribs, hc_opt, hw_opt, bw, d, l0)
     optimized_section.h_w_max = h_w_max
@@ -713,8 +729,6 @@ def tcc_rqs(var, add_arg):
     member.calc_qk_zul_gzt()
     # ULS penalty 
     penalty1 = max(member.qk - member.qk_zul_gzt, 0) 
-    if criterion in ("ULS", "ENV") and penalty1 > 1e-6:
-        return uls_infeasible_penalty(member, penalty1)
 
     # SLS1 penalty (deflection)
     d1, d2, d3 = [member.w_install - member.w_install_adm, member.w_use - member.w_use_adm, member.w_app - member.w_app_adm]
