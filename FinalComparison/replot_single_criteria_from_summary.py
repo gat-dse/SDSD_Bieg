@@ -134,25 +134,26 @@ def replot_system(case_name: str, scenario: dict, system: dict, summary: pd.Data
     return path
 
 
-def replot_residential_structural_gwp(summary: pd.DataFrame) -> Path | None:
-    case_name = "residential"
+def replot_case_structural_gwp(
+    summary: pd.DataFrame,
+    case_name: str,
+    system_ids: list[str] | None = None,
+) -> Path | None:
     scenario = inputs.SCENARIOS[case_name]
     systems_by_id = {system["id"]: system for system in scenario["systems"]}
-    systems = [
-        systems_by_id["res_rc_flat_walls"],
-        systems_by_id["res_pt_flat_walls_dist"],
-        systems_by_id["res_tcc_flat_kerve"],
-        systems_by_id["res_tcc_ribs_dbs"],
-        systems_by_id["res_wood_flat_simple"],
-        systems_by_id["res_hollow_core_simple"],
-    ]
-    if len(systems) != 6:
-        raise RuntimeError(f"Expected six residential systems, found {len(systems)}.")
-
-    fig, axes = plt.subplots(3, 2, figsize=(15.5, 15.0), sharex=True, sharey=True)
+    systems = (
+        [systems_by_id[system_id] for system_id in system_ids]
+        if system_ids is not None
+        else list(scenario["systems"])
+    )
+    n_cols = 2
+    n_rows = (len(systems) + n_cols - 1) // n_cols
+    fig_height = 5.0 * n_rows
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(15.5, fig_height), sharex=True, sharey=True)
+    axes = pd.Series(axes.ravel())
     all_y_values = []
     has_data = False
-    for ax, system in zip(axes.flat, systems):
+    for ax, system in zip(axes, systems):
         rows = summary[
             (summary["case"] == scenario["label"])
             & (summary["system_id"] == system["id"])
@@ -187,14 +188,18 @@ def replot_residential_structural_gwp(summary: pd.DataFrame) -> Path | None:
         ax.tick_params(axis="both", which="major", labelsize=15)
         ax.grid(True, alpha=0.35)
 
+    for ax in axes[len(systems):]:
+        ax.axis("off")
+
     if not has_data:
         plt.close(fig)
         return None
 
-    for ax in axes.flat:
+    for ax in axes[:len(systems)]:
         set_readable_ylim(ax, all_y_values)
-    for ax in axes[-1, :]:
-        ax.set_xlabel("l [m]", fontsize=17)
+    for ax in axes[-n_cols:]:
+        if ax.axison:
+            ax.set_xlabel("l [m]", fontsize=17)
 
     handles = [
         Line2D(
@@ -216,10 +221,29 @@ def replot_residential_structural_gwp(summary: pd.DataFrame) -> Path | None:
         title_fontsize=17,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.94))
-    path = OUTPUT_DIR / "final_single_residential_GWP_struct.png"
+    path = OUTPUT_DIR / f"final_single_{case_name}_GWP_struct.png"
     fig.savefig(path, dpi=400, bbox_inches="tight")
     plt.close(fig)
     return path
+
+
+def replot_residential_structural_gwp(summary: pd.DataFrame) -> Path | None:
+    return replot_case_structural_gwp(
+        summary,
+        "residential",
+        [
+            "res_rc_flat_walls",
+            "res_pt_flat_walls_dist",
+            "res_tcc_flat_kerve",
+            "res_tcc_ribs_dbs",
+            "res_wood_flat_simple",
+            "res_hollow_core_simple",
+        ],
+    )
+
+
+def replot_office_structural_gwp(summary: pd.DataFrame) -> Path | None:
+    return replot_case_structural_gwp(summary, "office")
 
 
 def main() -> None:
@@ -230,6 +254,9 @@ def main() -> None:
             if path is not None:
                 print(f"Saved {path}")
     path = replot_residential_structural_gwp(summary)
+    if path is not None:
+        print(f"Saved {path}")
+    path = replot_office_structural_gwp(summary)
     if path is not None:
         print(f"Saved {path}")
 

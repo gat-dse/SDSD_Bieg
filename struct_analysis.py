@@ -1350,7 +1350,7 @@ class RibbedConcrete(SupStrucRibbedConcrete):
         x_p, x_PB_p = self.x_p, self.x_PB_p
         x_n, x_PB_n = self.x_n, self.x_PB_n
         as_bw = 0
-        as_PB_bw = np.pi * di_r ** 2 / 4 * n_r / s_r * 0.9 * d
+        as_PB_bw = np.pi * di_r ** 2 / 4 * n_r / s_r * 0.9 * d_PB
 
         if bauteil == 'Platte':
             if d_installation < d / 6:  #SIA 262 4.3.3.2.8

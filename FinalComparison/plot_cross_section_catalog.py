@@ -555,6 +555,16 @@ def plot_envelope_construction():
         ha="left",
         va="center",
     )
+    plot_ax.annotate(
+        "best cross-section\n(lower envelope bound)",
+        xy=(6, y_min[2]),
+        xytext=(4.15, y_min[2] - 18),
+        arrowprops={"arrowstyle": "-", "color": "#111111", "lw": 0.8},
+        fontsize=plot_text_size - 2,
+        ha="left",
+        va="center",
+        color="#111111",
+    )
     plot_ax.set_xlabel("span $l$ [m]", fontsize=plot_text_size)
     plot_ax.set_ylabel("GWP [kg CO$_2$-eq/m$^2$]", fontsize=plot_text_size)
     plot_ax.tick_params(axis="both", labelsize=plot_text_size)

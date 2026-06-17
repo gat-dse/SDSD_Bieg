@@ -299,7 +299,7 @@ def opt_rc_rib(m, to_opt="GWP", criterion="ULS", max_iter=100):
     # definition of fixed values of cross-section
     l0 = m.li_max
     di_xu, s_xu, di_xo, s_xo = m.section.bw[0][0], m.section.bw[0][1], m.section.bw[1][0], m.section.bw[1][1]
-    di_pb_bw, s_pb_bw, n_pb_bw = m.section.bw_bg[0], m.section.bw_bg[1], m.section.bw_bg[2]
+    di_pb_bw, s_pb_bw, n_pb_bw = m.section.bw_bg_r[0], m.section.bw_bg_r[1], m.section.bw_bg_r[2]
     n_x_w = m.section.bw_r[1]
     phi, c_nom, xi, jnt_srch = m.section.phi, m.section.c_nom, m.section.xi, m.section.joint_surcharge
 
@@ -864,7 +864,7 @@ def get_opt_sec(section, gwp_budget):
         l0 = section.li_max
         h_f = section.h_f
         di_xu, s_xu, di_xo, s_xo = section.bw[0][0], section.bw[0][1], section.bw[1][0], section.bw[1][1]
-        di_pb_bw, s_pb_bw, n_pb_bw = section.bw_bg[0], section.bw_bg[1], section.bw_bg[2]
+        di_pb_bw, s_pb_bw, n_pb_bw = section.bw_bg_r[0], section.bw_bg_r[1], section.bw_bg_r[2]
         n_x_w = section.bw_r[1]
         phi, c_nom, xi, jnt_srch = section.phi, section.c_nom, section.xi, section.joint_surcharge
         co, st = section.concrete_type, section.rebar_type

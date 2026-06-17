@@ -1,4 +1,4 @@
-"""Rerun all office systems and update the final summary.
+"""Rerun office ribbed concrete and update the final summary.
 
 The script preserves all other systems in ``final_comparison_summary.xlsx``.
 It replaces the target rows in every result sheet, records the partial rerun
@@ -31,10 +31,7 @@ import replot_single_criteria_from_summary as single_replot
 import run_final_comparison as comparison
 
 
-TARGETS = tuple(
-    ("office", system["id"])
-    for system in inputs.SCENARIOS["office"]["systems"]
-)
+TARGETS = (("office", "off_ribbed_concrete_continuous"),)
 
 DEFAULT_ITERATIONS = 20
 RIBBED_CONCRETE_ITERATIONS = 30

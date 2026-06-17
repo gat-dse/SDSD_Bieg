@@ -888,14 +888,6 @@ def plot_case(df, case_name, span):
     ax.set_aspect("equal", adjustable="box")
     ax.axis("off")
 
-    qk = float(rows.iloc[0].get("qk_kN_m2", 0.0))
-    fig.suptitle(
-        f"{case_name}, q$_k$={qk:.1f} kN/m$^2$, l={span:g} m - best total GWP cross-sections",
-        x=0.5,
-        y=0.965,
-        ha="center",
-    )
-
     for idx, (x_center, (_, row)) in enumerate(zip(x_positions, rows.iterrows())):
         draw_cross_section(ax, row, x_center, total_tops[idx], name_ys[idx], text_ys[idx], scale)
 
@@ -911,7 +903,15 @@ def plot_case(df, case_name, span):
     ]
     handles = [Rectangle((0, 0), 1, 1, facecolor=color, edgecolor="#222222", lw=0.4) for _, color in legend_items]
     labels = [label for label, _ in legend_items]
-    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.905), ncol=7, frameon=False, fontsize=8.8)
+    fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.965),
+        ncol=4,
+        frameon=False,
+        fontsize=10.4,
+    )
 
     safe_case = case_name.lower().replace(" ", "_")
     path = OUTPUT_DIR / f"final_cross_sections_{safe_case}_{int(span)}m.png"
