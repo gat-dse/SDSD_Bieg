@@ -1,5 +1,5 @@
 \begin{tikzpicture}[
-    font=\small,
+    font=\normalsize,
     >=Latex,
     arrow/.style={->, thick},
     box/.style={draw, rounded corners=1pt, align=center, minimum width=3.2cm, minimum height=1.0cm},
@@ -13,29 +13,32 @@
     \(m'_{\mathrm{base}}\)\\[1pt]
     \(R_{w,\mathrm{mass}}, L_{n,w,\mathrm{mass}}\)};
 \node[box] (checkbare) at (9.5,0) {Targets\\fulfilled?};
-\node[box] (none) at (13.9,1.65) {No additional\\floor build-up};
-\node[widebox] (floating) at (13.9,-1.65) {Floating floor\\glass wool + screed + parquet};
-\node[eqbox] (spring) at (19.3,-1.65) {Mass-spring-mass\\[-1pt]
+\node[box] (none) at (9.5,2) {No additional\\floor build-up};
+\node[widebox] (floating) at (9.5,-2) {Floating floor\\glass wool + screed + parquet};
+\node[eqbox] (spring) at (16.5,-1) {Mass-spring-mass\\[-1pt]
     \(f_{0,R}, f_{0,L}\)\\[1pt]
     \(\Delta R_{w,\mathrm{fl}},\Delta L_{n,w,\mathrm{fl}}\)};
-\node[corrbox] (damping) at (25.4,-1.65) {Damping corrections\\[-1pt]
-    gravel: \(\Delta_{\mathrm{gravel}}\leq6\,\mathrm{dB}\)\\[-1pt]
-    hollow-core: \(\Delta_{\mathrm{hc}}=\min(6h_{\mathrm{ins}}/0.20,7)\)\\[-1pt]
-    TCC topping: \(\Delta_{\mathrm{tcc}}\leq6\,\mathrm{dB}\)};
-\node[widebox] (tcc) at (19.3,-3.75) {TCC branch\\topping as mass\\and impact damping};
+\node[corrbox] (damping) at (24.5,-2) {Damping corrections\\[-1pt]
+    gravel: \(\Delta_{\mathrm{gravel}}\leq 6\,\mathrm{dB}\)
+\((1\,\mathrm{dB}/40\,\mathrm{kg/m^2})\)\\[-1pt]
+    hollow-core: \(\Delta_{\mathrm{insulation}}\leq 7\,\mathrm{dB}\)
+    \((6\,\mathrm{dB}/0.20\,\mathrm{m})\)\\[-1pt]
+    TCC topping: \(\Delta_{\mathrm{concrete}}\leq 6\,\mathrm{dB}\)
+\((1\,\mathrm{dB}/40\,\mathrm{kg/m^2})\)};
+\node[widebox] (tcc) at (16.5,-3.5) {TCC branch\\topping as mass\\and impact damping};
 \node[eqbox] (output) at (32.0,0) {Complete floor assembly\\[-1pt]
     \(R_w=R_{w,\mathrm{mass}}+\Delta R\)\\[1pt]
     \(L_{n,w}=L_{n,w,\mathrm{mass}}-\Delta L\)};
 
 \draw[arrow] (section) -- (mass);
 \draw[arrow] (mass) -- (checkbare);
-\draw[arrow] (checkbare) -- node[above, font=\small] {yes} (none);
-\draw[arrow] (checkbare) -- node[below, font=\small] {no} (floating);
+\draw[arrow] (checkbare) -- node[left, font=\small] {yes} (none);
+\draw[arrow] (checkbare) -- node[left, font=\small] {no} (floating);
 \draw[arrow] (floating) -- (spring);
 \draw[arrow] (spring) -- (damping);
 \draw[arrow] (floating) -- (tcc);
-\draw[arrow] (none) -| (output);
-\draw[arrow] (damping) -| (output);
-\draw[arrow] (tcc) -| (damping);
+\draw[arrow] (none) -| node[above, font=\small] {$\Delta R\ = \Delta L = 0$} (output);
+\draw[arrow] (damping) -| node[below, font=\small] {$\Delta R\, \ \Delta L$}  (output);
+\draw[arrow] (tcc) -- (damping);
 
 \end{tikzpicture}

@@ -1,0 +1,105 @@
+\begin{tikzpicture}[
+    font=\scriptsize,
+    >=Latex,
+    arrow/.style={->, thick},
+    note/.style={align=left},
+    line/.style={thick}
+]
+
+% ------------------------------------------------------------------
+% Column x-positions
+% ------------------------------------------------------------------
+\def\xData{0}
+\def\xCS{4.2}
+\def\xMember{10.8}
+
+% Titles
+\node[font=\bfseries\small] at (\xData,3.6) {Data};
+\node[font=\bfseries\small] at (\xCS,3.6) {Cross-section};
+\node[font=\bfseries\small] at (\xMember,3.6) {Member};
+
+% ------------------------------------------------------------------
+% Data block
+% ------------------------------------------------------------------
+\node[cylinder, draw, shape border rotate=90, aspect=0.25,
+      minimum height=2.0cm, minimum width=1.25cm, align=center] (db) at (\xData,2.1)
+      {Materials\\[2pt]CO$_2$ eq/m$^3$\\[2pt]CHF/m$^3$};
+
+\node[note, anchor=north] at (\xData,0.85) {Material\\variations};
+
+% ------------------------------------------------------------------
+% Cross-section block
+% ------------------------------------------------------------------
+\coordinate (cs0) at (3.0,1.85);
+
+\draw[line] (cs0) rectangle ++(2.8,0.85);
+\fill[brown!80] ($(cs0)+(0,0)$) rectangle ++(2.8,0.35);
+\fill[gray!60] ($(cs0)+(0,0.35)$) rectangle ++(2.8,0.30);
+\fill[violet!70] ($(cs0)+(0,0.65)$) rectangle ++(2.8,0.08);
+\fill[gray!30] ($(cs0)+(0,0.73)$) rectangle ++(2.8,0.12);
+
+\draw[decorate,decoration={brace,amplitude=4pt}]
+    (5.95,2.70) -- (5.95,2.50);
+
+\node[anchor=west,align=left]
+    at (6.15,2.80)
+    {Automated\\[-4pt]floor build-up};
+
+% Structural cross-section brace
+\draw[decorate,decoration={brace,amplitude=4pt}]
+    (5.95,2.50) -- (5.95,1.85)
+    node[midway,right=6pt]
+    {Cross-section};
+
+\node[green!60!black, font=\large] at (8.25,2.1) {$\circlearrowleft$};
+%\node[yellow!80!black, font=\large] at (8.15,3) {$\lightning$};
+
+\node[note, anchor=north west] at (3.0,1.35) {Cross-section\\
+$\bullet$ Fulfils requirements\\
+$\bullet$ Optimised for GWP};
+
+\node[green!60!black, font=\large] at (6.25,0.05) {$\circlearrowleft$};
+
+% ------------------------------------------------------------------
+% Member block
+% ------------------------------------------------------------------
+\coordinate (b1) at (10.0,2.10);
+\coordinate (b2) at (12.3,2.10);
+
+% Beam
+\draw[line] (b1) -- (b2);
+
+% Distributed load
+\draw[red, thick] ($(b1)+(0,0.55)$) -- ($(b2)+(0,0.55)$);
+\draw[red, thick] ($(b1)+(0,0.55)$) -- (b1);
+\draw[red, thick] ($(b2)+(0,0.55)$) -- (b2);
+
+\foreach \x in {10.0,10.75,11.50,12.3} {
+    \draw[red, ->] (\x,2.65) -- (\x,2.25);
+}
+
+% Supports
+\draw[line] (10.0,2.10) -- ++(-0.16,-0.27) -- ++(0.32,0) -- cycle;
+\draw[line] (12.3,2.10) -- ++(-0.16,-0.27) -- ++(0.32,0) -- cycle;
+
+% Span
+%\draw[<->] (10.0,1.45) -- (12.3,1.45);
+%\node at (11.15,1.22) {$L$};
+
+% Member labels
+\node[note, anchor=west] at (12.65,2.55) {Load combination};
+\node[note, anchor=west] at (12.65,1.85) {Structural system};
+
+\node[note, anchor=north west] at (10.0,1.35) {Requirements\\
+$\bullet$ ULS\\
+$\bullet$ SLS 1: Deflection\\
+$\bullet$ SLS 2: Vibration\\
+$\bullet$ Fire};
+
+% ------------------------------------------------------------------
+% Arrows between blocks
+% ------------------------------------------------------------------
+\draw[arrow] (1.25,2.1) -- (2.25,2.1);
+\draw[arrow] (8.55,2.1) -- (9.45,2.1);
+
+\end{tikzpicture}%

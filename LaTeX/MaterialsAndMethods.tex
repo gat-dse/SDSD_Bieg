@@ -4,184 +4,80 @@
 \section{Slab configurator}
 The computational work presented in this thesis is based on a Python-based design and optimisation framework initiated by the Sustainability in Structural Design Team at kfmResearch \cite{kfmResearch2026}. The original framework provided the general structure for the GWP optimisation of floor system cross-sections across different structural systems and for their environmental performance assessment. Within the scope of this thesis, the framework was further developed by incorporating additional slab systems and implementing the automated handling of non-structural floor build-ups.
 
-The overall workflow is shown schematically in Figure~\ref{fig:slab_configurator_workflow}. The calculation starts with the material and product database. Based on the selected slab system, a cross-section object is created from the available materials and geometric start values. The cross-section is then combined with a member object, which defines the structural system, span, loading and requirements. The member is verified in ULS, SLS 1, SLS 2 and fire according to Table~\ref{Tab: SustFact}. For the structural cross-section a floor build-up is automatically created to satisfy the acoustic insulation requirements against airborne and impact sound. If the selected cross-section does not satisfy the governing requirements, the optimiser modifies selected cross-section parameters until a suitable design is found.  
+Figure~\ref{fig:slab_configurator_workflow} provides a schematic overview of the overall workflow, while Figure~\ref{fig:software_architecture} documents the underlying software architecture using a UML diagram.
+The calculation starts with the material and product database. Based on the selected slab system, a cross-section object is created using the available materials and initial geometric parameters. The cross-section is then combined with a member object that defines the structural system, span, loading and design requirements. The member can be verified with respect to ULS, SLS~1, SLS~2 and fire, as defined in Table~\ref{Tab: ReqSS}. In addition, a floor build-up is generated automatically to satisfy the acoustic requirements for airborne and impact sound insulation.\\
 
-\begin{figure}[htbp]
+\begin{figure}[h]
 \centering
-\resizebox{\textwidth}{!}{%
-\begin{tikzpicture}[
-    font=\scriptsize,
-    >=Latex,
-    arrow/.style={->, thick},
-    note/.style={align=left},
-    line/.style={thick}
-]
-
-% ------------------------------------------------------------------
-% Column x-positions
-% ------------------------------------------------------------------
-\def\xData{0}
-\def\xCS{4.2}
-\def\xMember{10.8}
-
-% Titles
-\node[font=\bfseries\small] at (\xData,3.6) {Data};
-\node[font=\bfseries\small] at (\xCS,3.6) {Cross-section};
-\node[font=\bfseries\small] at (\xMember,3.6) {Member};
-
-% ------------------------------------------------------------------
-% Data block
-% ------------------------------------------------------------------
-\node[cylinder, draw, shape border rotate=90, aspect=0.25,
-      minimum height=2.0cm, minimum width=1.25cm, align=center] (db) at (\xData,2.1)
-      {Materials\\[2pt]CO$_2$ eq/m$^3$\\[2pt]CHF/m$^3$};
-
-\node[note, anchor=north] at (\xData,0.85) {Material\\variations};
-
-% ------------------------------------------------------------------
-% Cross-section block
-% ------------------------------------------------------------------
-\coordinate (cs0) at (3.0,1.85);
-
-\draw[line] (cs0) rectangle ++(2.8,0.85);
-\fill[brown!80] ($(cs0)+(0,0)$) rectangle ++(2.8,0.35);
-\fill[gray!60] ($(cs0)+(0,0.35)$) rectangle ++(2.8,0.30);
-\fill[violet!70] ($(cs0)+(0,0.65)$) rectangle ++(2.8,0.08);
-\fill[gray!30] ($(cs0)+(0,0.73)$) rectangle ++(2.8,0.12);
-
-\draw[decorate,decoration={brace,amplitude=4pt}]
-    (5.95,2.70) -- (5.95,2.50);
-
-\node[anchor=west,align=left]
-    at (6.15,2.80)
-    {Automated\\[-4pt]floor build-up};
-
-% Structural cross-section brace
-\draw[decorate,decoration={brace,amplitude=4pt}]
-    (5.95,2.50) -- (5.95,1.85)
-    node[midway,right=6pt]
-    {Cross-section};
-
-\node[green!60!black, font=\large] at (8.25,2.1) {$\circlearrowleft$};
-%\node[yellow!80!black, font=\large] at (8.15,3) {$\lightning$};
-
-\node[note, anchor=north west] at (3.0,1.35) {Cross-section\\
-$\bullet$ Fulfils requirements\\
-$\bullet$ Optimised for GWP};
-
-\node[green!60!black, font=\large] at (6.25,0.05) {$\circlearrowleft$};
-
-% ------------------------------------------------------------------
-% Member block
-% ------------------------------------------------------------------
-\coordinate (b1) at (10.0,2.10);
-\coordinate (b2) at (12.3,2.10);
-
-% Beam
-\draw[line] (b1) -- (b2);
-
-% Distributed load
-\draw[red, thick] ($(b1)+(0,0.55)$) -- ($(b2)+(0,0.55)$);
-\draw[red, thick] ($(b1)+(0,0.55)$) -- (b1);
-\draw[red, thick] ($(b2)+(0,0.55)$) -- (b2);
-
-\foreach \x in {10.0,10.75,11.50,12.3} {
-    \draw[red, ->] (\x,2.65) -- (\x,2.25);
-}
-
-% Supports
-\draw[line] (10.0,2.10) -- ++(-0.16,-0.27) -- ++(0.32,0) -- cycle;
-\draw[line] (12.3,2.10) -- ++(-0.16,-0.27) -- ++(0.32,0) -- cycle;
-
-% Span
-%\draw[<->] (10.0,1.45) -- (12.3,1.45);
-%\node at (11.15,1.22) {$L$};
-
-% Member labels
-\node[note, anchor=west] at (12.65,2.55) {Load combination};
-\node[note, anchor=west] at (12.65,1.85) {Structural system};
-
-\node[note, anchor=north west] at (10.0,1.35) {Requirements\\
-$\bullet$ ULS\\
-$\bullet$ SLS 1: Deflection\\
-$\bullet$ SLS 2: Vibration\\
-$\bullet$ Fire};
-
-% ------------------------------------------------------------------
-% Arrows between blocks
-% ------------------------------------------------------------------
-\draw[arrow] (1.25,2.1) -- (2.25,2.1);
-\draw[arrow] (8.55,2.1) -- (9.45,2.1);
-
-\end{tikzpicture}%
-}
+ \resizebox{\textwidth}{!}{%
+        \input{IMAGES/tikz/Slab_configurator_workflow}
+    }
 \caption{Slab configurator workflow from material database to cross-section optimisation and member comparison.}
 \label{fig:slab_configurator_workflow}
 \end{figure}
 
-The comparison is carried out in two stages. First, each slab system is optimised for the selected design criterion and span. Second, the resulting feasible members are compared according to the identified factors for sustainability, defined in Table~\ref{Tab: SustFact}.
+\newpage
+
+
+The optimiser modifies selected cross-section parameters to minimise the GWP. The optimisation can be performed either for a single design state or for the combined envelope criterion. In the combined envelope criterion, all considered requirements, ULS, SLS~1, SLS~2, and fire, are included. When a single criterion is selected, the cross-section is optimised subject to the corresponding requirement, allowing its individual influence on the resulting design to be examined. Only solutions satisfying the chosen requirement are considered valid, preventing low-GWP cross-sections that are not feasible.
 
 It is noted that the slab configurator is used as a comparative design tool. It does not replace a detailed project-specific structural design, but it enables a consistent assessment of the relative influence of slab system, span, material choice, acoustic build-up and governing design criterion.
 
 
 \subsection{Material database}
-The material database was compiled by the Sustainability in Structural Design Team of \textit{kfmResearch} \cite{kfmResearch2026}. It separates mechanical material classes from product-specific environmental data. Mechanical properties are assigned through the material class used by the structural model, whereas density and total global warming potential (GWP) are stored for individual Environmental Product Declarations (EPDs). This structure allows products with the same structural performance to be compared without assigning their producer-specific environmental values to a different strength class.
+The material database was selected by the Sustainability in Structural Design Team of \textit{kfmResearch} \cite{kfmResearch2026}. It contains mechanical material properties and product-specific environmental data. Environmental Product Declarations (EPDs) are stored on product level and are linked to the mechanical property classes used by the structural models. The database therefore allows a distinction between mechanical performance and producer-specific environmental impact. For concrete, reinforcing steel, prestressing steel, and timber products, the database stores product density, material class and total GWP values. These properties enable the assessment of producer-specific GWP, mass, and structural height, while accounting for product-specific variations. As identified in the literature review, these parameters are key indicators for the sustainability assessment of floor systems.
 
-The assessment does not use every EPD contained in the database. Table~\ref{tab:product_specific_gwp_values} includes only the product records that can enter the final comparison. These comprise the EPDs selected for the deterministic material variants and the additional records available to the empirical uncertainty-quantification pools. Records are retained only when density and mechanical class are available, the statistical-selection flag is active, and the source is not classified as Betonsortenrechner, Ecoinvent or KBOB. Within this filtered dataset, uncertainty sampling remains restricted to the same material and mechanical-property class. Density and GWP are sampled jointly from the same product record.
-
-The database product IDs in Table~\ref{tab:product_specific_gwp_values} provide an unambiguous link to the underlying EPD identifier, producer and product name stored in \texttt{database\_260126.db}. The reported ranges therefore describe only the EPD records used by the deterministic comparison or the UQ analysis, rather than the full contents of the material database.
+The range of product-specific GWP values used in the database is summarised in Table~\ref{tab:product_specific_gwp_values}. Only EPDs within the 0.05--0.95 quantile range were selected to exclude outliers. Each product is assigned to a material class, which defines the corresponding mechanical and physical properties listed in Table~\ref{tab:material_properties}.
 
 \begin{table*}[h]
     \centering
     \begingroup
     \scriptsize
+    \caption{Product-specific GWP values used for the sustainability assessment.}
+    \label{tab:product_specific_gwp_values}
     \setlength{\tabcolsep}{3pt}
     \renewcommand{\arraystretch}{1.12}
     \begin{tabularx}{\textwidth}{@{}
         >{\raggedright\arraybackslash}X
         |>{\raggedright\arraybackslash}X
-        |>{\raggedright\arraybackslash}X
-        |c|r|r|r@{}}
+        |c|r|r@{}}
     \hline
     \textbf{Material} &
     \textbf{Material class} &
-    \textbf{Database product IDs} &
-    \textbf{EPDs} &
-    \textbf{$\rho_{\min}$--$\rho_{\max}$} &
+    \textbf{Products} &
     \textbf{$GWP_{\min}$} &
     \textbf{$GWP_{\max}$} \\
     &
     &
     &
-    -- &
-    kg/m$^3$ &
     kg CO$_2$-eq/t &
     kg CO$_2$-eq/t \\
     \hline
 
-    Ready-mixed concrete & C20/25 & 23 & 1 & 2440 & 77.0 & 77.0 \\
-    Ready-mixed concrete & C25/30 & 24, 26, 27 & 3 & 2400--2439 & 78.7 & 87.3 \\
-    Ready-mixed concrete & C30/37 & 25 & 1 & 2347 & 87.2 & 87.2 \\
-    Reinforcing steel & B500B & 38, 39, 42, 46--49 & 7 & 7850 & 460.2 & 618.2 \\
-    Prestressing steel & Y1860 & 121, 124, 128 & 3 & 7850 & 588.0 & 1309.0 \\
-    Glue-laminated timber & GL24h & 67, 69--71, 88, 90--92 & 8 & 424--480 & 116.6 & 319.9 \\
-    Solid structural timber & C24 & 73 & 1 & 470 & 137.1 & 137.1 \\
-    3- and 5-ply wood & C24 & 77, 80, 82, 83, 87 & 5 & 470 & 170.3 & 418.1 \\
+    Ready-mixed concrete & C20/25 & 1  & 77.0   & 77.0 \\
+    Ready-mixed concrete & C25/30 & 3  & 78.7   & 87.3 \\
+    Ready-mixed concrete & C30/37 & 1  & 87.2   & 87.2 \\
+    Reinforcing steel    & B500B  & 7 & 460.2  & 618.2 \\
+    Prestressing steel   & Y1860  & 3  & 588.0  & 1309.0 \\
+    Glue-laminated timber& GL24h  & 8 & 116.6 & 319.9 \\
+    Solid structural timber & C24 & 1 & 137.1   & 137.1 \\
+    3- and 5-ply wood    & C24    & 5 & 170.3  & 418.1 \\
     \hline
     \end{tabularx}
     \endgroup
-    \caption{EPD product records used by the deterministic final comparison or its empirical UQ pools. Product IDs refer to \texttt{database\_260126.db}; GWP is the product-specific total GWP per unit mass.}
-    \label{tab:product_specific_gwp_values}
+    
 \end{table*}
 
 \begin{table*}[htbp]
     \centering
     \begingroup
     \scriptsize
+    \caption{Mechanical properties data on characteristic design level. Mass is stored producer-specific.}
+    \label{tab:material_properties}
     \setlength{\tabcolsep}{3pt}
     \renewcommand{\arraystretch}{1.15}
     \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X|r|r|r|r|r|r|r|r|>{\raggedright\arraybackslash}X|r|r@{}}
-    \hline
+  \hline
     \textbf{Class} &
     \textbf{$f_c$} &
     \textbf{$f_t$} &
@@ -393,16 +289,17 @@ The database product IDs in Table~\ref{tab:product_specific_gwp_values} provide 
     \hline
     \end{tabularx}
     \endgroup
-    \caption{Mechanical and physical properties used in the final comparison. Product density is taken from the EPD records listed in Table~\ref{tab:product_specific_gwp_values}; only employed material classes, connector types and floor-build-up materials are shown.}
-    \label{tab:material_properties}
+    
 \end{table*}
 
-During the thesis, the database was extended with material-specific (not producer-specific) cost and construction time as listed in Table~\ref{tab:cost_time_assumptions}. The values are derived from NPK positions, market data, literature sources and engineering estimates.
+During the thesis, the database was extended with material-specific (not producer-specific) cost and construction time as listed in Table~\ref{tab:cost_time_assumptions}. The values are derived from NPK positions, market data, literature sources and engineering estimates. The assumptions are modelled with an accuracy range of \(\pm 20\,\%\) using triangular distributions. This approach reflects common building practice, where early design explorations are typically carried out with a cost accuracy of \(\pm 20\,\%\) \cite{MenzReichel2018_Kosten}.
 
 \begin{table*}[htbp]
     \centering
     \begingroup
     \scriptsize
+    \caption{Cost and construction-time input data used for the sustainability assessment.}
+    \label{tab:cost_time_assumptions}
     \setlength{\tabcolsep}{3pt}
     \renewcommand{\arraystretch}{1.12}
     \begin{tabularx}{\textwidth}{@{}X|c|c|c|c|X@{}}
@@ -479,23 +376,23 @@ During the thesis, the database was extended with material-specific (not produce
     NPK 364.921.111, ballast and protection layer. \\ \hline
     \end{tabularx}
     \endgroup
-    \caption{Cost and construction-time input data used for the sustainability assessment.}
-    \label{tab:cost_time_assumptions}
+    
 \end{table*}
 
 \newpage
 \subsection{Contribution to the existing Python framework}
-Since this thesis is based on an existing Python framework, it is important to highlight the contributions made within its scope. The initial configurator was able to handle solid rectangular concrete, ribbed concrete, solid rectangular timber, and ribbed timber hollow-core cross-sections. The one-dimensional static systems covered were simple-span and continuous beams. For the two-dimensional case, the framework was able to handle line-supported rectangular slabs without continuity over the supports.
+Since this thesis is based on an existing Python framework, it is important to highlight the contributions made within its scope. The initial configurator was able to handle solid rectangular concrete, ribbed concrete, solid rectangular timber, and ribbed timber hollow-core cross-sections. To distinguish these from the cross-sections added within this thesis, they marked with (*) in the legends.
+The one-dimensional static systems covered were simple-span and continuous beams. For the two-dimensional case, the framework was able to handle line-supported rectangular slabs without continuity over the supports.
 
 \subsubsection{Cross-section handling}
-All cross-section classes were updated with respect to the calculation of material quantities, GWP, cost, and construction time. These calculations are now normalised per square metre of floor area and account for quantities that develop in the transverse direction. This enables a consistent comparison between one-dimensional systems with defined tributary widths and two-dimensional slab systems.
-Furthermore, all systems were linked to the automated acoustic floor build-up generator described in Section~\ref{Sec: AutFloor}. Following the structural optimisation, the generator determines the lightest floor build-up that satisfies the specified acoustic requirements.
-The specific modifications made to the individual cross-section classes are summarised in Table~\ref{tab:existing_system_developments}.
+All cross-section classes were updated with respect to the calculation of material quantities, GWP, cost, and construction time. These calculations are now normalised per square metre of floor area and account for quantities that develop in the transverse direction. This enables a consistent comparison between one-dimensional systems with defined tributary widths and two-dimensional slab systems. Furthermore, all systems were linked to the automated acoustic floor build-up generator described in Section~\ref{Sec: AutFloor}. During the optimisation, each cross-section candidate is combined with the lightest build-up that satisfies the specified acoustic requirements. The optimisation therefore accounts for the additional mass introduced by the non-structural layers. Since these layers consist of a cement screed on an insulation layer, the damping coefficient for the vibration assessment was set to \(\zeta = 0.02\) for all cross-sections \cite{Lignum2021_HBT1}. The specific modifications made to the individual cross-section classes are summarised in Table~\ref{tab:existing_system_developments}.
 
 \begin{table*}[h]
     \centering
     \begingroup
     \scriptsize
+    \caption{Cross-section-specific developments introduced for existing structural systems.}
+    \label{tab:existing_system_developments}
     \setlength{\tabcolsep}{3pt}
     \renewcommand{\arraystretch}{1.15}
     \begin{tabularx}{\textwidth}{@{}
@@ -527,8 +424,7 @@ The specific modifications made to the individual cross-section classes are summ
     \hline
     \end{tabularx}
     \endgroup
-    \caption{Cross-section-specific developments introduced for existing structural systems.}
-    \label{tab:existing_system_developments}
+    
 \end{table*}
 
 \subsubsection{Static system handling}
@@ -536,30 +432,20 @@ The analysis of two-dimensional floor systems was extended to distinguish betwee
 
 \begin{equation}
 \begin{aligned}
-M_d &= \alpha_{M,\mathrm{system}} q_d l^2,\\
-V_d &= \alpha_{V,\mathrm{system}} q_d l,\\
-w &= \alpha_{w,\mathrm{system}}\frac{q_d l^4}{EI}.
+M_d &= \alpha_{M,\mathrm{system}} \ q_d l^2,\\
+V_d &= \alpha_{V,\mathrm{system}} \ q_d l,\\
+w &= \alpha_{w,\mathrm{system}}\ \frac{q_d l^4}{EI}.
 \end{aligned}
 \end{equation}
 
-The coefficients $\alpha_{M,\mathrm{system}}$, $\alpha_{V,\mathrm{system}}$, and $\alpha_{w,\mathrm{system}}$ were derived from a finite-element slab analysis performed in Cubus Cedrus. For point-supported systems, the model consisted of a regular $4 \times 4$ column grid subjected to a uniformly distributed load. The columns had a cross-section of $0.25 \times 0.25 \mathrm{m}$. Line-supported systems were represented by walls with a thickness of $0.20\mathrm{m}$ and a height of $0.10\mathrm{m}$. Vertical displacements at the supports were restrained. Bending moments and shear forces were evaluated over an averaged width of one metre within the support strip, whereas deflections were evaluated at mid-span. The coefficients were determined for spans of 3, 5, 6, 7, 8, 10, 12, and 16\,m and subsequently implemented in the configurator through a database storage.
+The coefficients $\alpha_{M,\mathrm{system}}$, $\alpha_{V,\mathrm{system}}$ and $\alpha_{w,\mathrm{system}}$ were derived from a finite-element slab analysis performed in Cubus Cedrus. For point-supported systems, the model consisted of a regular $4 \times 4$ column grid subjected to a uniformly distributed load. The columns had a cross-section of $0.25 \times 0.25 \mathrm{m}$. Line-supported systems were represented by walls with a thickness of $0.20\mathrm{m}$ and a height of $0.10\mathrm{m}$. Vertical displacements at the supports were restrained. Bending moments and shear forces were evaluated over an averaged width of one metre within the support strip, whereas deflections were evaluated at mid-span. The coefficients were determined for spans of 3, 5, 6, 7, 8, 10, 12, and 16\,m and subsequently implemented in the configurator through a database storage. 
 
-For ULS bending verification of two-dimensional rectangular concrete slabs, plastic moment redistribution was added as an optional modification of the elastic moment coefficients. The elastic coefficients from the slab database remain the basis for the analysis, but they are replaced by redistributed coefficients when the slab system and the cross-section provide sufficient rotational capacity. This redistribution is only applied to reinforced and post-tensioned rectangular concrete slabs. The available ductility classes of the positive and negative bending zones are compared with the required ductility classes stored for the corresponding slab system. If the requirement is not fulfilled, the elastic coefficients are retained. If it is fulfilled, positive span moments are increased and negative support moments are reduced by system-specific factors:
+For the ULS bending verification of two-dimensional rectangular concrete slabs, plastic moment redistribution was introduced. The elastic coefficients from the slab database remain the basis of the analysis, but they are modified if the cross-section provides sufficient rotational capacity. For this purpose, the criterion \(x/d < 0.35\) is checked. If this criterion is not fulfilled, the elastic coefficients are retained. If it is fulfilled, the negative support moments are reduced and the positive span moments are increased using system-specific redistribution factors. For line-supported continuous slabs, the redistribution factors \(k_{+}=1.51\) and \(k_{-}=0.76\) were used. For point-supported continuous slabs, the corresponding factors were \(k_{+}=1.47\) and \(k_{-}=0.68\). These factors were derived by applying an 80\% stiffness reduction over a length of \(0.15\,L_0\) in the support region in the finite-element slab analysis.
 
-\begin{equation}
-\alpha_{M,\mathrm{red},i}
-=
-\begin{cases}
-k_{+}\,\alpha_{M,i}, & \alpha_{M,i} \geq 0,\\
-k_{-}\,\alpha_{M,i}, & \alpha_{M,i} < 0.
-\end{cases}
-\end{equation}
-
-For line-supported continuous slabs, the factors \(k_{+}=1.51\) and \(k_{-}=0.76\) were used. For point-supported continuous slabs, the factors were \(k_{+}=1.47\) and \(k_{-}=0.68\). The redistributed moment coefficients are used only in the ULS bending resistance check; shear, punching shear, deflection and vibration checks remain based on the corresponding elastic coefficients.
 
 \subsection{Timber--concrete composite slab}
 
-Timber--concrete composite (TCC) slabs were modelled as unidirectional structural systems consisting of a timber tension member and a concrete compression layer. Composite action is partially achieved through mechanical shear connectors. Inclined screw connectors were used for ribbed systems, while notched connections were used for flat timber plate systems.
+Timber--concrete composite (TCC) slabs were modelled as unidirectional structural systems consisting of a timber tension member and a concrete compression layer. Composite action is partially achieved through mechanical shear connectors. 
 
 \subsubsection{$\gamma$-method}
 
@@ -618,11 +504,12 @@ For the concrete compression flange, an effective width is considered according 
 \begin{aligned}
 b_{\mathrm{ef}}
 &=
-b_{\mathrm{ef},1}
+\min
+\left(b_{\mathrm{ef},1}
 +
 b_{\mathrm{ef},2}
 +
-b_w,
+b_w, a_{ribs}\right),
 \\
 b_{\mathrm{ef},i}
 &=
@@ -636,7 +523,7 @@ b_{\mathrm{ef},i}
 \right).
 \end{aligned}
 \end{equation}
-Here, $E_i$, $I_i$ and $A_i$ are the modulus of elasticity, second moment of area and cross-sectional area of part $i$, respectively. The connector spacing is denoted by $s_1$, while $K$ is the connector slip modulus used in the $\gamma$-method. Furthermore, $l_0$ is the span length, $b_i$ is the width of part $i$, $b$ is the distance between ribs, $h_i$ is the depth of part $i$, and $d$ is the depth of the formwork or interlayer.
+Here, $E_i$, $I_i$ and $A_i$ are the modulus of elasticity, moment of inertia and cross-sectional area of part $i$, respectively. The connector spacing is denoted by $s_1$, while $K$ is the connector slip modulus used in the $\gamma$-method. Furthermore, $l_0$ is the span length, $b_i$ is the width of part $i$, $a_{ribs}$ distance between ribs, $h_i$ is the depth of part $i$, and $d$ is the depth of the formwork or interlayer.
 
 \subsubsection{Time-dependent behaviour}
 
@@ -730,8 +617,10 @@ v_u
 \end{equation}
 The shear resistance is governed by the timber member. For simplification, the shear connection was assumed to be sufficient. Consequently, the detailed design of the connectors was not considered and no connector resistance verification was performed.
 
-\subsubsection{Fire verification}
+\subsubsection{Vibration verification}
+The vibration verification was carried out according to Lignum HBT1 \cite{Lignum2021_HBT1}. In the longitudinal direction, the short-term serviceability bending stiffness \(EI_{\mathrm{SLS},t=0}\) was used. In the orthogonal direction, the uncracked concrete bending stiffness was assumed.
 
+\subsubsection{Fire verification}
 Fire resistance was evaluated using the residual timber cross-section after charring. A distinction was made between beams exposed on three sides and timber plates exposed on one side. For notched connections, no temperature-dependent reduction in connector stiffness was considered. For screw connectors, the reduction factor $k_{\mathrm{mod,fi}}$ according to Lignum 3.1 was applied \cite{Lignum3.1:2015}.
 
 To satisfy the REI60 requirement, a minimum concrete topping thickness of 80 mm was required \cite{SIA262_2025}. Furthermore, a timber cover of 30 mm was reserved for screw connectors to account for the arrangement of two screws placed side by side.
@@ -742,11 +631,11 @@ Several simplifications were adopted. The model is limited to one-way structural
 
 \subsection{Post-tensioned concrete slab}
 
-Post-tensioned concrete slabs were modelled as flat concrete slabs with unbonded monostrands \cite{Rombach2010, flachdecken_Morgen}. The model extends the reinforced concrete slab formulation by prestressing steel, tendon geometry, load-balancing effects, secondary internal forces, effective bending stiffness, and the additional shear and punching shear resistance provided by tendon deviation forces. The implemented system assumes parabolic tendon profiles. For one-dimensional systems, a distributed tendon layout was assumed. For two-dimensional systems, tendon layouts were represented by distributed and/or banded tendon arrangements, depending on the selected layout configuration.
+Post-tensioned concrete slabs were modelled as flat concrete slabs with unbonded monostrands \cite{Rombach2010, flachdecken_Morgen}. The implemented system assumes parabolic tendon profiles. For one-dimensional systems, a distributed tendon layout was assumed. For two-dimensional systems, the tendon layout was represented either by a distributed or a banded arrangement, as illustrated in Figure~\ref{fig:distributed_banded_tendon_layouts}. Minimum slab thickness and spacing requirements were defined in accordance with the technical documentation of VSL Switzerland \cite{VSL_STA01007}.
 
 \subsubsection{Load balancing and tendon geometry}
 
-The post-tensioning force was determined from the load-balancing principle. For a parabolic tendon trajectory, the upward deviation load depends on the prestressing force, tendon eccentricity and span length. For distributed tendons, the equivalent deviation loads in the two orthogonal directions are calculated as
+The post-tensioning force is calibrated from the load-balancing principle to compensate $100\%$ structural self-weight.  The upward deviation force depends on the prestressing force, tendon eccentricity and span length, given the parabolic tendon trajectory. For distributed tendons, the equivalent deviation loads in the two orthogonal directions are calculated as
 
 \begin{equation}
 u_x
@@ -758,9 +647,9 @@ u_y
 \frac{8p_y f_y}{l_y^2}.
 \end{equation}
 
-Here, \(p_x\) and \(p_y\) are the distributed prestressing forces per metre width, \(f_x\) and \(f_y\) are the tendon sag values, and \(l_x\) and \(l_y\) are the corresponding spans. The implemented load-balancing algorithm assigns the required balanced load depending on the selected tendon layout. For distributed tendons in both directions, the structural self-weight is split equally between the two directions and represented by equivalent surface deviation loads. For banded layouts, the tendons are concentrated in the support strips and the internal forces caused by prestressing are derived from equivalent line loads acting along these strips. The prestressing force is selected to balance the structural self-weight estimate available during tendon layout generation.
+Here, \(p_x\) and \(p_y\) are the distributed prestressing forces per metre width, \(f_x\) and \(f_y\) are the tendon sag values, and \(l_x\) and \(l_y\) are the corresponding spans. The implemented load-balancing algorithm assigns the required balanced load depending on the selected tendon layout. For distributed tendons in both directions, the structural self-weight is split equally between the two directions and represented by equivalent surface deviation loads. For banded layouts, the tendons are concentrated in the support strips and the internal forces caused by prestressing are derived from equivalent line loads acting along these strips. 
 
-The tendon profile was defined by the support and mid-span eccentricities. For a parabolic profile,
+The tendon profile was defined by the eccentricities at the supports and at mid-span. The eccentricities were selected as the maximum values that satisfy the tendon cover requirements, avoid overlap with the bonded reinforcement, and remain within the slab depth.
 
 \begin{equation}
 z(x)
@@ -772,11 +661,10 @@ z(x)
 e_{\mathrm{sup}}.
 \end{equation}
 
-The eccentricities were selected as the maximum values that satisfy the tendon cover, avoid overlap with the bonded reinforcement and remain within the slab depth. The tendon input values were \(A_p=150\,\mathrm{mm^2}\), \(c_{p,\mathrm{nom}}=30\,\mathrm{mm}\) and \(r_p=6.91\,\mathrm{mm}\).
 
 \subsubsection{Secondary internal forces}
 
-In hyperstatic systems, the deformation caused by post-tensioning is restrained by the supports. This restraint introduces secondary bending moments and secondary shear forces. The total internal forces resulting from the deviation forces of the prestressing system are first calculated using the slab-system coefficients. The secondary internal forces are then obtained by subtracting the primary prestressing contribution:
+In hyperstatic systems, the deformation due to post-tensioning deviation forces is restrained by the supports. This restraint introduces secondary bending moments and secondary shear forces. The total internal forces resulting from the deviation forces of the prestressing system are first calculated using the slab-system coefficients. The secondary internal forces are then obtained by subtracting the primary prestressing contribution:
 
 \begin{equation}
 M_{\mathrm{sec}}
@@ -796,7 +684,7 @@ Here, \(M_{\mathrm{tot}}\) and \(V_{\mathrm{tot}}\) denote the total internal fo
 
 \subsubsection{Effective bending stiffness}
 
-Post-tensioning introduces compressive stresses into the concrete and therefore delays cracking under service loads. For SLS verification, the effective bending stiffness is determined based on the relation between the acting service moment, including secondary moments, and the cracking moment. The cracking moment, initial concrete stress and effective tensile strength are calculated as
+Post-tensioning introduces compressive stresses into the concrete. Thus, the member stays longer in the uncracked state under service loads. For SLS verification, the effective bending stiffness is determined based on the relation between the acting service moment, including secondary moments, and the cracking moment. The cracking moment, initial concrete stress and effective tensile strength are calculated as
 
 \begin{equation}
 \begin{aligned}
@@ -838,7 +726,7 @@ E_{cm}I_I
 M_R.
 \end{equation}
 
-If the cracking moment is exceeded, a partial-cracking factor is calculated and the effective stiffness is interpolated between the uncracked and cracked states as implemented in the code:
+If the cracking moment is exceeded, a partial-cracking factor is calculated and the effective stiffness is interpolated between the uncracked and cracked states according to EN 1992-1-1 \cite{DIN_EN_1992_1_1_2025}:
 
 \begin{equation}
 \begin{aligned}
@@ -858,7 +746,7 @@ If the cracking moment is exceeded, a partial-cracking factor is calculated and 
 \end{aligned}
 \end{equation}
 
-For cracked sections, the local increase of the post-tensioning force is neglected because strain compatibility between concrete and unbonded tendons is not maintained. The cracked neutral-axis depth \(x_{II}\) is obtained from force and moment equilibrium using the effective prestressing force as an external normal force:
+For cracked sections, the local increase of the post-tensioning force is neglected because strain compatibility between concrete and unbonded tendons is not maintained. The cracked neutral-axis depth \(x_{II}\) is obtained from force and moment equilibrium using the effective prestressing force as an external normal force averaged over the slab width:
 
 \begin{equation}
 \begin{aligned}
@@ -876,13 +764,8 @@ M_{\mathrm{Ed,SLS}}
 +
 M_{\mathrm{sec}}
 &=
-\frac{b\,x_{II}^2}{6}\sigma_{c,\mathrm{inf}}.
-\end{aligned}
-\end{equation}
-
-The stresses are calculated as
-
-\begin{equation}
+\frac{b\,x_{II}^2}{6}\sigma_{c,\mathrm{inf}},
+\\
 \sigma_s
 =
 \frac{\varepsilon_{c,\mathrm{inf}}}{x_{II}}
@@ -891,6 +774,7 @@ The stresses are calculated as
 \sigma_{c,\mathrm{inf}}
 =
 E_{cm}\varepsilon_{c,\mathrm{inf}}.
+\end{aligned}
 \end{equation}
 
 The cracked bending stiffness is calculated from the concrete compression zone and the transformed bonded reinforcement contribution:
@@ -910,7 +794,7 @@ A_s
 
 The prestressing tendon is not added as a transformed reinforcement area in the cracked inertia because the tendon is unbonded and local strain compatibility is not assumed. Creep is considered in the member deflection calculation through the service load combinations and creep amplification, rather than by reducing \(E_{cm}\) directly in the cracked-section stiffness calculation in accordance with the existing rectangular concrete handling.
 
-\subsubsection{Bending and one-way shear resistance}
+\subsubsection{Bending and shear resistance}
 
 The bending resistance accounts for the contribution of the prestressing steel and the bonded reinforcement. The design bending moment includes the effects of external loads and secondary moments:
 
@@ -955,7 +839,7 @@ b_{\mathrm{eff}} f_{cd}
 \end{aligned}
 \end{equation}
 
-Ductility is ensured by limiting the compression-zone depth and by providing minimum bonded reinforcement. For the minimum bonded reinforcement check, the ordinary reinforced-concrete cracking moment is used, while the prestress-increased cracking moment is used for serviceability stiffness.
+Ductility is ensured by limiting the compression-zone depth and by providing minimum bonded reinforcement. For the minimum bonded reinforcement check, the ordinary reinforced-concrete cracking moment is used.
 
 For systems without column supports, one-way shear is checked. The design shear force includes the secondary shear force and is verified against the concrete shear resistance and the vertical component of the prestressing force:
 
@@ -1024,27 +908,7 @@ r_s &= 0.22l.
 \end{aligned}
 \end{equation}
 
-The rotation is determined independently for both orthogonal directions, and the larger value governs:
-
-\begin{equation}
-\psi
-=
-\max(\psi_x,\psi_y).
-\end{equation}
-
-The design action is calculated as
-
-\begin{equation}
-V_{Ed}
-=
-V_{g,d}
-+
-V_{q,d}
-+
-V_{\mathrm{sec}},
-\end{equation}
-
-where \(V_{\mathrm{sec}}\) is the secondary shear force caused by restraint of the prestressing deformation. Without punching reinforcement, the verification is
+Without punching reinforcement, the verification is
 
 \begin{equation}
 V_{Ed}
@@ -1052,17 +916,7 @@ V_{Ed}
 V_{Rd,c}(\psi).
 \end{equation}
 
-For post-tensioned slabs, the resistance is increased by the vertical component of the prestressing force above the column:
-
-\begin{equation}
-V_{Rd,\mathrm{punch}}
-=
-V_{Rd,c}(\psi)
-+
-V_{P,\mathrm{punch}}.
-\end{equation}
-
-The prestressing contribution is calculated from the support-strip tendons and the distributed tendons crossing the control width around the column:
+For post-tensioned slabs, the resistance is increased by the vertical component of the prestressing force above the column. The prestressing contribution is calculated from the support-strip tendons and the distributed tendons crossing the control width around the column:
 
 \begin{equation}
 V_{P,\mathrm{punch}}
@@ -1084,7 +938,7 @@ p_{dy,\infty} b_{0,x}
 
 The forces \(P_{sx}\) and \(P_{sy}\) are the post-tensioning forces in the support strips and are assumed to act fully over the column. Distributed tendons are only considered over the relevant control width around the column.
 
-If punching reinforcement is required, the existing shear reinforcement definition of the cross-section is used for the resistance calculation. No separate punching reinforcement object is introduced in the structural model. For material accounting in the final comparison, required punching reinforcement is post-processed as an additional averaged steel quantity. The resistance is calculated as
+Punching shear is not included in the ULS verification within the optimisation of point-supported slabs. Instead, only bending is checked. This simplification was adopted because practical punching shear detailing, such as mushroom heads, steel shear heads, or punching shear reinforcement, cannot be represented without substantial modelling effort. Consequently, no separate punching reinforcement object is introduced in the structural model. For material accounting in the final comparison, the required punching reinforcement is post-processed as an additional steel quantity based on the total punching resistance calculated as
 
 \begin{equation}
 V_{Rd,\mathrm{punch}}
@@ -1093,14 +947,19 @@ V_{Rd,c}(\psi)
 +
 V_{Rd,s}
 +
-V_{P,\mathrm{punch}},
+V_{P,\mathrm{punch}}.
 \end{equation}
 
-with an upper limit applied to the sum of concrete and punching reinforcement resistance in the implementation.
+\subsubsection{Vibration verification}
+
+The vibration verification was conservatively carried out according to Lignum HBT1 \cite{Lignum2021_HBT1}. This simplification allows vibration calculations to be handled consistently and is considered sufficient, as the vibration design state is usually not governing. For slab systems, the vibration calculation was extended to two-way spanning systems by introducing factors that account for the static system in the eigenfrequency calculation \cite{Ziegler2008Grundlagen}.
+
+\subsubsection{Fire verification}
+The fire verification is carried out according to SIA 262 \cite{SIA262_2025} by satisfying the minimum member dimensions and reinforcement cover requirements for post-tensioned systems.
+
 
 \subsubsection{Model limitations}
-
-Several simplifications were adopted. The model is limited to unbonded monostrands with parabolic tendon profiles. Friction losses were neglected. Local anchorage verification and local concrete crushing at anchorages were not considered. For cracked sections, the local increase in prestressing force is neglected because strain compatibility is not maintained for unbonded tendons. The model also assumes that the selected prestressing layout can be arranged within the geometric constraints of the slab and anchorage system. The effective stiffness model is a simplified post-processing approach and does not include a transformed unbonded tendon contribution in the cracked inertia.
+Several simplifications were adopted. The model is limited to unbonded monostrands with parabolic tendon profiles. Friction losses were neglected. Local anchorage verification and local concrete crushing at the anchorages were not considered. The model also assumes that the selected prestressing layout can be arranged within the geometric constraints of the slab and anchorage system. For cracked sections, the local increase in prestressing force is neglected because strain compatibility is not maintained for unbonded tendons. The normal force introduced by the tendons was averaged across the slab width for the bending resistance calculation. The model is limited to ULS bending resistance. Although punching resistance is calculated, it is only considered indirectly through the required punching reinforcement used for the material calculations.
 
 \subsection{Automated acoustic floor build-up generator \label{Sec: AutFloor}}
 
@@ -1149,7 +1008,7 @@ f_{0,L} &=
 
 Here, \(s'_{\mathrm{eff}}\) is the effective dynamic stiffness of the glass-wool layer in \(\mathrm{MN/m^3}\). For TCC sections with two insulation layers, the layers are treated as springs in series.
 
-If the acoustic targets are still not met, gravel is added below the spring layer in discrete steps. TCC sections use a separate branch because the concrete topping is already part of the structural cross-section. The concrete layer is therefore treated as mass and impact damping, and no additional gravel is generated. Gravel, hollow-core insulation and the TCC concrete topping all use damping corrections \cite{BauphysikKalender}.
+If the acoustic targets are still not met, gravel is added below the insulation layer in discrete steps. TCC sections use a separate branch because the concrete topping is already part of the structural cross-section. The concrete layer is therefore treated as both mass and impact-sound damping and is increased instead of adding additional gravel. Gravel, hollow-core insulation, and the TCC concrete topping all use damping corrections calibrated according to literature measurements \cite{BauphysikKalender}.
 
 \begin{figure}[htbp]
 \centering
@@ -1160,16 +1019,278 @@ If the acoustic targets are still not met, gravel is added below the spring laye
 \label{fig:acoustic_floor_generator}
 \end{figure}
 
-The implemented acoustic model is intentionally simplified. A fully spectral prediction would require measured $R(f)$, $L_n(f)$ and $\Delta L(f)$ data for every structural system and floor layer. Such data is not available consistently for all systems in the optimisation. Thus, the model averages across the calculated frequencies. The selected model is therefore used as a robust comparative approximation, not as a replacement for project-specific acoustic verification.
+The implemented acoustic model is intentionally simplified. A fully spectral prediction would require measured $R(f)$, $L_n(f)$ and $\Delta L(f)$ data for every structural system and floor layer. Such data is not generally available for all systems in the optimisation. Thus, the model averages across the calculated frequencies. The selected model is therefore used as a robust comparative approximation, not as a replacement for project-specific acoustic verification.
 
-\subsection{Final comparison setup}
+\section{Verification of implemented models}
 
-The final comparison was defined through a set of residential and office cases with fixed load levels, discrete span values and structural systems. The cases are summarised in Table~\ref{tab:final_comparison_cases}; the materials and fixed geometric inputs are shown in the cross-section catalogue. The corresponding start values, optimisation variables and bounds are listed in Table~\ref{tab:final_comparison_bounds}. This separation keeps the comparison inputs transparent: Table~\ref{tab:final_comparison_cases} defines which systems are compared, while Table~\ref{tab:final_comparison_bounds} defines how each system is optimised.
+\subsection{Timber--concrete composite slab}
 
-\begin{table*}[t]
+The implementation of the $\gamma$-method was verified against a hand calculation based on a representative timber--concrete composite floor system. The verification focused on the effective bending stiffness, as this quantity governs both resistance and serviceability calculations.
+
+The verification model used the following set-up:
+
+\begin{itemize}
+    \item Concrete C30/37: $h_c = 0.080\,\mathrm{m}$, $b_{\mathrm{ef}} = 0.60\,\mathrm{m}$, $A_c = 0.048\,\mathrm{m}^2$, $I_c = 2.56 \times 10^{-5}\,\mathrm{m}^4$, $E_{cm} = 34\,\mathrm{GPa}$, $\varphi_c = 2.5$.
+    
+    \item Timber ribs GL24h: $a_{\mathrm{ribs}} = 0.6\,\mathrm{m}$, $h_w = 0.241\,\mathrm{m}$, $b_w = 0.12\,\mathrm{m}$, $A_w = 0.0289\,\mathrm{m}^2$, $I_w = 1.399 \times 10^{-4}\,\mathrm{m}^4$, $E_{w,\mathrm{mean}} = 11.5\,\mathrm{GPa}$, $d = 0.02\,\mathrm{m}$, $k_{\mathrm{def}} = 0.6$.
+    
+    \item Connection skrews: $d=10mm$, $s = 0.25\,\mathrm{m}$, $K_{\mathrm{ser}} = 9.7\,\mathrm{MN/m}$, $k'_{\mathrm{def}} = 1.2$.
+    
+    \item Structural system: single-span beam with $l_0 = 6.0\,\mathrm{m}$.
+\end{itemize}
+
+
+Table~\ref{tab:TCCVer} summarises the calculated $\gamma_c$ factors, the lever arms to the neutral axis ($a_c$ and $a_w$), and the resulting effective bending stiffness per metre width. The comparison showed excellent agreement between the manual calculations and the implementation, confirming the correct implementation of the $\gamma$-method across the time-dependent stiffness calculations.
+
+\begin{table}[h!]
     \centering
     \begingroup
     \scriptsize
+    \caption{Timber--concrete composite class validation of time-dependent effective bending stiffness values. \label{tab:TCCVer}}
+    \setlength{\tabcolsep}{3.5pt}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}X|>{\centering\arraybackslash}X|>{\centering\arraybackslash}X|>{\centering\arraybackslash}X|>{\centering\arraybackslash}X|>{\centering\arraybackslash}X@{}}
+    \hline
+    \textbf{Case} &
+    \textbf{Time} &
+    \(\boldsymbol{\gamma_c}\) &
+    \(\boldsymbol{a_c}\) [m] &
+    \(\boldsymbol{a_w}\) [m] &
+    \(\boldsymbol{EI_{\mathrm{eff,manual}}}\) [$\mathrm{kN\,m^2/m}$] &
+    \(\boldsymbol{EI_{\mathrm{eff,test \ file}}}\) [$\mathrm{kN\,m^2/m}$] \\
+    \hline
+    SLS & \(t=0\)       & 0.0798 & 0.1299 & 0.0508 & 9225.00 & 9238.66 \\
+    SLS & \(t=\infty\) & 0.2279 & 0.1459 & 0.0348 & 4053.00 & 4059.49 \\
+    ULS & \(t=0\)       & 0.0547 & 0.1425 & 0.0382 & 7962.00 & 7972.65 \\
+    ULS & \(t=\infty\) & 0.1645 & 0.1541 & 0.0265 & 3537.00 & 3540.68 \\
+    \hline
+    \end{tabularx}
+    \endgroup
+\end{table}
+
+\subsection{Post-tensioned concrete slab}
+
+The implementation of the post-tensioned slab class was verified based on a representative post-tensioned concrete slab. The verification case covers the bending resistance and the quasi-permanent deflection of a two-way post-tensioned slab with distributed tendons and wall supports.
+
+The verification model used the following set-up:
+
+\begin{itemize}
+    \item Concrete C30/37: \(h_c=280\,\mathrm{mm}\)
+    \item Reinforcing steel B500B: \(d=14\,\mathrm{mm}\), \(s_x=s_y=150\,\mathrm{mm}\)
+    \item Prestressing steel Y1860: layout distributed, load-balancing $100\% \ g_{0,k}$
+    \item Structural system: two-way slab with wall supports and \(l_x=l_y=6.0\,\mathrm{m}\).
+    \item Loads: \(g_{0,k}\), \(g_{2,k}=0.75\,\mathrm{kN/m^2}\), \(q_k=2.00\,\mathrm{kN/m^2}\),  \(\varphi=2.0\).
+\end{itemize}
+
+The bending resistance was calculated from the contribution of the prestressing steel and the bonded reinforcement:
+
+\begin{equation}
+\begin{aligned}
+M_{Rd}
+&=
+\frac{P_{\infty}}{l}
+\left(d_p-\frac{0.85x}{2}\right)
++
+A_s f_{sd}
+\left(d_s-\frac{0.85x}{2}\right)
+&=
+124.49\,\mathrm{kNm/m}.
+\end{aligned}
+\end{equation}
+
+\begin{equation}
+\begin{aligned}
+\frac{P_{\infty}}{l}
+&=
+76.39\,\mathrm{kN/m},\\
+A_s
+&=
+\frac{\pi \cdot 14^2}{4 \cdot 150}
+=
+1026\,\mathrm{mm^2/m},\\
+f_{sd}
+&=
+435\,\mathrm{MPa},
+\qquad
+f_{pd}
+=
+1391\,\mathrm{MPa},\\
+d_s
+&=
+h-c_{\mathrm{nom}}-\frac{d}{2}
+=
+280-20-\frac{14}{2}
+=
+253.00\,\mathrm{mm},\\
+d_p
+&=
+h-c_{p,\mathrm{nom}}-\sqrt{\frac{A_p}{\pi}}
+=
+280-30-\sqrt{\frac{150}{\pi}}
+=
+243.09\,\mathrm{mm},\\
+x
+&=
+\frac{\frac{P_{\infty}}{l}+A_s f_{sd}}
+{b f_{cd}}
+=
+31.36\,\mathrm{mm},
+\qquad
+0.85x
+=
+26.65\,\mathrm{mm}.
+\end{aligned}
+\end{equation}
+
+The deflection calculation, was based on the quasi-permanent load combination. The net load after load balancing and the long-term reference deflection were
+
+\begin{equation}
+\begin{aligned}
+q_{\mathrm{per}}
+&=
+g_{0,k}+g_{1,k}+g_{2,k}+\psi_2 q_k
+=
+7.00+0.00+0.75+0.30\cdot2.00
+=
+8.35\,\mathrm{kN/m^2},\\
+g_{0,k}
+&=
+7.00\,\mathrm{kN/m^2},\\
+q_{\mathrm{net}}
+&=
+q_{\mathrm{per}}-g_{0,k}
+=
+1.35\,\mathrm{kN/m^2}.
+\end{aligned}
+\end{equation}
+
+In Cubus Cedrus the respective traction load was applied onto the structural finite-element model. The analysis is documented in \ref{fig:CubusEiVal}. The uncracked elastic deflection and long-term deflection were
+
+\begin{equation}
+\begin{aligned}
+q_{\mathrm{net,Cedrus}}
+&=
+-1.350\,\mathrm{kN/m^2},\\
+w_{\mathrm{Cedrus},\varphi=0}
+&=
+0.0349\,\mathrm{mm},\\
+w_{\varphi}
+&=
+w_{\varphi=0}(1+\varphi),\\
+w_{\mathrm{Cedrus},\varphi=2.0}
+&=
+0.0349\cdot3
+=
+0.1047\,\mathrm{mm}.
+\end{aligned}
+\end{equation}
+
+
+Table \ref{tab:pt_verification_methods} summarises the comparison of the manual calculations to the test file output of the verification model, showing excellent agreement, verifying the implementation of the post-tensioned concrete class.
+
+\begin{table}[H]
+    \centering
+    \begingroup
+    \scriptsize
+    \caption{Post-tensioned concrete class validation of bending resistance and quasi-permanent deflection. \label{tab:pt_verification_methods}}
+    \setlength{\tabcolsep}{3.5pt}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}X|>{\centering\arraybackslash}X|>{\centering\arraybackslash}X@{}}
+    \hline
+    \textbf{Result} &
+    \textbf{Manual} &
+    \textbf{Test file output} &
+    \textbf{Difference} \\
+    \hline
+    $M_{Rd}\ [\mathrm{kNm/m}]$ & $124.49$ & $124.49$ & $0.0\,\%$ \\
+    $w_{\varphi=2.0} \ [\mathrm{mm}]$& $0.1047$ & $0.1037$ & $-1.0\,\%$ \\
+    \hline
+    \end{tabularx}
+    \endgroup
+\end{table}
+
+\subsection{Acoustic floor build-up}
+
+The simplified acoustic handling was checked against Lignum example values
+\cite{LignumData_Decken}. The bias is defined as
+
+\begin{equation}
+    \begin{aligned}
+        \Delta R_w = R_{w,\mathrm{calc}} - R_{w,\mathrm{Lignum}},\\
+        \Delta L_{n,w} = L_{n,w,\mathrm{calc}} - L_{n,w,\mathrm{Lignum}},
+    \end{aligned}
+\end{equation}
+
+\noindent where negative $\Delta R_w$ and positive $\Delta L_{n,w}$ are conservative.
+
+\begin{table*}[h]
+    \centering
+    \begingroup
+    \scriptsize
+    \caption{Validation of the acoustic handling against Lignum example values. \label{tab:acoustic_validation_lignum}}
+    \setlength{\tabcolsep}{3.5pt}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabularx}{\textwidth}{@{}l|c|>{\raggedright\arraybackslash}X|r|r|r|r|r|r|l@{}}
+    \hline
+    \textbf{Name} &
+    \textbf{Lignum} &
+    \textbf{Reference build-up} &
+    \textbf{$R_{w,\mathrm{calc}}$} &
+    \textbf{$R_{w,\mathrm{ref}}$} &
+    \textbf{$\Delta R_w$} &
+    \textbf{$L_{n,w,\mathrm{calc}}$} &
+    \textbf{$L_{n,w,\mathrm{ref}}$} &
+    \textbf{$\Delta L_{n,w}$} &
+    \textbf{Assessment} \\
+    & Bauteil & & dB & dB & dB & dB & dB & dB & \\ \hline
+
+    Hohlkastendecke &
+    A0438 &
+    Hollow-core floor; cement screed $80\,\mathrm{mm}$; glass wool $s'\leq6\,\mathrm{MN/m^3}$, $30\,\mathrm{mm}$; split ballast $60\,\mathrm{mm}$; hollow-core damping &
+    67.24 & 69.00 & -1.76 & 46.89 & 46.00 & +0.89 & conservative \\
+
+    Rippendecke &
+    A0231 &
+    Rib/beam floor; cement screed $80\,\mathrm{mm}$; glass wool $s'\leq6\,\mathrm{MN/m^3}$, $30\,\mathrm{mm}$; split ballast $60\,\mathrm{mm}$ &
+    63.81 & 67.00 & -3.19 & 49.40 & 48.00 & +1.40 & conservative \\
+
+    CLT &
+    A1088 &
+    Solid timber floor; cement screed $80\,\mathrm{mm}$; glass wool $s'\leq6\,\mathrm{MN/m^3}$, $30\,\mathrm{mm}$; split ballast $60\,\mathrm{mm}$ &
+    65.34 & 70.00 & -4.66 & 46.25 & 45.00 & +1.25 & conservative \\
+
+    BSH &
+    A1090 &
+    Solid timber floor; anhydrite flowing screed $55\,\mathrm{mm}$; glass wool $s'\leq6\,\mathrm{MN/m^3}$, $30\,\mathrm{mm}$; split ballast $60\,\mathrm{mm}$ &
+    64.23 & 67.00 & -2.77 & 49.25 & 48.00 & +1.25 & conservative \\
+
+    HBV--BSH &
+    A1347 &
+    Timber--concrete composite floor; cement screed $80\,\mathrm{mm}$; glass wool $s'\leq6\,\mathrm{MN/m^3}$, $30\,\mathrm{mm}$; additional glass wool $s'\leq9\,\mathrm{MN/m^3}$, $30\,\mathrm{mm}$; concrete topping $120\,\mathrm{mm}$; timber layer $120\,\mathrm{mm}$ &
+    71.47 & 72.00 & -0.53 & 45.20 & 43.00 & +2.20 & conservative \\
+
+    \hline
+    \end{tabularx}
+    \endgroup
+\end{table*}
+
+\section{Comparison model set-up}
+
+As the scope of this work is limited to residential and office buildings, the comparison was divided into a residential case and an office case. Both cases used distinct load levels, discrete span values, structural systems, and cross-sections based on the literature review. Each slab system was assigned the most structurally efficient static system available. The complete comparison set-up is summarised in Table~\ref{tab:final_comparison_cases}.
+
+The detailed treatment of the individual cross-sections, including the fixed parameters and those optimised, is illustrated in Figures~\ref{Fig: compA} and~\ref{Fig: compB}. The optimisation was performed within predefined bounds. These bounds were selected to reflect commercially available timber widths \cite{BestWoodSchneider_Holz_2026}. In addition, they ensure compliance with fire-safety requirements for the hollow-core timber slab \cite{Lignum3.1:2015} and with minimum concrete thicknesses for cross-sections incorporating concrete \cite{SIA262_2025}.
+
+The slab and floor systems were compared according to the sustainability assessment criteria listed in Table~\ref{Tab: SustFact}. All systems must fulfil the requirements listed in Table~\ref{Tab: ReqSS}. The acoustic requirement was set to the normal requirement level.
+
+
+% Morkoetter2021_HBVDecken Zitieren für abstand Kerven, Abstand rippen
+% Wuerth2021_HolzBetonVerbund Zitieren für abstand schrauben
+% Schaenzlin_HBVMusterdetails Zitieren für abstand Kerven, Abstand rippen, Beinhaltet kostenvergleich
+\begin{table*}[h]
+    \centering
+    \begingroup
+    \scriptsize
+    \caption{Input definition for the final comparison of slab systems. (*) Denotes cross-sections already handled by the initial slab configurator. \label{tab:final_comparison_cases}}
     \setlength{\tabcolsep}{3.5pt}
     \renewcommand{\arraystretch}{1.2}
     \begin{tabularx}{\textwidth}{@{}l|c|l|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}X@{}}
@@ -1198,12 +1319,12 @@ The final comparison was defined through a set of residential and office cases w
 
     Residential & 2.0 & 3, 5, 6, 7, 8, 10 &
     TCC flat, kerve &
-    glue-laminated timber; connector: 20\,mm kerve (30\,mm for $L_0>7$\,m) &
+    glue-laminated timber; connector: 20\,mm kerve (30\,mm for $L_0>7$\,m) \cite{Morkoetter2021_HBVDecken}&
     Simple span \\
 
     Residential & 2.0 & 3, 5, 6, 7, 8, 10 &
     TCC ribs, screws &
-    $s_{eq}=0.06$\,m (2 rows at $s=0.12$\,m); connector: screws, $d=8$\,mm &
+    $s_{eq}=0.06$\,m (2 rows at $s=0.12$\,m); connector: screws, $d=8$\,mm \cite{Morkoetter2021_HBVDecken, Wuerth2021_HolzBetonVerbund}&
     Simple span \\
 
     Residential & 2.0 & 3, 5, 6, 7, 8, 10 &
@@ -1234,312 +1355,102 @@ The final comparison was defined through a set of residential and office cases w
     \hline
     \end{tabularx}
     \endgroup
-    \caption{Input definition for the final comparison of slab systems. Only the discrete span values available in \texttt{slab\_properties.db} are used. Materials and fixed geometric inputs are defined in the cross-section catalogue.}
-    \label{tab:final_comparison_cases}
+    
 \end{table*}
 
-\begin{table*}[t]
+
+\begin{figure}[H]
     \centering
-    \begingroup
-    \scriptsize
-    \setlength{\tabcolsep}{4pt}
-    \renewcommand{\arraystretch}{1.2}
-    \begin{tabularx}{\textwidth}{@{}l|>{\hsize=0.7\hsize\raggedright\arraybackslash}X|l|>{\hsize=1.3\hsize\raggedright\arraybackslash}X@{}}
-    \hline
-    \textbf{Cross-section} &
-    \textbf{Start values} &
-    \textbf{Optimisation variables} &
-    \textbf{Bounds / fixed values} \\ \hline
+    
+    \includegraphics[width=1\textwidth]{IMAGES/cross_section_catalog_rc_rec.png}\vspace{-0.6cm}
+    \includegraphics[width=1\textwidth]{IMAGES/cross_section_catalog_pc_rec_dist.png}\vspace{-0.6cm}
+    \includegraphics[width=1\textwidth]{IMAGES/cross_section_catalog_pc_rec_band.png}\vspace{-0.6cm}
+    \includegraphics[width=1\textwidth]{IMAGES/cross_section_catalog_rc_rib.png}\vspace{-0.6cm}
 
-    Rectangular concrete 2D &
-    $b=1.00$\,m, $h=0.20$\,m generally; office start heights $h_0=\{0.25,0.35,0.45,0.60\}$\,m for $l=\{8,10,12,16\}$\,m &
-    $h$, $\varnothing_{xu}$, $\varnothing_{xo}$, $\varnothing_w$ &
-    $h=0.16$--$1.20$\,m, $\varnothing_{xu/xo}=6$--$40$\,mm, $\varnothing_w=0$--$20$\,mm; $s=0.15$\,m; y-reinforcement follows x-reinforcement \\
+    \caption{Compared concrete cross-sections. (*) Denotes cross-sections already handled by the initial slab configurator. \label{Fig: compA}}
+\end{figure}
 
-    Rectangular concrete PT 2D &
-    $b=1.00$\,m, $h=0.20$\,m generally; office start heights $h_0=\{0.20,0.25,0.30,0.40\}$\,m for $l=\{8,10,12,16\}$\,m &
-    $h$, $\varnothing_{xu}$, $\varnothing_{xo}$, $\varnothing_w$ &
-    $h=0.18$--$1.20$\,m, $\varnothing_{xu/xo}=6$--$40$\,mm, $\varnothing_w=0$--$20$\,mm; $s=0.15$\,m; Y1860 monostrands; load balancing from PT layout \\
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{IMAGES/cross_section_catalog_wd_rec.png}\vspace{-0.6cm}
+    \includegraphics[width=1\textwidth]{IMAGES/cross_section_catalog_wd_rib.png}\vspace{-0.6cm}
+    \includegraphics[width=1\textwidth]{IMAGES/cross_section_catalog_tcc_flat.png}\vspace{-0.6cm}
+    \includegraphics[width=1\textwidth]{IMAGES/cross_section_catalog_tcc_ribs.png}\vspace{-0.6cm}
+    \caption{ Compared timber and timber-concrete composite cross-sections. (*) Denotes cross-sections already handled by the initial slab configurator. \label{Fig: compB}}
+\end{figure}
 
-    Rectangular wood 1D &
-    $b=1.00$\,m, $h=0.10$\,m &
-    $h$ &
-    section height optimised for the governing criterion; glue-laminated timber and solid structural timber variations from database \\
 
-    Ribbed timber 1D &
-    $b=0.12$\,m, $h=0.22$\,m, $a=0.625$\,m, $t_2=25$\,mm, $t_3=27$\,mm &
-    $b$, $h$, $t_2$, $t_3$ &
-    $b=0.10$--$0.24$\,m, $h=0.22$--$2.00$\,m, $t_2=25$--$160$\,mm, $t_3=27$--$160$\,mm; rib spacing fixed at $a=0.625$\,m \\
 
-    Ribbed concrete 1D &
-    $b=1.00$\,m, $b_w=0.25$\,m, $h=0.30$\,m, $h_f=0.18$\,m &
-    $h_w$, $h_f$, $\varnothing_{x,w}$, $b_w$, $b$ &
-    $h_w=0.04$--$2.00$\,m, $h_f=0.08$--$0.50$\,m in 1D / $0.12$--$0.50$\,m in 2D optimiser, $\varnothing_{x,w}=8$--$40$\,mm, $b_w=0.15$--$0.40$\,m, $b=0.40$--$2.50$\,m \\
+\subsection{Definition of plotting envelopes}
+In the final comparison, product variation was generated by selecting the best and worst available EPDs by GWP within each material class. For example, concrete strength class C30/37 was sampled using its lowest and highest available product-specific GWP values. This procedure was applied to all possible material combinations within the cross-section. The resulting optimised valid candidates defined the envelope boundaries. In addition, a statistical median was constructed from these valid candidates. This median does not necessarily correspond to an existing product-specific candidate. Based on the best valid candidate a cross-section plot was created for better interpretability of the calculation model. 
 
-    TCC 1D &
-    Residential: $h_c=0.08$\,m, $h_w=0.12$\,m; office TCC starts $(h_c/h_w)=0.12/0.30$, $0.16/0.35$, $0.20/0.40$, $0.25/0.70$\,m for $l=8$, 10, 12, 16\,m &
-    $h_c$, $h_w$ &
-    $h_c=0.08$--$0.50$\,m, $h_w=0.08$--$1.50$\,m; flat residential $s=0.50$\,m; ribbed residential $s=0.15$\,m, $b_w=0.18$\,m; ribbed office $s=0.06$\,m, $b_w=0.24$\,m \\ \hline
-    \end{tabularx}
-    \endgroup
-    \caption{Start values, optimisation variables and bounds used for the final comparison. All systems are optimised for GWP with $n_{\mathrm{iter}}=150$; the automated acoustic floor build-up is enabled with normal acoustic requirements. Material variations are generated from the EPD best and worst cases within each mechanical property class.}
-    \label{tab:final_comparison_bounds}
-\end{table*}
-
-\subsubsection{Definition of plotting envelopes}
-
-In the final comparison, product variation is generated by selecting the lowest and highest available product-specific GWP within each material and mechanical-property class. Thus, for example, concrete strength class C30/37 is represented by the products with the lowest and highest available GWP within C30/37 and is not combined with products from another strength class. This procedure is applied to every material component and to all resulting material combinations within a cross-section. Each material combination is optimised independently, and only candidates satisfying the ENV design criterion are retained. The minimum and maximum values of these valid candidates at each span define the plotting-envelope boundaries. In addition, a statistical median is calculated from the valid candidates. This median is a statistical value and does not necessarily correspond to an existing product combination or optimised cross-section.
-
-Because density and GWP are product-specific properties, the selected material combinations also affect the structural mass and can lead to different optimised geometries. Consequently, the floor-system height and mass may vary within the plotting envelope. The envelopes for cost and construction time are based on triangular distributions with a range of $\pm 20\,\%$ around the deterministic value.
+Due to this sampling technique, the floor system height and mass also vary because of product-specific densities and varying material classes within one structural cross-section. The plotting envelopes for cost and construction time were based on triangular distributions with an accuracy range of \(\pm 20\,\%\).
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.75\textwidth]{IMAGES/cross_section_catalog_envelope_construction.png}
-    \caption{Schematic definition of the plotting envelope from valid optimised material combinations.}
+    \caption{Schematic diagram of the plotting envelope definition.}
     \label{fig:cross_section_catalog_envelope_construction}
 \end{figure}
 
-\subsubsection{Monte Carlo estimation of the probability of the lowest GWP}
 
-The deterministic plotting envelopes describe the possible range of the optimised results but do not indicate how frequently one floor system performs better than another. Therefore, an empirical Monte Carlo analysis is used to estimate the probability that a floor system has the lowest realised GWP at a given span. The analysis is performed separately for total GWP, $GWP_{\mathrm{tot}}$, and structural GWP, $GWP_{\mathrm{struct}}$.
+\begin{comment}
+\subsubsection{Monte carlo analysis}
+The plotting envelopes indicate the range of feasible optimised results but provide no information about the likelihood that a particular floor system performs best at a given span. A Monte Carlo analysis was therefore conducted to estimate the probability that each floor system achieves the lowest realised value for each sustainability assessment criterion listed in Table~\ref{Tab: SustFact
 
-For each material and mechanical-property class used by the deterministic comparison, an empirical product pool is created from the eligible database records. Only records with the statistical-selection flag enabled and with valid density and GWP values are retained; generic records from Betonsortenrechner, Ecoinvent and KBOB are excluded. The density and GWP of a product remain paired and are sampled jointly from the same database row. Hence, no continuous probability distribution is assumed and no values are generated between observed products. If only one eligible product is available in a pool, that material input remains deterministic.
+All feasible candidate solutions were assigned equal probability. In each Monte Carlo draw, one feasible candidate was sampled independently for every floor system. The corresponding assessment criterion was then re-evaluated by sampling its underlying parameters from the respective distributions. GWP and material density were sampled from their empirical data distributions, whereas cost and construction time were sampled from the assumed triangular distributions. This procedure was repeated $N = 5{,}000$ times for each span. In every draw, the floor system with the lowest realised criterion value was identified as the winning system.
 
-For each Monte Carlo draw, one product record is sampled with equal probability from every empirical material pool. The same sampled density--GWP pair is applied to all cross-section variants that use the corresponding material and mechanical-property class. This common sampling preserves comparability between floor systems and avoids assigning different realisations of the same material class within one draw. For a component with volume $V_j$, sampled density $\rho_j^{(r)}$ and product-specific GWP $g_j^{(r)}$, its structural GWP contribution in draw $r$ is calculated as
-
-\begin{equation}
-GWP_{\mathrm{struct}}^{(r)}
-=
-\sum_j
-V_j\,\rho_j^{(r)}\,
-\frac{g_j^{(r)}}{1000}.
-\end{equation}
-
-Here, $g_j^{(r)}$ is expressed in kg CO$_2$-eq per tonne and the resulting GWP is expressed in kg CO$_2$-eq/m$^2$. The GWP of the automatically generated floor build-up is added to obtain $GWP_{\mathrm{tot}}^{(r)}$. The sampled density is also used to recalculate the structural mass. The geometry of each previously optimised candidate is retained during this post-processing step; the structural optimisation is not repeated for every Monte Carlo draw.
-
-At each span, several feasible ENV candidates may exist for one floor system because different deterministic material combinations produced different optimised cross-sections. To avoid assuming that the best candidate is known before the actual products are selected, one feasible ENV candidate is selected with equal probability for each floor system and Monte Carlo draw. The sampled material properties are then propagated through this realised candidate. Subsequently, the realised GWP values of all floor systems are compared, and the system with the lowest value is recorded as the winner of that draw.
-
-Using $N=5000$ Monte Carlo draws, the probability that floor system $i$ has the lowest GWP is estimated as
+The probability that system $s$ provides the best result (e.g. lowest GWP) at span $L$ was estimated as
 
 \begin{equation}
-\widehat{P}_i(\mathrm{lowest\ GWP})
-=
-\frac{1}{N}
-\sum_{r=1}^{N}
-\mathbb{I}
-\left[
-i
-=
-\operatorname*{arg\,min}_k GWP_k^{(r)}
-\right],
-\end{equation}
-
-where $\mathbb{I}[\cdot]$ is the indicator function and $k$ denotes all floor systems included in the respective comparison. The resulting probabilities are presented in the \texttt{uq\_probability\_best} plots. In addition, the 5th, 50th and 95th percentiles of the realised GWP values are reported in the GWP uncertainty plots. These percentile bands represent the empirical Monte Carlo distribution and are therefore conceptually different from the absolute minimum--maximum plotting envelopes.
-
-\subsection{Verification of implemented models}
-
-\subsubsection{Timber--concrete composite slab}
-
-The implementation of the $\gamma$-method was verified against a hand calculation based on a representative timber--concrete composite floor system. The selected geometry, material properties and connector configuration corresponded to a typical residential floor. The verification focused on the effective bending stiffness, as this quantity governs both resistance and serviceability calculations.
-
-The verification model used the following set-up:
-
-\begin{itemize}
-    \item Concrete C30/37: $h_c = 0.080\,\mathrm{m}$, $b_{\mathrm{ef}} = 0.60\,\mathrm{m}$, $A_c = 0.048\,\mathrm{m}^2$, $I_c = 2.56 \times 10^{-5}\,\mathrm{m}^4$, $E_{cm} = 34\,\mathrm{GPa}$, $\varphi_c = 2.5$.
-    
-    \item Timber ribs GL24h: $a_{\mathrm{ribs}} = 0.6\,\mathrm{m}$, $h_w = 0.241\,\mathrm{m}$, $b_w = 0.12\,\mathrm{m}$, $A_w = 0.0289\,\mathrm{m}^2$, $I_w = 1.399 \times 10^{-4}\,\mathrm{m}^4$, $E_{w,\mathrm{mean}} = 11.5\,\mathrm{GPa}$, $d = 0.02\,\mathrm{m}$, $k_{\mathrm{def}} = 0.6$.
-    
-    \item Connection DBS\_10: $s = 0.25\,\mathrm{m}$, $K_{\mathrm{ser}} = 9.7\,\mathrm{MN/m}$, $k'_{\mathrm{def}} = 1.2$.
-    
-    \item Structural system: single-span system with $l_0 = 6.0\,\mathrm{m}$.
-\end{itemize}
-
-
-Table~\ref{tab:TCCVer} summarises the calculated $\gamma_c$ factors, the lever arms to the neutral axis ($a_c$ and $a_w$), and the resulting effective bending stiffness per metre width. The comparison showed excellent agreement between the manual calculations and the implementation. The maximum deviation remained below $0.2\,\%$, confirming the correct implementation of the $\gamma$-method across the time-dependent stiffness calculations.
-
-\begin{table}[h!]
-    \centering
-    \begingroup
-    \scriptsize
-    \setlength{\tabcolsep}{3pt}
-    \renewcommand{\arraystretch}{1.12}
-    \begin{tabularx}{\textwidth}{@{}l|c|c|c|c|r|r@{}}
-    \hline
-    \textbf{Case} &
-    \textbf{Time} &
-    $\gamma_c$ &
-    $a_c$ [m] &
-    $a_w$ [m] &
-    $EI_{\mathrm{eff,manual}}$ [$\mathrm{kN\,m^2/m}$] &
-    $EI_{\mathrm{eff,test}}$ [$\mathrm{kN\,m^2/m}$] \\
-    \hline
-    SLS & $t=0$       & 0.0798 & 0.1299 & 0.0508 & 9225.00 & 9238.66 \\
-    SLS & $t=\infty$ & 0.2279 & 0.1459 & 0.0348 & 4053.00 & 4059.49 \\
-    ULS & $t=0$       & 0.0547 & 0.1425 & 0.0382 & 7962.00 & 7972.65 \\
-    ULS & $t=\infty$ & 0.1645 & 0.1541 & 0.0265 & 3537.00 & 3540.68 \\
-    \hline
-    \end{tabularx}
-    \endgroup
-    \caption{Comparison of manual calculations to test-case output for effective bending stiffness values in $\mathrm{kN\,m^2/m}$.}
-    \label{tab:TCCVer}
-\end{table}
-
-\subsubsection{Post-tensioned concrete slab}
-
-The implementation of the post-tensioned slab class was checked using a diagnostic test file with a fixed set-up. The verification case covers the bending resistance and the quasi-permanent deflection of a two-way post-tensioned slab with distributed tendons and wall supports.
-
-The verification model used the following set-up:
-
-\begin{itemize}
-    \item Materials: concrete C30/37, reinforcing steel B500B, prestressing steel Y1860.
-    \item Structural system: two-way slab with wall supports and \(l_x=l_y=6.0\,\mathrm{m}\).
-    \item Geometry: slab thickness \(h=280\,\mathrm{mm}\), effective depth of bonded steel \(d_s\), and effective depth of prestressing steel \(d_P\) as calculated from the reinforcement and tendon cover constraints.
-    \item Tendon layout: distributed
-    \item Loads: \(g_{0,k}\), \(g_{2,k}=0.75\,\mathrm{kN/m^2}\), \(q_k=2.00\,\mathrm{kN/m^2}\),  \(\varphi=2.0\).
-\end{itemize}
-
-The bending resistance was calculated from the contribution of the prestressing steel and the bonded reinforcement:
-
-\begin{equation}
-    M_{Rd}
+    \widehat{P}_{s}(L)
     =
-    \frac{P_{\infty}}{l}
-    \left(d_p-\frac{0.85x}{2}\right)
-    +
-    A_s f_{sd}
-    \left(d_s-\frac{0.85x}{2}\right)
+    \frac{1}{N}
+    \sum_{i=1}^{N}
+    \mathbf{1}_{A_{s,i}(L)},
+    \label{eq:monte_carlo_probability}
 \end{equation}
+
+where $\widehat{P}_{s}(L)$ is the estimated probability that floor system $s$ performs best at span $L$, $N$ is the total number of Monte Carlo draws, and $i$ denotes the individual draw, with $i=1,\ldots,N$. Here, $A_{s,i}(L)$ denotes the event that floor system $s$ performs best in draw $i$ at span $L$. The indicator $\mathbf{1}_{A_{s,i}(L)}$ equals one if this event occurs and zero otherwise.
+    
+\end{comment}
+
+\subsection{Pairwise comparison}
+
+The plotting envelopes indicate the range of feasible optimised results but do not describe how consistently one floor system outperforms another at a given span. A pairwise comparison based on the Monte Carlo method was therefore conducted for each sustainability assessment criterion listed in Table~\ref{Tab: SustFact}.
+
+All feasible candidate solutions were assigned equal probability. In each Monte Carlo draw, one feasible candidate was sampled independently for every floor system. The corresponding criterion value was then re-evaluated by sampling its underlying parameters from the respective distributions. GWP and material density were sampled from their empirical data distributions, whereas cost and construction time were sampled from the assumed triangular distributions. This procedure was repeated $N=5{,}000$ times for each span.
+
+In every draw, each floor system was compared with every other feasible system. For criteria to be minimised, system $s$ was considered to outperform system $k$ when its realised criterion value was lower. Ties were divided equally between both systems. The pairwise probability and the resulting normalised pairwise score were calculated as
 
 \begin{equation}
 \begin{aligned}
-x
-&=
-\frac{\frac{P_{\infty}}{l}+A_s f_{sd}}
-{b f_{cd}},\\
-\frac{P_{\infty}}{l}
-&=
-76.39\,\mathrm{kN/m},\\
-A_s
-&=
-\frac{\pi \cdot 14^2}{4 \cdot 150}
-=
-1026\,\mathrm{mm^2/m},\\
-f_{sd} &= 435\,\mathrm{MPa},
-\qquad
-f_{pd}=1391\,\mathrm{MPa},\\
-x &= 31.36\,\mathrm{mm},
-\qquad
-0.85x=26.65\,\mathrm{mm}.
+    \widehat{P}_{s \prec k,j}(L)
+    &=
+    \frac{1}{N}
+    \sum_{i=1}^{N}
+    \left[
+        \mathbf{1}
+        \left(
+            X_{s,j,i}(L)<X_{k,j,i}(L)
+        \right)
+        +
+        \frac{1}{2}
+        \mathbf{1}
+        \left(
+            X_{s,j,i}(L)=X_{k,j,i}(L)
+        \right)
+    \right],
+    \\
+    S_{s,j}(L)
+    &=
+    \frac{1}{|\mathcal{S}(L)|-1}
+    \sum_{\substack{k\in\mathcal{S}(L)\\k\neq s}}
+    \widehat{P}_{s \prec k,j}(L),
 \end{aligned}
+\label{eq:pairwise_score}
 \end{equation}
 
-The prestressing and bonded reinforcement contributions are
+where $X_{s,j,i}(L)$ is the realised value of criterion $j$ for system $s$ in draw $i$ at span $L$, and $\mathcal{S}(L)$ is the set of feasible floor systems. The indicator function $\mathbf{1}(\cdot)$ equals one when the stated condition is satisfied and zero otherwise. Furthermore, $\widehat{P}_{s \prec k,j}(L)$ is the Monte Carlo estimate of the probability that system $s$ outperforms the individual system $k$ in a pairwise comparison. Then, $S_{s,j}(L)$ is the normalised pairwise score obtained by averaging these probabilities over all other feasible systems.
 
-\begin{equation}
-\begin{aligned}
-M_{Rd,p}
-&=
-76.39
-\left(
-0.2431-\frac{0.02665}{2}
-\right)
-=
-17.55\,\mathrm{kNm/m},\\
-M_{Rd,s}
-&=
-1026 \cdot 10^{-6}
-\cdot 435000
-\left(
-0.253-\frac{0.02665}{2}
-\right)
-=
-106.94\,\mathrm{kNm/m},\\
-M_{Rd}
-&=
-17.55+106.94
-=
-124.49\,\mathrm{kNm/m}.
-\end{aligned}
-\end{equation}
-
-\paragraph{Deflection calculation}
-
-The quasi-permanent load combination, the net load after load balancing and the long-term reference deflection are
-
-\begin{equation}
-\begin{aligned}
-q_{\mathrm{per}}
-&=
-g_{0,k}+g_{1,k}+g_{2,k}+\psi_2 q_k
-=
-7.00+0.00+0.75+0.30\cdot2.00
-=
-8.35\,\mathrm{kN/m^2},\\
-g_{0,k}
-&=
-7.00\,\mathrm{kN/m^2},\\
-q_{\mathrm{net}}
-&=
-q_{\mathrm{per}}-g_{0,k}
-=
-1.35\,\mathrm{kN/m^2}.
-\end{aligned}
-\end{equation}
-
-In Cubus Cedrus the same action was applied with the corresponding sign convention. The uncracked elastic deflection and long-term deflection are
-
-\begin{equation}
-\begin{aligned}
-q_{\mathrm{net,Cedrus}}
-&=
--1.350\,\mathrm{kN/m^2},\\
-w_{\mathrm{Cedrus},\varphi=0}
-&=
-0.0349\,\mathrm{mm},\\
-w_{\varphi}
-&=
-w_{\varphi=0}(1+\varphi),\\
-w_{\mathrm{Cedrus},\varphi=2.0}
-&=
-0.0349\cdot3
-=
-0.1047\,\mathrm{mm}.
-\end{aligned}
-\end{equation}
-
-
-The hand calculation is compared with the output of \inlinecode{test\_pt\_2D.py}.
-
-\begin{table}[H]
-    \centering
-    \begingroup
-    \scriptsize
-    \setlength{\tabcolsep}{3pt}
-    \renewcommand{\arraystretch}{1.12}
-    \begin{tabularx}{0.65\textwidth}{@{}l|r|r|r@{}}
-    \hline
-    \textbf{Result} & \textbf{Calculation} & \textbf{Python} & \textbf{Difference} \\
-    \hline
-    $M_{Rd}$ & $124.49$ & $124.49$ & $0.0\%$ \\
-    $M_{cr,PT}$ & $100.83$ & $100.83$ & $0.0\%$ \\
-    $w_{\varphi=2.0}$ & $0.1047$ & $0.1037$ & $-1.0\%$ \\
-    \hline
-    \end{tabularx}
-    \endgroup
-    \caption{Validation of bending resistance and quasi-permanent deflection. $M$ values are given in $\mathrm{kNm/m}$ and deflections in $\mathrm{mm}$.}
-    \label{tab:pt_verification_methods}
-\end{table}
-
-The bending resistance fulfils the minimum bonded reinforcement condition:
-
-\begin{equation}
-    M_{Rd}
-    =
-    124.49\,\mathrm{kNm/m}
-    >
-    M_{cr,PT}
-    =
-    100.83\,\mathrm{kNm/m}
-\end{equation}
-
-The calculated long-term deflection agrees with the Cedrus reference value. The small difference results from rounding of the printed deflection and material parameters.
+The normalised pairwise score $S_{s,j}(L)$ summarises the performance of system $s$ relative to all feasible opponents. A score of one indicates that the system outperforms all compared alternatives for the considered criterion, whereas a score close to zero indicates that it is frequently outperformed. Thus, the pairwise comparison provides a ranking of the floor systems that accounts for the variability represented by the plotting envelopes. This ranking identifies not only the best performing system for each criterion but also the relative performance of the remaining alternatives.
