@@ -850,21 +850,29 @@ def plot_case(df, case_name, span):
     # height. This avoids visually compressing deep ribbed sections.
     scale = CS_WIDTH
     n = len(rows)
-    if case_name == "Residential" and n > 3:
+    case_key = str(case_name).lower()
+    if case_key == "residential" and n > 3:
         n_cols = 3
+        fig_width = 12.2
+    elif case_key == "office" and n > 2:
+        n_cols = 2
+        fig_width = 9.2
+    else:
+        n_cols = None
+
+    if n_cols is not None:
         n_rows = (n + n_cols - 1) // n_cols
         column_spacing = 3.05
-        row_height = max(4.65, max_total_height * scale + 3.85)
+        row_height = max(4.20, max_total_height * scale + 3.45)
         x_positions = [1.35 + (idx % n_cols) * column_spacing for idx in range(n)]
         row_bases = [(n_rows - 1 - idx // n_cols) * row_height for idx in range(n)]
-        total_tops = [base + max_total_height * scale + 1.18 for base in row_bases]
-        name_ys = [top + 0.44 for top in total_tops]
-        text_ys = [base + 0.78 for base in row_bases]
+        total_tops = [base + max_total_height * scale + 1.02 for base in row_bases]
+        name_ys = [top + 0.34 for top in total_tops]
+        text_ys = [base + 0.62 for base in row_bases]
         x_min = 0.18
         x_lim_max = 1.35 + (n_cols - 1) * column_spacing + CS_WIDTH + 0.78
         y_min = -0.72
-        y_max = max(name_ys) + 0.28
-        fig_width = 12.2
+        y_max = max(name_ys) + 0.14
     else:
         x_positions = [1.35 + idx * COLUMN_SPACING for idx in range(n)]
         x_max = x_positions[-1] + CS_WIDTH
@@ -907,7 +915,7 @@ def plot_case(df, case_name, span):
         handles,
         labels,
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.965),
+        bbox_to_anchor=(0.5, 0.94),
         ncol=4,
         frameon=False,
         fontsize=10.4,

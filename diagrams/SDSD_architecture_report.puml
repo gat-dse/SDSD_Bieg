@@ -1,9 +1,13 @@
 @startuml SDSD_architecture_report
 !pragma layout smetana
 
+top to bottom direction
+scale max 7.5 inch by 10.5 inch
 hide empty members
 skinparam shadowing false
 skinparam linetype polyline
+skinparam nodesep 25
+skinparam ranksep 45
 skinparam packageStyle rectangle
 skinparam classAttributeIconSize 0
 skinparam defaultFontName "Times New Roman"

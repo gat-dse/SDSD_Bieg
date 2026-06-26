@@ -218,7 +218,7 @@
     const caseSlug = state.caseName.toLowerCase().replaceAll(" ", "_");
     image.hidden = false;
     message.hidden = true;
-    image.src = `cross_sections/final_cross_sections_${caseSlug}_${Number(state.span)}m.png?v=2`;
+    image.src = `cross_sections/final_cross_sections_${caseSlug}_${Number(state.span)}m.png?v=20260622`;
     image.alt = `${state.caseName} floor-system cross-sections at a span of ${state.span} m`;
     image.onerror = () => {
       image.hidden = true;

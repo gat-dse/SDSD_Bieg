@@ -1,0 +1,214 @@
+{"kind":"deck","id":"pr/wgfdho","name":"Deck"}
+{"kind":"layout","layoutId":"30e59172-475e-4ef1-ae0a-6db7c22eeafd","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"5f67b395-dcbb-4357-8faf-b19881d6a0c2","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/qb5ns3","slide":1,"title":"Multi-Criteria Sustainability Optimisation","textShapes":3}
+{"kind":"shape","id":"sh/wra5gbq1","slide":1,"bbox":[0,0,1280,720]}
+{"kind":"textbox","id":"sh/eloj2t83","slide":1,"text":"Multi-Criteria Sustainability Optimisation\nof Floor Slabs","textPreview":"Multi-Criteria Sustainability Optimisation | of Floor Slabs","textChars":57,"textLines":2,"bbox":[56,215,760,92]}
+{"kind":"textbox","id":"sh/l0rqd4vm","slide":1,"text":"Beyond Structural Performance in Early-Stage Design","textPreview":"Beyond Structural Performance in Early-Stage Design","textChars":51,"textLines":1,"bbox":[56,318,720,34]}
+{"kind":"textbox","id":"sh/wfyxobm5","slide":1,"text":"Jonathan Bieg\nMaster Thesis - Final Presentation\n29 June 2026","textPreview":"Jonathan Bieg | Master Thesis - Final Presentation | 29 June 2026","textChars":61,"textLines":3,"bbox":[56,465,360,84]}
+{"kind":"image","id":"im/u9knih4b","slide":1,"name":"","alt":"IBK logo","bbox":[1136,26,95,42]}
+{"kind":"notes","id":"nt/qb5ns3","slide":1,"text":""}
+{"kind":"slide","id":"sl/2lntx6","slide":2,"title":"Table of content","textShapes":10}
+{"kind":"textbox","id":"sh/w3m94fu1","slide":2,"text":"Table of content","textPreview":"Table of content","textChars":16,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/3itgfmlk","slide":2,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/ex0nuxc3","slide":2,"text":"Multi-criteria sustainability optimisation of floor slabs","textPreview":"Multi-criteria sustainability optimisation of floor slabs","textChars":57,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/lwval87e","slide":2,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/wb2hwfyx","slide":2,"bbox":[46,670,1188,1]}
+{"kind":"textbox","id":"sh/3q5o7qpg","slide":2,"text":"Introduction","textPreview":"Introduction","textChars":12,"textLines":1,"bbox":[96,145,500,32]}
+{"kind":"textbox","id":"sh/e9cvixcz","slide":2,"text":"Objective and contribution","textPreview":"Objective and contribution","textChars":26,"textLines":1,"bbox":[96,199,500,32]}
+{"kind":"textbox","id":"sh/l87ed8ba","slide":2,"text":"Methodology","textPreview":"Methodology","textChars":11,"textLines":1,"bbox":[96,253,500,32]}
+{"kind":"textbox","id":"sh/sneloj2t","slide":2,"text":"Results and discussion","textPreview":"Results and discussion","textChars":22,"textLines":1,"bbox":[96,307,500,32]}
+{"kind":"textbox","id":"sh/qd4vmtwr","slide":2,"text":"Conclusion","textPreview":"Conclusion","textChars":10,"textLines":1,"bbox":[96,361,500,32]}
+{"kind":"textbox","id":"sh/fyxobm58","slide":2,"text":"Outlook","textPreview":"Outlook","textChars":7,"textLines":1,"bbox":[96,415,500,32]}
+{"kind":"notes","id":"nt/2lntx6","slide":2,"text":""}
+{"kind":"slide","id":"sl/bjkchb","slide":3,"title":"Introduction - Challenge for the construction industry","textShapes":9}
+{"kind":"textbox","id":"sh/u54zidon","slide":3,"text":"Introduction - Challenge for the construction industry","textPreview":"Introduction - Challenge for the construction industry","textChars":54,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/5sneloj2","slide":3,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/cbulwval","slide":3,"text":"Introduction","textPreview":"Introduction","textChars":12,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/neloj2t8","slide":3,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/ytsvu9kn","slide":3,"bbox":[46,670,1188,1]}
+{"kind":"textbox","id":"sh/5kb6xkf6","slide":3,"text":"Why floor systems matter","textPreview":"Why floor systems matter","textChars":24,"textLines":1,"bbox":[78,96,420,38]}
+{"kind":"textbox","id":"sh/czed8v6p","slide":3,"text":"- Buildings are a major source of material demand and emissions.\n- Floor slabs repeat over many storeys and strongly influence mass, height and construction process.\n- Early design decisions lock in much of the later sustainability performance.","textPreview":"- Buildings are a major source of material demand and emissions. | - Floor slabs repeat over many storeys and strongly influence mass, he...","textChars":244,"textLines":3,"bbox":[78,158,470,250]}
+{"kind":"shape","id":"sh/n29gr2p8","slide":3,"bbox":[610,116,2,430]}
+{"kind":"textbox","id":"sh/yhgn29gr","slide":3,"text":"Goal","textPreview":"Goal","textChars":4,"textLines":1,"bbox":[660,116,280,30]}
+{"kind":"textbox","id":"sh/kb6xkf6d","slide":3,"text":"Make floor-system selection comparable beyond structural performance alone.","textPreview":"Make floor-system selection comparable beyond structural performance alone.","textChars":75,"textLines":1,"bbox":[660,160,455,80]}
+{"kind":"textbox","id":"sh/9w3m94fu","slide":3,"text":"Sustainability is assessed through GWP, cost, construction time, height and mass while all required structural and functional criteria are fulfilled.","textPreview":"Sustainability is assessed through GWP, cost, construction time, height and mass while all required structural and functional criteria ar...","textChars":149,"textLines":1,"bbox":[660,280,455,140]}
+{"kind":"notes","id":"nt/bjkchb","slide":3,"text":""}
+{"kind":"slide","id":"sl/i3ynl4","slide":4,"title":"Objective and research questions","textShapes":12}
+{"kind":"textbox","id":"sh/bi9s36hc","slide":4,"text":"Objective and research questions","textPreview":"Objective and research questions","textChars":32,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/032lszqt","slide":4,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/tovahoza","slide":4,"text":"Objective","textPreview":"Objective","textChars":9,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/i9s36hcr","slide":4,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/bulwval8","slide":4,"bbox":[46,670,1188,1]}
+{"kind":"textbox","id":"sh/0fepkzup","slide":4,"text":"Objective","textPreview":"Objective","textChars":9,"textLines":1,"bbox":[66,92,220,30]}
+{"kind":"textbox","id":"sh/p0bi9s36","slide":4,"text":"Assess the sustainability impact of choosing a floor system for residential and office buildings in early-stage design.","textPreview":"Assess the sustainability impact of choosing a floor system for residential and office buildings in early-stage design.","textChars":119,"textLines":1,"bbox":[66,136,1080,58]}
+{"kind":"shape","id":"sh/idonyd0z","slide":4,"bbox":[82,260,315,210]}
+{"kind":"textbox","id":"sh/byhgn29g","slide":4,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[100,278,48,48]}
+{"kind":"textbox","id":"sh/ra5gbq1o","slide":4,"text":"Which assessment criteria are relevant for early-stage floor-system comparison?","textPreview":"Which assessment criteria are relevant for early-stage floor-system comparison?","textChars":79,"textLines":1,"bbox":[100,345,265,90]}
+{"kind":"shape","id":"sh/2p8nqxs7","slide":4,"bbox":[462,260,315,210]}
+{"kind":"textbox","id":"sh/9gr2p8nq","slide":4,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[480,278,48,48]}
+{"kind":"textbox","id":"sh/gvy90je9","slide":4,"text":"Which systems perform favourably when structural and functional requirements are respected?","textPreview":"Which systems perform favourably when structural and functional requirements are respected?","textChars":91,"textLines":1,"bbox":[480,345,265,90]}
+{"kind":"shape","id":"sh/r2p8nqxs","slide":4,"bbox":[842,260,315,210]}
+{"kind":"textbox","id":"sh/2hwfyxob","slide":4,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[860,278,48,48]}
+{"kind":"textbox","id":"sh/94fu18jq","slide":4,"text":"How do Global Warming Potential and construction cost align or conflict?","textPreview":"How do Global Warming Potential and construction cost align or conflict?","textChars":72,"textLines":1,"bbox":[860,345,265,90]}
+{"kind":"notes","id":"nt/i3ynl4","slide":4,"text":""}
+{"kind":"slide","id":"sl/58d600","slide":5,"title":"Methodology - Slab configurator workflow","textShapes":6}
+{"kind":"textbox","id":"sh/bq1oryts","slide":5,"text":"Methodology - Slab configurator workflow","textPreview":"Methodology - Slab configurator workflow","textChars":40,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/4byhgn29","slide":5,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/twra5gbq","slide":5,"text":"Methodology","textPreview":"Methodology","textChars":11,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/mhk3q5o7","slide":5,"text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/b2hwfyxo","slide":5,"bbox":[46,670,1188,1]}
+{"kind":"shape","id":"sh/t83itgfm","slide":5,"bbox":[895,108,190,30]}
+{"kind":"textbox","id":"sh/mp0bi9s3","slide":5,"text":"Contribution","textPreview":"Contribution","textChars":12,"textLines":1,"bbox":[905,114,170,18]}
+{"kind":"textbox","id":"sh/bat47y1k","slide":5,"text":"- Existing Python framework extended for consistent comparison.\n- New floor systems: timber-concrete composite and post-tensioned concrete.\n- Automated acoustic floor build-up handling added.\n- Pairwise comparison ranks systems while accounting for data variation.","textPreview":"- Existing Python framework extended for consistent comparison. | - New floor systems: timber-concrete composite and post-tensioned concr...","textChars":264,"textLines":4,"bbox":[890,160,310,330]}
+{"kind":"image","id":"im/tgfmlkjm","slide":5,"name":"","alt":"Slab configurator workflow","bbox":[70,92,770,500]}
+{"kind":"notes","id":"nt/58d600","slide":5,"text":""}
+{"kind":"slide","id":"sl/jgo31s","slide":6,"title":"Methodology - Compared systems and requirements","textShapes":11}
+{"kind":"textbox","id":"sh/9knih4by","slide":6,"text":"Methodology - Compared systems and requirements","textPreview":"Methodology - Compared systems and requirements","textChars":47,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/2t83itgf","slide":6,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/re1w7mp0","slide":6,"text":"Methodology","textPreview":"Methodology","textChars":11,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/kb6xkf6d","slide":6,"text":"6","textPreview":"6","textChars":1,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/9w3m94fu","slide":6,"bbox":[46,670,1188,1]}
+{"kind":"shape","id":"sh/25kb6xkf","slide":6,"bbox":[80,116,320,328]}
+{"kind":"shape","id":"sh/rqd4vmtw","slide":6,"bbox":[80,116,320,44]}
+{"kind":"textbox","id":"sh/kjm1cfa9","slide":6,"text":"Residential","textPreview":"Residential","textChars":11,"textLines":1,"bbox":[96,127,288,24]}
+{"kind":"textbox","id":"sh/94fu18jq","slide":6,"text":"Concrete\nTimber\nTimber-concrete composite","textPreview":"Concrete | Timber | Timber-concrete composite","textChars":41,"textLines":3,"bbox":[112,198,260,190]}
+{"kind":"shape","id":"sh/1orytsvu","slide":6,"bbox":[470,116,320,328]}
+{"kind":"shape","id":"sh/c7u54zid","slide":6,"bbox":[470,116,320,44]}
+{"kind":"textbox","id":"sh/jm1cfa9w","slide":6,"text":"Office","textPreview":"Office","textChars":6,"textLines":1,"bbox":[486,127,288,24]}
+{"kind":"textbox","id":"sh/u18jqh0f","slide":6,"text":"Concrete systems\nPost-tensioned layouts\nRibbed concrete","textPreview":"Concrete systems | Post-tensioned layouts | Ribbed concrete","textChars":55,"textLines":3,"bbox":[502,198,260,190]}
+{"kind":"shape","id":"sh/1032lszq","slide":6,"bbox":[860,116,320,328]}
+{"kind":"shape","id":"sh/cfa9w3m9","slide":6,"bbox":[860,116,320,44]}
+{"kind":"textbox","id":"sh/judg7ads","slide":6,"text":"Requirements","textPreview":"Requirements","textChars":12,"textLines":1,"bbox":[876,127,288,24]}
+{"kind":"textbox","id":"sh/u9knih4b","slide":6,"text":"ULS\nDeflection\nVibration\nFire\nAcoustics","textPreview":"ULS | Deflection | Vibration | Fire | Acoustics","textChars":39,"textLines":5,"bbox":[892,198,260,190]}
+{"kind":"textbox","id":"sh/54zidony","slide":6,"text":"Comparison is performed for complete floor systems, not only the bare structural cross-section.","textPreview":"Comparison is performed for complete floor systems, not only the bare structural cross-section.","textChars":95,"textLines":1,"bbox":[132,506,1010,50]}
+{"kind":"notes","id":"nt/jgo31s","slide":6,"text":""}
+{"kind":"slide","id":"sl/vsxgsi","slide":7,"title":"Methodology - New model components","textShapes":10}
+{"kind":"textbox","id":"sh/wval87ed","slide":7,"text":"Methodology - New model components","textPreview":"Methodology - New model components","textChars":34,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/7adsji5s","slide":7,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/epkzupwb","slide":7,"text":"Methodology","textPreview":"Methodology","textChars":11,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/psfil0rq","slide":7,"text":"7","textPreview":"7","textChars":1,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/w7mp0bi9","slide":7,"bbox":[46,670,1188,1]}
+{"kind":"shape","id":"sh/wfyxobm5","slide":7,"bbox":[145,382,140,30]}
+{"kind":"textbox","id":"sh/ixczed8v","slide":7,"text":"TCC","textPreview":"TCC","textChars":3,"textLines":1,"bbox":[155,388,120,18]}
+{"kind":"shape","id":"sh/bi9s36hc","slide":7,"bbox":[548,382,190,30]}
+{"kind":"textbox","id":"sh/032lszqt","slide":7,"text":"Post-tensioning","textPreview":"Post-tensioning","textChars":15,"textLines":1,"bbox":[558,388,170,18]}
+{"kind":"shape","id":"sh/tovahoza","slide":7,"bbox":[912,382,180,30]}
+{"kind":"textbox","id":"sh/i9s36hcr","slide":7,"text":"Floor build-up","textPreview":"Floor build-up","textChars":14,"textLines":1,"bbox":[922,388,160,18]}
+{"kind":"textbox","id":"sh/bulwval8","slide":7,"text":"- Semi-rigid composite action\n- Flat and ribbed alternatives","textPreview":"- Semi-rigid composite action | - Flat and ribbed alternatives","textChars":60,"textLines":2,"bbox":[84,430,290,110]}
+{"kind":"textbox","id":"sh/0fepkzup","slide":7,"text":"- Distributed and banded tendons\n- Secondary moments and punching","textPreview":"- Distributed and banded tendons | - Secondary moments and punching","textChars":65,"textLines":2,"bbox":[484,430,300,110]}
+{"kind":"textbox","id":"sh/p0bi9s36","slide":7,"text":"- Acoustic requirements\n- Mass, height, cost and GWP added","textPreview":"- Acoustic requirements | - Mass, height, cost and GWP added","textChars":58,"textLines":2,"bbox":[854,430,320,110]}
+{"kind":"image","id":"im/u18jqh0f","slide":7,"name":"","alt":"Ribbed timber-concrete composite section","bbox":[74,118,330,230]}
+{"kind":"image","id":"im/jm1cfa9w","slide":7,"name":"","alt":"Banded post-tensioned concrete section","bbox":[474,118,330,230]}
+{"kind":"image","id":"im/cvixczed","slide":7,"name":"","alt":"Residential floor build-up cross-sections","bbox":[844,132,310,210]}
+{"kind":"notes","id":"nt/vsxgsi","slide":7,"text":""}
+{"kind":"slide","id":"sl/y5veq1","slide":8,"title":"Verification and comparison setup","textShapes":9}
+{"kind":"textbox","id":"sh/l0rqd4vm","slide":8,"text":"Verification and comparison setup","textPreview":"Verification and comparison setup","textChars":33,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/ed8bat47","slide":8,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/7u54zido","slide":8,"text":"Methodology","textPreview":"Methodology","textChars":11,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/wra5gbq1","slide":8,"text":"8","textPreview":"8","textChars":1,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/lc7u54zi","slide":8,"bbox":[46,670,1188,1]}
+{"kind":"textbox","id":"sh/eloj2t83","slide":8,"text":"Validation before comparison","textPreview":"Validation before comparison","textChars":28,"textLines":1,"bbox":[72,96,520,38]}
+{"kind":"textbox","id":"sh/36hcrmhk","slide":8,"text":"- Timber-concrete composite stiffness checked against reference calculations.\n- Post-tensioned concrete class validated for bending resistance and deflection.\n- Acoustic build-up generator checked against Lignum reference constructions.","textPreview":"- Timber-concrete composite stiffness checked against reference calculations. | - Post-tensioned concrete class validated for bending res...","textChars":236,"textLines":3,"bbox":[78,158,520,190]}
+{"kind":"textbox","id":"sh/wval87ed","slide":8,"text":"Final comparison","textPreview":"Final comparison","textChars":16,"textLines":1,"bbox":[710,96,360,38]}
+{"kind":"textbox","id":"sh/pg3ex0nu","slide":8,"text":"- Optimise each system with respect to GWP while fulfilling all requirements.\n- Evaluate GWP, cost, time, height and mass over relevant span ranges.\n- Use envelopes and pairwise scores to handle variation in product data.","textPreview":"- Optimise each system with respect to GWP while fulfilling all requirements. | - Evaluate GWP, cost, time, height and mass over relevant...","textChars":221,"textLines":3,"bbox":[710,158,440,220]}
+{"kind":"shape","id":"sh/loj2t83i","slide":8,"bbox":[170,430,900,74]}
+{"kind":"textbox","id":"sh/w3m94fu1","slide":8,"text":"Core principle: compare feasible alternatives, not idealised material stereotypes.","textPreview":"Core principle: compare feasible alternatives, not idealised material stereotypes.","textChars":82,"textLines":1,"bbox":[205,452,830,32]}
+{"kind":"notes","id":"nt/y5veq1","slide":8,"text":""}
+{"kind":"slide","id":"sl/xxjytk","slide":9,"title":"Results - Residential floor systems","textShapes":5}
+{"kind":"textbox","id":"sh/ed8bat47","slide":9,"text":"Results - Residential floor systems","textPreview":"Results - Residential floor systems","textChars":35,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/l0rqd4vm","slide":9,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/wfyxobm5","slide":9,"text":"Results","textPreview":"Results","textChars":7,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/36hcrmhk","slide":9,"text":"9","textPreview":"9","textChars":1,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/eloj2t83","slide":9,"bbox":[46,670,1188,1]}
+{"kind":"textbox","id":"sh/7adsji5s","slide":9,"text":"- Timber performs favourably at short spans but becomes sensitive to vibration and height.\n- Rectangular concrete is balanced at intermediate spans.\n- TCC and post-tensioned concrete become competitive at longer spans.","textPreview":"- Timber performs favourably at short spans but becomes sensitive to vibration and height. | - Rectangular concrete is balanced at interm...","textChars":218,"textLines":3,"bbox":[90,430,1030,125]}
+{"kind":"image","id":"im/gr2p8nqx","slide":9,"name":"","alt":"Residential GWP by governing criteria","bbox":[52,88,555,270]}
+{"kind":"image","id":"im/9cvixcze","slide":9,"name":"","alt":"Residential pairwise comparison","bbox":[660,86,540,292]}
+{"kind":"notes","id":"nt/xxjytk","slide":9,"text":""}
+{"kind":"slide","id":"sl/5myxzw","slide":10,"title":"Results - Residential application ranges","textShapes":6}
+{"kind":"textbox","id":"sh/mp0bi9s3","slide":10,"text":"Results - Residential application ranges","textPreview":"Results - Residential application ranges","textChars":40,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/tgfmlkjm","slide":10,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/4vmtwra5","slide":10,"text":"Results","textPreview":"Results","textChars":7,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/bm58z25k","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/m1cfa9w3","slide":10,"bbox":[46,670,1188,1]}
+{"kind":"textbox","id":"sh/47y1kre1","slide":10,"text":"Interpretation","textPreview":"Interpretation","textChars":14,"textLines":1,"bbox":[885,112,240,30]}
+{"kind":"textbox","id":"sh/bq1oryts","slide":10,"text":"- No single system dominates all spans and criteria.\n- Use rectangular timber only where short spans keep height and cost controlled.\n- Use concrete or post-tensioned concrete as span increases.\n- Flat TCC is a robust compromise across residential spans.","textPreview":"- No single system dominates all spans and criteria. | - Use rectangular timber only where short spans keep height and cost controlled. |...","textChars":254,"textLines":4,"bbox":[885,168,300,270]}
+{"kind":"image","id":"im/kf6dcbul","slide":10,"name":"","alt":"Residential proposed application ranges","bbox":[70,92,760,440]}
+{"kind":"notes","id":"nt/5myxzw","slide":10,"text":""}
+{"kind":"slide","id":"sl/h0cudr","slide":11,"title":"Results - Office floor systems","textShapes":5}
+{"kind":"textbox","id":"sh/0je9cvix","slide":11,"text":"Results - Office floor systems","textPreview":"Results - Office floor systems","textChars":30,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/byhgn29g","slide":11,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/idonyd0z","slide":11,"text":"Results","textPreview":"Results","textChars":7,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/tcj6tova","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/0rqd4vmt","slide":11,"bbox":[46,670,1188,1]}
+{"kind":"textbox","id":"sh/tovahoza","slide":11,"text":"- Post-tensioning improves deflection, punching and material demand at larger spans.\n- Banded tendons perform best in the current model because tendons align with support strips.\n- Ribbed concrete has low GWP and mass, but requires more construction height.","textPreview":"- Post-tensioning improves deflection, punching and material demand at larger spans. | - Banded tendons perform best in the current model...","textChars":257,"textLines":3,"bbox":[90,430,1030,125]}
+{"kind":"image","id":"im/2lszqtcj","slide":11,"name":"","alt":"Office GWP by governing criteria","bbox":[52,88,555,270]}
+{"kind":"image","id":"im/v6psfil0","slide":11,"name":"","alt":"Office pairwise comparison","bbox":[660,86,540,292]}
+{"kind":"notes","id":"nt/h0cudr","slide":11,"text":""}
+{"kind":"slide","id":"sl/bdi126","slide":12,"title":"Results - Office application ranges","textShapes":6}
+{"kind":"textbox","id":"sh/2lszqtcj","slide":12,"text":"Results - Office application ranges","textPreview":"Results - Office application ranges","textChars":35,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/d8bat47y","slide":12,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/knih4byh","slide":12,"text":"Results","textPreview":"Results","textChars":7,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/vu9knih4","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/29gr2p8n","slide":12,"bbox":[46,670,1188,1]}
+{"kind":"textbox","id":"sh/kf6dcbul","slide":12,"text":"Recommendation","textPreview":"Recommendation","textChars":14,"textLines":1,"bbox":[885,112,260,30]}
+{"kind":"textbox","id":"sh/vixczed8","slide":12,"text":"- Rectangular reinforced concrete is not recommended for the investigated span range.\n- Banded post-tensioned concrete provides the best overall balance.\n- Ribbed concrete is attractive from approximately 10 m, unless height governs.","textPreview":"- Rectangular reinforced concrete is not recommended for the investigated span range. | - Banded post-tensioned concrete provides the bes...","textChars":233,"textLines":3,"bbox":[885,168,310,260]}
+{"kind":"image","id":"im/g3ex0nux","slide":12,"name":"","alt":"Office proposed application ranges","bbox":[70,92,760,440]}
+{"kind":"image","id":"im/rmhk3q5o","slide":12,"name":"","alt":"Concrete strength class application ranges","bbox":[885,480,280,92]}
+{"kind":"notes","id":"nt/bdi126","slide":12,"text":""}
+{"kind":"slide","id":"sl/2bg3v2","slide":13,"title":"Discussion - GWP and construction cost","textShapes":10}
+{"kind":"textbox","id":"sh/wfyxobm5","slide":13,"text":"Discussion - GWP and construction cost","textPreview":"Discussion - GWP and construction cost","textChars":38,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/7u54zido","slide":13,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/ed8bat47","slide":13,"text":"Discussion","textPreview":"Discussion","textChars":10,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/lc7u54zi","slide":13,"text":"13","textPreview":"13","textChars":2,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/wra5gbq1","slide":13,"bbox":[46,670,1188,1]}
+{"kind":"textbox","id":"sh/eloj2t83","slide":13,"text":"Residential","textPreview":"Residential","textChars":11,"textLines":1,"bbox":[830,108,250,30]}
+{"kind":"textbox","id":"sh/pg3ex0nu","slide":13,"text":"Weak correlation: r = 0.17","textPreview":"Weak correlation: r = 0.17","textChars":26,"textLines":1,"bbox":[830,150,320,36]}
+{"kind":"textbox","id":"sh/wval87ed","slide":13,"text":"- Low-GWP timber is modelled as higher cost.\n- Concrete tends to be cheaper but has higher GWP.\n- TCC systems become compromise solutions.","textPreview":"- Low-GWP timber is modelled as higher cost. | - Concrete tends to be cheaper but has higher GWP. | - TCC systems become compromise solut...","textChars":138,"textLines":3,"bbox":[830,205,330,150]}
+{"kind":"textbox","id":"sh/6hcrmhk3","slide":13,"text":"Office","textPreview":"Office","textChars":6,"textLines":1,"bbox":[830,390,250,30]}
+{"kind":"textbox","id":"sh/z25kb6xk","slide":13,"text":"Strong correlation: r = 0.96","textPreview":"Strong correlation: r = 0.96","textChars":28,"textLines":1,"bbox":[830,432,320,36]}
+{"kind":"textbox","id":"sh/onyd0z61","slide":13,"text":"- All systems are concrete-based.\n- Material efficiency reduces both GWP and cost.\n- Height remains the key counter-criterion.","textPreview":"- All systems are concrete-based. | - Material efficiency reduces both GWP and cost. | - Height remains the key counter-criterion.","textChars":126,"textLines":3,"bbox":[830,487,330,120]}
+{"kind":"image","id":"im/u54zidon","slide":13,"name":"","alt":"Scatter plot of GWP versus cost","bbox":[70,88,700,445]}
+{"kind":"notes","id":"nt/2bg3v2","slide":13,"text":""}
+{"kind":"slide","id":"sl/tdwvwl","slide":14,"title":"Discussion - Relevant sustainability criteria","textShapes":11}
+{"kind":"textbox","id":"sh/0rqd4vmt","slide":14,"text":"Discussion - Relevant sustainability criteria","textPreview":"Discussion - Relevant sustainability criteria","textChars":45,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/b6xkf6dc","slide":14,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/il0rqd4v","slide":14,"text":"Discussion","textPreview":"Discussion","textChars":10,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/t47y1kre","slide":14,"text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/0je9cvix","slide":14,"bbox":[46,670,1188,1]}
+{"kind":"shape","id":"sh/byhgn29g","slide":14,"bbox":[92,138,315,300]}
+{"kind":"shape","id":"sh/idonyd0z","slide":14,"bbox":[92,138,315,48]}
+{"kind":"textbox","id":"sh/p0bi9s36","slide":14,"text":"Primary","textPreview":"Primary","textChars":7,"textLines":1,"bbox":[106,151,287,22]}
+{"kind":"textbox","id":"sh/0fepkzup","slide":14,"text":"GWP\nConstruction cost","textPreview":"GWP | Construction cost","textChars":21,"textLines":2,"bbox":[122,238,255,95]}
+{"kind":"shape","id":"sh/itgfmlkj","slide":14,"bbox":[472,138,315,300]}
+{"kind":"shape","id":"sh/7ed8bat4","slide":14,"bbox":[472,138,315,48]}
+{"kind":"textbox","id":"sh/0z61032l","slide":14,"text":"Boundary / project-specific","textPreview":"Boundary / project-specific","textChars":27,"textLines":1,"bbox":[486,151,287,22]}
+{"kind":"textbox","id":"sh/pkzupwb2","slide":14,"text":"Height\nConstruction time","textPreview":"Height | Construction time","textChars":24,"textLines":2,"bbox":[502,238,255,95]}
+{"kind":"shape","id":"sh/ih4byhgn","slide":14,"bbox":[852,138,315,300]}
+{"kind":"shape","id":"sh/72x4nap4","slide":14,"bbox":[852,138,315,48]}
+{"kind":"textbox","id":"sh/0nuxc3yl","slide":14,"text":"Context-dependent","textPreview":"Context-dependent","textChars":17,"textLines":1,"bbox":[866,151,287,22]}
+{"kind":"textbox","id":"sh/p8nqxs72","slide":14,"text":"Mass\nMaterial variation","textPreview":"Mass | Material variation","textChars":23,"textLines":2,"bbox":[882,238,255,95]}
+{"kind":"textbox","id":"sh/ed8v6psf","slide":14,"text":"The complete floor system matters: acoustic build-ups can change rankings, especially for timber and TCC residential systems.","textPreview":"The complete floor system matters: acoustic build-ups can change rankings, especially for timber and TCC residential systems.","textChars":125,"textLines":1,"bbox":[126,510,1020,52]}
+{"kind":"notes","id":"nt/tdwvwl","slide":14,"text":""}
+{"kind":"slide","id":"sl/j7ac1y","slide":15,"title":"Limitations","textShapes":6}
+{"kind":"textbox","id":"sh/5sneloj2","slide":15,"text":"Limitations","textPreview":"Limitations","textChars":11,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/u54zidon","slide":15,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/nqxs72x4","slide":15,"text":"Conclusion","textPreview":"Conclusion","textChars":10,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/czed8v6p","slide":15,"text":"15","textPreview":"15","textChars":2,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/5kb6xkf6","slide":15,"bbox":[46,670,1188,1]}
+{"kind":"textbox","id":"sh/ytsvu9kn","slide":15,"text":"- Results are early-stage comparison results, not final project-specific design recommendations.\n- Application ranges depend on loads, span ranges, acoustic requirements, height constraints and construction processes.\n- Cost and time models simplify fabrication, logistics and connection effort.\n- Ribbed timber hollow-core results are sensitive to fire verification and insulation assumptions.","textPreview":"- Results are early-stage comparison results, not final project-specific design recommendations. | - Application ranges depend on loads, ...","textChars":394,"textLines":4,"bbox":[94,120,1040,260]}
+{"kind":"shape","id":"sh/neloj2t8","slide":15,"bbox":[130,455,980,76]}
+{"kind":"textbox","id":"sh/gn29gr2p","slide":15,"text":"Main value of the configurator: a consistent, transparent decision basis for comparing feasible floor systems early.","textPreview":"Main value of the configurator: a consistent, transparent decision basis for comparing feasible floor systems early.","textChars":116,"textLines":1,"bbox":[168,478,900,34]}
+{"kind":"notes","id":"nt/j7ac1y","slide":15,"text":""}
+{"kind":"slide","id":"sl/0yd149","slide":16,"title":"Conclusion and outlook","textShapes":9}
+{"kind":"textbox","id":"sh/fu18jqh0","slide":16,"text":"Conclusion and outlook","textPreview":"Conclusion and outlook","textChars":22,"textLines":1,"bbox":[46,28,760,40]}
+{"kind":"textbox","id":"sh/4fu18jqh","slide":16,"text":"Institute of Structural Engineering","textPreview":"Institute of Structural Engineering","textChars":35,"textLines":1,"bbox":[46,681,300,18]}
+{"kind":"textbox","id":"sh/x0nuxc3y","slide":16,"text":"Conclusion","textPreview":"Conclusion","textChars":10,"textLines":1,"bbox":[455,681,420,18]}
+{"kind":"textbox","id":"sh/qxs72x4n","slide":16,"text":"16","textPreview":"16","textChars":2,"textLines":1,"bbox":[1218,681,28,18]}
+{"kind":"shape","id":"sh/fil0rqd4","slide":16,"bbox":[46,670,1188,1]}
+{"kind":"textbox","id":"sh/83itgfml","slide":16,"text":"Conclusion","textPreview":"Conclusion","textChars":10,"textLines":1,"bbox":[72,94,260,34]}
+{"kind":"textbox","id":"sh/xobm58z2","slide":16,"text":"- GWP and cost should be treated as primary criteria.\n- Residential design contains a real ecological-economic trade-off.\n- Office long-span design benefits from structural efficiency: post-tensioned and ribbed systems align cost and GWP.\n- Floor height can decide whether a low-GWP system is actually usable.","textPreview":"- GWP and cost should be treated as primary criteria. | - Residential design contains a real ecological-economic trade-off. | - Office lo...","textChars":309,"textLines":4,"bbox":[84,150,520,285]}
+{"kind":"textbox","id":"sh/mtwra5gb","slide":16,"text":"Outlook","textPreview":"Outlook","textChars":7,"textLines":1,"bbox":[710,94,260,34]}
+{"kind":"textbox","id":"sh/fepkzupw","slide":16,"text":"- Improve fire verification and insulation data for timber hollow-core systems.\n- Separate material, fabrication and installation in cost and time databases.\n- Test sensitivity to changed loads, acoustic requirements and height limits.\n- Develop a web interface for criterion weighting in practice.","textPreview":"- Improve fire verification and insulation data for timber hollow-core systems. | - Separate material, fabrication and installation in co...","textChars":298,"textLines":4,"bbox":[710,150,440,285]}
+{"kind":"textbox","id":"sh/7adsji5s","slide":16,"text":"Thank you","textPreview":"Thank you","textChars":9,"textLines":1,"bbox":[468,540,330,50]}
+{"kind":"notes","id":"nt/0yd149","slide":16,"text":""}
