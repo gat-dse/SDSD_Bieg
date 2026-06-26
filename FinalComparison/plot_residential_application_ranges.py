@@ -25,6 +25,7 @@ from run_final_comparison import ENV_COMPARISON_TEXT_SIZE
 
 
 OUTPUT_PATH = Path(inputs.OUTPUT_DIR) / "final_application_ranges_residential.png"
+TRANSPARENT_OUTPUT_PATH = Path(inputs.OUTPUT_DIR) / "final_application_ranges_residential_transparent.png"
 
 
 APPLICATION_RANGES = [
@@ -113,10 +114,13 @@ def plot_application_ranges() -> Path:
     for spine in ("left", "right", "top"):
         ax.spines[spine].set_visible(False)
 
+    fig.patch.set_alpha(0)
+    ax.set_facecolor("none")
     fig.tight_layout()
     fig.savefig(OUTPUT_PATH, dpi=400, bbox_inches="tight")
+    fig.savefig(TRANSPARENT_OUTPUT_PATH, dpi=400, bbox_inches="tight", transparent=True)
     plt.close(fig)
-    return OUTPUT_PATH
+    return TRANSPARENT_OUTPUT_PATH
 
 
 def main() -> None:

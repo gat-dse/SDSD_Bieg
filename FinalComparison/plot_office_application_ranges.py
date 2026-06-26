@@ -25,6 +25,7 @@ from run_final_comparison import ENV_COMPARISON_TEXT_SIZE
 
 
 OUTPUT_PATH = Path(inputs.OUTPUT_DIR) / "final_application_ranges_office.png"
+TRANSPARENT_OUTPUT_PATH = Path(inputs.OUTPUT_DIR) / "final_application_ranges_office_transparent.png"
 
 
 APPLICATION_RANGES = [
@@ -60,7 +61,10 @@ def plot_application_ranges() -> Path:
     systems_by_id = {system["id"]: system for system in scenario["systems"]}
 
     fig, ax = plt.subplots(figsize=(12.8, 4.8))
-    bar_height = 0.72
+    text_scale = (10.0 - 3.0) / (16.0 - 8.0)
+    axis_text_size = round(ENV_COMPARISON_TEXT_SIZE * text_scale)
+    bar_text_size = round((ENV_COMPARISON_TEXT_SIZE - 1) * text_scale)
+    bar_height = 0.55
     y_positions_by_system = {
         "off_pt_flat_columns_band": 2,
         "off_pt_flat_columns_dist": 1,
@@ -89,26 +93,29 @@ def plot_application_ranges() -> Path:
             item["label"],
             ha="center",
             va="center",
-            fontsize=ENV_COMPARISON_TEXT_SIZE - 1,
+            fontsize=bar_text_size,
             color="black",
         )
 
     ax.set_xlim(min(scenario["lengths"]) - 0.15, max(scenario["lengths"]) + 0.15)
     ax.set_xticks(scenario["lengths"])
-    ax.set_xlabel("Span $l$ [m]", fontsize=ENV_COMPARISON_TEXT_SIZE)
-    ax.set_ylim(-0.6, 2.6)
+    ax.set_xlabel("Span $l$ [m]", fontsize=axis_text_size)
+    ax.set_ylim(-0.8, 2.8)
     ax.set_yticks([])
     ax.set_ylabel("")
     ax.grid(True, axis="x", alpha=0.35)
     ax.set_axisbelow(True)
-    ax.tick_params(axis="x", labelsize=ENV_COMPARISON_TEXT_SIZE)
+    ax.tick_params(axis="x", labelsize=axis_text_size)
     for spine in ("left", "right", "top"):
         ax.spines[spine].set_visible(False)
 
+    fig.patch.set_alpha(0)
+    ax.set_facecolor("none")
     fig.tight_layout()
     fig.savefig(OUTPUT_PATH, dpi=400, bbox_inches="tight")
+    fig.savefig(TRANSPARENT_OUTPUT_PATH, dpi=400, bbox_inches="tight", transparent=True)
     plt.close(fig)
-    return OUTPUT_PATH
+    return TRANSPARENT_OUTPUT_PATH
 
 
 def main() -> None:
